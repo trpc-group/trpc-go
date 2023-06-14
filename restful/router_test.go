@@ -271,3 +271,35 @@ func TestNoPanicOnFilterReturnsNil(t *testing.T) {
 	require.Equal(t, http.StatusOK, rsp.StatusCode)
 	require.Equal(t, t.Name(), rsp.Header.Get(t.Name()))
 }
+
+func TestTimeout(t *testing.T) {
+	l, err := net.Listen("tcp", "localhost:")
+	require.Nil(t, err)
+	s := server.New(
+		server.WithListener(l),
+		server.WithServiceName(t.Name()),
+		server.WithProtocol("restful"),
+		server.WithTimeout(time.Millisecond*100))
+	RegisterGreeterService(s, &greeterAlwaysTimeout{})
+	errCh := make(chan error)
+	go func() { errCh <- s.Serve() }()
+	select {
+	case err := <-errCh:
+		require.FailNow(t, "serve failed", err)
+	case <-time.After(time.Millisecond * 100):
+	}
+	defer s.Close(nil)
+
+	start := time.Now()
+	rsp, err := http.Get(fmt.Sprintf("http://%s/v2/bar/world", l.Addr().String()))
+	require.Nil(t, err)
+	require.Equal(t, http.StatusGatewayTimeout, rsp.StatusCode)
+	require.InDelta(t, time.Millisecond*100, time.Since(start), float64(time.Millisecond*30))
+}
+
+type greeterAlwaysTimeout struct{}
+
+func (*greeterAlwaysTimeout) SayHello(ctx context.Context, req *helloworld.HelloRequest, rsp *helloworld.HelloReply) error {
+	<-ctx.Done()
+	return errs.NewFrameError(errs.RetServerTimeout, "ctx timeout")
+}
