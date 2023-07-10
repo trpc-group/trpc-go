@@ -179,7 +179,10 @@ func (s *Server) Serve() error {
 		WriteTimeout: cfg.writeTimeout,
 		Handler:      s.router,
 	}
-	if err := s.server.Serve(ln); err != nil && err != http.ErrServerClosed {
+	// Restricted access to the internal/poll.ErrNetClosing type necessitates comparing a string literal.
+	const closeError = "use of closed network connection"
+	if err := s.server.Serve(ln); err != nil &&
+		err != http.ErrServerClosed && !strings.Contains(err.Error(), closeError) {
 		return err
 	}
 	return nil
