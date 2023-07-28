@@ -118,10 +118,8 @@ var (
 	ConnectionPoolOverLimit = metrics.Counter("trpc.ConnectionPoolOverLimit")
 
 	// -----------------------------multiplexed----------------------------- //
-	// fails to reconnect when multiplexed.
-	MultiplexedTCPReconnectErr        = metrics.Counter("trpc.MultiplexedReconnectErr")
-	MultiplexedTCPReconnectOnReadErr  = metrics.Counter("trpc.MultiplexedReconnectOnReadErr")
-	MultiplexedTCPReconnectOnWriteErr = metrics.Counter("trpc.MultiplexedReconnectOnWriteErr")
+	MultiplexedTCPReadingErr = metrics.Counter("trpc.MultiplexedTCPReadingErr")
+	MultiplexedTCPWritingErr = metrics.Counter("trpc.MultiplexedTCPWritingErr")
 
 	// -----------------------------other----------------------------- //
 	// panic number of trpc.GoAndWait.

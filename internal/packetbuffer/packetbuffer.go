@@ -8,12 +8,17 @@
 package packetbuffer
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
 
+	"github.com/hashicorp/go-multierror"
 	"trpc.group/trpc-go/trpc-go/internal/allocator"
 )
+
+// ErrReadFrom indicates packet connection Readfrom failed.
+var ErrReadFrom = errors.New("packet connection ReadFrom failed")
 
 // New creates a packet buffer with specific packet connection and size.
 func New(conn net.PacketConn, size int) *PacketBuffer {
@@ -42,7 +47,7 @@ func (pb *PacketBuffer) Read(p []byte) (n int, err error) {
 	if pb.w == 0 {
 		n, raddr, err := pb.conn.ReadFrom(pb.buf)
 		if err != nil {
-			return 0, err
+			return 0, multierror.Append(ErrReadFrom, err).ErrorOrNil()
 		}
 		pb.w = n
 		pb.raddr = raddr

@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -74,7 +73,7 @@ func TestClientStreamNetworkError(t *testing.T) {
 	err = ct.Init(ctx, roundTripOpts...)
 	assert.Nil(t, err)
 	rsp, err := ct.Recv(ctx)
-	assert.Equal(t, io.EOF, err, fmt.Sprintf("current err: %+v", err))
+	assert.NotNil(t, err)
 	assert.Nil(t, rsp)
 
 	// test ctx canceled.
@@ -122,7 +121,7 @@ func TestConcurrent(t *testing.T) {
 	binary.BigEndian.PutUint32(headData[4:8], uint32(len(data)))
 	reqData := append(headData, data...)
 
-	ct := transport.NewClientStreamTransport(transport.WithMaxConcurrentStreams(20), transport.WithMaxIdleConnsPerHost(2))
+	ct := transport.NewClientStreamTransport(transport.WithMaxConcurrentStreams(20))
 
 	// close stream send and receive.
 	var wg sync.WaitGroup
@@ -183,8 +182,8 @@ func (fb *multiplexedFramerBuilder) New(r io.Reader) codec.Framer {
 	return &multiplexedFramer{r: r, fb: fb}
 }
 
-func (fb *multiplexedFramerBuilder) Parse(rc io.Reader) (vid uint32, buf []byte, err error) {
-	buf, err = fb.New(rc).ReadFrame()
+func (fb *multiplexedFramerBuilder) Parse(r io.Reader) (vid uint32, buf []byte, err error) {
+	buf, err = fb.New(r).ReadFrame()
 	if err != nil {
 		return 0, nil, err
 	}

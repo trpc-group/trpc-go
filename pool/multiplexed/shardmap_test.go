@@ -3,10 +3,7 @@
 // If you have downloaded a copy of the tRPC source code from Tencent,
 // please note that tRPC source code is licensed under the Apache 2.0 License that can be found in the LICENSE file.
 
-//go:build linux || freebsd || dragonfly || darwin
-// +build linux freebsd dragonfly darwin
-
-package multiplex
+package multiplexed
 
 import (
 	"sync"
@@ -19,7 +16,7 @@ import (
 func TestShardMap(t *testing.T) {
 	var (
 		id uint32 = 1
-		vc        = &virtualConnection{}
+		vc        = &virtualConn{}
 		m         = newShardMap(4)
 	)
 	_, loaded := m.loadOrStore(id, vc)
@@ -38,10 +35,10 @@ func TestShardMap(t *testing.T) {
 
 func BenchmarkMutexMap(b *testing.B) {
 	var mu sync.RWMutex
-	m := make(map[uint32]*virtualConnection)
+	m := make(map[uint32]*virtualConn)
 	var (
 		id uint32
-		vc virtualConnection
+		vc virtualConn
 	)
 	b.SetParallelism(128)
 	b.ResetTimer()
@@ -71,7 +68,7 @@ func BenchmarkShardMap(b *testing.B) {
 	m := newShardMap(32)
 	var (
 		id uint32
-		vc virtualConnection
+		vc virtualConn
 	)
 	b.SetParallelism(128)
 	b.ResetTimer()
@@ -90,7 +87,7 @@ func BenchmarkSyncMap(b *testing.B) {
 	var m sync.Map
 	var (
 		id uint32
-		vc virtualConnection
+		vc virtualConn
 	)
 	b.SetParallelism(128)
 	b.ResetTimer()

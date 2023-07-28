@@ -55,13 +55,11 @@ func (s *serverTransport) ListenAndServe(ctx context.Context, opts ...transport.
 	if err != nil {
 		return err
 	}
-	log.Infof("service:%s is using tnet transport, current number of pollers: %d",
-		lsOpts.ServiceName, tnet.NumPollers())
 	networks := strings.Split(lsOpts.Network, ",")
 	for _, network := range networks {
 		lsOpts.Network = network
 		if err := s.switchNetworkToServe(ctx, lsOpts); err != nil {
-			log.Error("switch to gonet default transport, ", err)
+			log.Info("switch to gonet default transport, ", err)
 			opts = append(opts, transport.WithListenNetwork(network))
 			return transport.DefaultServerTransport.ListenAndServe(ctx, opts...)
 		}
@@ -95,6 +93,8 @@ func (s *serverTransport) Close(ctx context.Context) {
 func (s *serverTransport) switchNetworkToServe(ctx context.Context, opts *transport.ListenServeOptions) error {
 	switch opts.Network {
 	case "tcp", "tcp4", "tcp6":
+		log.Infof("service:%s is using tnet transport, current number of pollers: %d",
+			opts.ServiceName, tnet.NumPollers())
 		if err := s.listenAndServeTCP(ctx, opts); err != nil {
 			return err
 		}

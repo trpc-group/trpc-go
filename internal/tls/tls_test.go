@@ -24,10 +24,14 @@ func TestGetServerConfig(t *testing.T) {
 func TestGetClientConfig(t *testing.T) {
 	_, err := tls.GetClientConfig("localhost", "../../testdata/ca.pem", "../../testdata/client.crt", "../../testdata/client.key")
 	assert.Nil(t, err)
+	_, err = tls.GetClientConfig("localhost", "no_exist.pem", "../../testdata/client.crt", "../../testdata/client.key")
+	assert.NotNil(t, err)
 	_, err = tls.GetClientConfig("localhost", "none", "../../testdata/client.crt", "../../testdata/client.key")
 	assert.Nil(t, err)
 	_, err = tls.GetClientConfig("localhost", "../../testdata/ca.pem", "", "")
 	assert.Nil(t, err)
+	_, err = tls.GetClientConfig("localhost", "../../testdata/ca.pem", "no_exist.crt", "no_exist.key")
+	assert.NotNil(t, err)
 	_, err = tls.GetClientConfig("localhost", "root", "", "")
 	assert.Nil(t, err)
 }

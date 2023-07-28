@@ -3,10 +3,7 @@
 // If you have downloaded a copy of the tRPC source code from Tencent,
 // please note that tRPC source code is licensed under the Apache 2.0 License that can be found in the LICENSE file.
 
-//go:build linux || freebsd || dragonfly || darwin
-// +build linux freebsd dragonfly darwin
-
-package multiplex
+package multiplexed
 
 import (
 	"testing"

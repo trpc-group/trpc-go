@@ -496,8 +496,8 @@ func (fb *lengthDelimitedBuilder) New(reader io.Reader) codec.Framer {
 	}
 }
 
-func (fb *lengthDelimitedBuilder) Parse(rc io.Reader) (vid uint32, buf []byte, err error) {
-	buf, err = fb.New(rc).ReadFrame()
+func (fb *lengthDelimitedBuilder) Parse(r io.Reader) (vid uint32, buf []byte, err error) {
+	buf, err = fb.New(r).ReadFrame()
 	if err != nil {
 		return 0, nil, err
 	}
@@ -573,6 +573,7 @@ func TestClientTransport_MultiplexedErr(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	ctx, msg := codec.WithNewMessage(ctx)
+	// bad request, serve ReadFrame will fail.
 	_, err = tc.RoundTrip(ctx, []byte("helloworld"),
 		transport.WithDialNetwork(listener.Addr().Network()),
 		transport.WithDialAddress(listener.Addr().String()),
@@ -668,7 +669,7 @@ func TestOptions(t *testing.T) {
 // TestWithMultiplexedPool tests connection pool multiplexing.
 func TestWithMultiplexedPool(t *testing.T) {
 	opts := &transport.RoundTripOptions{}
-	m := multiplexed.New(multiplexed.WithConnectNumber(10))
+	m := multiplexed.NewPool(multiplexed.NewDialFunc())
 	o := transport.WithMultiplexedPool(m)
 	o(opts)
 	assert.True(t, opts.EnableMultiplexed)

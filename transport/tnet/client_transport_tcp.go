@@ -165,27 +165,28 @@ func checkContextErr(ctx context.Context) error {
 	}
 	return nil
 }
+
 func (c *clientTransport) multiplex(ctx context.Context, req []byte, opts *transport.RoundTripOptions) ([]byte, error) {
 	getOpts := multiplexed.NewGetOptions()
-	getOpts.WithVID(opts.Msg.RequestID())
 	fp, ok := opts.FramerBuilder.(multiplexed.FrameParser)
 	if !ok {
 		return nil, errs.NewFrameError(errs.RetClientConnectFail,
 			"frame builder does not implement multiplexed.FrameParser")
 	}
 	getOpts.WithFrameParser(fp)
+	getOpts.WithVID(opts.Msg.RequestID())
 	getOpts.WithDialTLS(opts.TLSCertFile, opts.TLSKeyFile, opts.CACertFile, opts.TLSServerName)
 	getOpts.WithLocalAddr(opts.LocalAddr)
-	conn, err := opts.Multiplexed.GetMuxConn(ctx, opts.Network, opts.Address, getOpts)
+	conn, err := opts.Multiplexed.GetVirtualConn(ctx, opts.Network, opts.Address, getOpts)
 	if err != nil {
-		return nil, errs.WrapFrameError(err, errs.RetClientNetErr, "tcp client get multiplex connection failed")
+		return nil, errs.WrapFrameError(err, errs.RetClientNetErr, "tcp client get multiplexed connection failed")
 	}
 	defer conn.Close()
 	msg := codec.Message(ctx)
 	msg.WithRemoteAddr(conn.RemoteAddr())
 
 	if err := conn.Write(req); err != nil {
-		return nil, errs.WrapFrameError(err, errs.RetClientNetErr, "tcp client multiplex write failed")
+		return nil, errs.WrapFrameError(err, errs.RetClientNetErr, "tcp client multiplexed write failed")
 	}
 
 	// no need to receive response when request type is SendOnly.

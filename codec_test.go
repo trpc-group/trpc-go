@@ -347,17 +347,17 @@ func TestUDPParseFail(t *testing.T) {
 	s.start(context.Background())
 	t.Cleanup(s.stop)
 
-	m := multiplexed.New(multiplexed.WithConnectNumber(1))
+	m := multiplexed.NewPool(multiplexed.NewDialFunc())
 	test := func(id uint32, buf []byte, wantErr error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		opts := multiplexed.NewGetOptions()
 		opts.WithVID(id)
 		opts.WithFrameParser(&trpc.FramerBuilder{})
-		mc, err := m.GetMuxConn(ctx, s.conn.LocalAddr().Network(), s.conn.LocalAddr().String(), opts)
+		vc, err := m.GetVirtualConn(ctx, s.conn.LocalAddr().Network(), s.conn.LocalAddr().String(), opts)
 		assert.Nil(t, err)
-		require.Nil(t, mc.Write(buf))
-		_, err = mc.Read()
-		assert.Equal(t, err, wantErr)
+		require.Nil(t, vc.Write(buf))
+		_, err = vc.Read()
+		assert.ErrorIs(t, err, wantErr)
 		cancel()
 	}
 	// fail when parse invalid buf

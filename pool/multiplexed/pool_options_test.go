@@ -7,17 +7,18 @@ package multiplexed
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
 // TestPoolOptions test the configuration items of the multiplexed pool.
 func TestPoolOptions(t *testing.T) {
-	opts := &PoolOptions{}
-	WithConnectNumber(50000)(opts)
-	WithQueueSize(20000)(opts)
-	WithDropFull(true)(opts)
-	assert.Equal(t, opts.connectNumberPerHost, 50000)
-	assert.Equal(t, opts.sendQueueSize, 20000)
-	assert.Equal(t, opts.dropFull, true)
+	opts := &PoolOption{}
+	WithDialTimeout(time.Second)(opts)
+	WithMaxConcurrentVirtualConnsPerConn(20)(opts)
+	WithEnableMetrics()(opts)
+	assert.Equal(t, opts.dialTimeout, time.Second)
+	assert.Equal(t, opts.maxConcurrentVirtualConnsPerConn, 20)
+	assert.Equal(t, opts.enableMetrics, true)
 }

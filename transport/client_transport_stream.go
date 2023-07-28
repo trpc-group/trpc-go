@@ -26,7 +26,6 @@ var DefaultClientStreamTransport = NewClientStreamTransport()
 func NewClientStreamTransport(opts ...ClientStreamTransportOption) ClientStreamTransport {
 	options := &cstOptions{
 		maxConcurrentStreams: defaultMaxConcurrentStreams,
-		maxIdleConnsPerHost:  defaultMaxIdleConnsPerHost,
 	}
 	for _, opt := range opts {
 		opt(options)
@@ -34,11 +33,11 @@ func NewClientStreamTransport(opts ...ClientStreamTransportOption) ClientStreamT
 	t := &clientStreamTransport{
 		// Map streamID to connection. On the client side, ensure that the streamID is
 		// incremented and unique, otherwise the map of addr must be added.
-		streamIDToConn: make(map[uint32]multiplexed.MuxConn),
+		streamIDToConn: make(map[uint32]multiplexed.VirtualConn),
 		m:              &sync.RWMutex{},
-		multiplexedPool: multiplexed.New(
-			multiplexed.WithMaxVirConnsPerConn(options.maxConcurrentStreams),
-			multiplexed.WithMaxIdleConnsPerHost(options.maxIdleConnsPerHost),
+		multiplexedPool: multiplexed.NewPool(
+			multiplexed.NewDialFunc(),
+			multiplexed.WithMaxConcurrentVirtualConnsPerConn(options.maxConcurrentStreams),
 		),
 	}
 	return t
@@ -47,7 +46,6 @@ func NewClientStreamTransport(opts ...ClientStreamTransportOption) ClientStreamT
 // cstOptions is the client stream transport options.
 type cstOptions struct {
 	maxConcurrentStreams int
-	maxIdleConnsPerHost  int
 }
 
 // ClientStreamTransportOption sets properties of ClientStreamTransport.
@@ -60,16 +58,9 @@ func WithMaxConcurrentStreams(n int) ClientStreamTransportOption {
 	}
 }
 
-// WithMaxIdleConnsPerHost sets the maximum idle connections per host.
-func WithMaxIdleConnsPerHost(n int) ClientStreamTransportOption {
-	return func(opts *cstOptions) {
-		opts.maxIdleConnsPerHost = n
-	}
-}
-
 // clientStreamTransport keeps compatibility with the original client transport.
 type clientStreamTransport struct {
-	streamIDToConn  map[uint32]multiplexed.MuxConn
+	streamIDToConn  map[uint32]multiplexed.VirtualConn
 	m               *sync.RWMutex
 	multiplexedPool multiplexed.Pool
 }
@@ -103,7 +94,7 @@ func (c *clientStreamTransport) Init(ctx context.Context, roundTripOpts ...Round
 	getOpts.WithFrameParser(fp)
 	getOpts.WithDialTLS(opts.TLSCertFile, opts.TLSKeyFile, opts.CACertFile, opts.TLSServerName)
 	getOpts.WithLocalAddr(opts.LocalAddr)
-	conn, err := opts.Multiplexed.GetMuxConn(ctx, opts.Network, opts.Address, getOpts)
+	conn, err := opts.Multiplexed.GetVirtualConn(ctx, opts.Network, opts.Address, getOpts)
 	if err != nil {
 		return errs.NewFrameError(errs.RetClientConnectFail,
 			"tcp client transport multiplexd pool: "+err.Error())
@@ -197,7 +188,7 @@ func (c *clientStreamTransport) getOptions(ctx context.Context,
 }
 
 func (c *clientStreamTransport) getConnect(ctx context.Context,
-	roundTripOpts ...RoundTripOption) (multiplexed.MuxConn, error) {
+	roundTripOpts ...RoundTripOption) (multiplexed.VirtualConn, error) {
 	msg := codec.Message(ctx)
 	streamID := msg.StreamID()
 	c.m.RLock()

@@ -44,16 +44,17 @@ func GetClientConfig(serverName, caCertFile, certFile, keyFile string) (*tls.Con
 	tlsConf := &tls.Config{}
 	if caCertFile == "none" { // no need to verify server certificate.
 		tlsConf.InsecureSkipVerify = true
-		return tlsConf, nil
+	} else {
+		// need to verify server certification.
+		certPool, err := GetCertPool(caCertFile)
+		if err != nil {
+			return nil, err
+		}
+
+		tlsConf.RootCAs = certPool
 	}
-	// need to verify server certification.
 	tlsConf.ServerName = serverName
-	certPool, err := GetCertPool(caCertFile)
-	if err != nil {
-		return nil, err
-	}
-	tlsConf.RootCAs = certPool
-	if certFile == "" {
+	if certFile == "" || keyFile == "" {
 		return tlsConf, nil
 	}
 	// enable two-way authentication and needs to send the

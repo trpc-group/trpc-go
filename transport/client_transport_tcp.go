@@ -7,6 +7,7 @@ package transport
 
 import (
 	"context"
+	"errors"
 	"net"
 	"time"
 
@@ -201,7 +202,7 @@ func (c *clientTransport) multiplexed(ctx context.Context, req []byte, opts *Rou
 	getOpts.WithFrameParser(fp)
 	getOpts.WithDialTLS(opts.TLSCertFile, opts.TLSKeyFile, opts.CACertFile, opts.TLSServerName)
 	getOpts.WithLocalAddr(opts.LocalAddr)
-	conn, err := opts.Multiplexed.GetMuxConn(ctx, opts.Network, opts.Address, getOpts)
+	conn, err := opts.Multiplexed.GetVirtualConn(ctx, opts.Network, opts.Address, getOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -221,11 +222,11 @@ func (c *clientTransport) multiplexed(ctx context.Context, req []byte, opts *Rou
 
 	buf, err := conn.Read()
 	if err != nil {
-		if err == context.Canceled {
+		if errors.Is(err, context.Canceled) {
 			return nil, errs.NewFrameError(errs.RetClientCanceled,
 				"tcp client multiplexed transport ReadFrame: "+err.Error())
 		}
-		if err == context.DeadlineExceeded {
+		if errors.Is(err, context.DeadlineExceeded) {
 			return nil, errs.NewFrameError(errs.RetClientTimeout,
 				"tcp client multiplexed transport ReadFrame: "+err.Error())
 		}

@@ -250,6 +250,38 @@ func TestClientTCP_TLS(t *testing.T) {
 	)
 }
 
+func TestClientTCP_TLS_Multiplex(t *testing.T) {
+	invokeTest := func(tlsOpt transport.RoundTripOption) {
+		startClientTest(
+			t,
+			defaultServerHandle,
+			[]transport.ListenServeOption{
+				transport.WithServeTLS("../../testdata/server.crt", "../../testdata/server.key", "../../testdata/ca.pem")},
+			func(addr string) {
+				cliOpts := getRoundTripOption(
+					transport.WithDialAddress(addr),
+					transport.WithMultiplexed(true),
+					tlsOpt,
+				)
+				clientTrans := tnettrans.NewClientTransport()
+				ctx, msg := codec.EnsureMessage(context.Background())
+				reqbytes, err := trpc.DefaultClientCodec.Encode(msg, helloWorld)
+				assert.Nil(t, err)
+				rspFrame, err := clientTrans.RoundTrip(ctx, reqbytes, append(cliOpts, transport.WithMsg(msg))...)
+				assert.Nil(t, err)
+				rsp, err := trpc.DefaultClientCodec.Decode(msg, rspFrame)
+				assert.Nil(t, err)
+				assert.Equal(t, helloWorld, rsp)
+			},
+		)
+	}
+	// Set CAFile and ServerName
+	invokeTest(transport.WithDialTLS("../../testdata/client.crt", "../../testdata/client.key", "../../testdata/ca.pem", "localhost"))
+
+	// None CAFile and no ServerName
+	invokeTest(transport.WithDialTLS("../../testdata/client.crt", "../../testdata/client.key", "none", ""))
+}
+
 func TestClientTCP_HealthCheck(t *testing.T) {
 	addr := getAddr()
 	s := transport.NewServerTransport()

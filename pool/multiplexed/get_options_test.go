@@ -28,7 +28,7 @@ func TestGetOptions(t *testing.T) {
 	opts.WithDialTLS(certFile, keyFile, caFile, serverName)
 	opts.WithLocalAddr(localAddr)
 
-	assert.Equal(t, opts.FP, fp)
+	assert.Equal(t, opts.FrameParser, fp)
 	assert.Equal(t, opts.VID, id)
 	assert.Equal(t, opts.CACertFile, caFile)
 	assert.Equal(t, opts.TLSKeyFile, keyFile)
@@ -39,6 +39,6 @@ func TestGetOptions(t *testing.T) {
 
 type emptyFrameParser struct{}
 
-func (efp *emptyFrameParser) Parse(rc io.Reader) (vid uint32, buf []byte, err error) {
+func (efp *emptyFrameParser) Parse(r io.Reader) (vid uint32, buf []byte, err error) {
 	return 0, nil, nil
 }

@@ -178,8 +178,8 @@ func (fb *FramerBuilder) New(reader io.Reader) codec.Framer {
 }
 
 // Parse implement multiplexed.FrameParser interface.
-func (fb *FramerBuilder) Parse(rc io.Reader) (vid uint32, buf []byte, err error) {
-	buf, err = fb.New(rc).ReadFrame()
+func (fb *FramerBuilder) Parse(r io.Reader) (vid uint32, buf []byte, err error) {
+	buf, err = fb.New(r).ReadFrame()
 	if err != nil {
 		return 0, nil, err
 	}

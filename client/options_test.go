@@ -295,7 +295,7 @@ func TestDataOptions(t *testing.T) {
 func TestWithMultiplexedPool(t *testing.T) {
 	opts := &client.Options{}
 	roundTripOptions := &transport.RoundTripOptions{}
-	m := multiplexed.New(multiplexed.WithConnectNumber(8))
+	m := multiplexed.DefaultMultiplexedPool
 	o := client.WithMultiplexedPool(m)
 	o(opts)
 	require.True(t, opts.EnableMultiplexed)

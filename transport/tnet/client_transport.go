@@ -20,9 +20,7 @@ import (
 	intertls "trpc.group/trpc-go/trpc-go/internal/tls"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/pool/connpool"
-	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
 	"trpc.group/trpc-go/trpc-go/transport"
-	"trpc.group/trpc-go/trpc-go/transport/tnet/multiplex"
 )
 
 func init() {
@@ -38,9 +36,6 @@ var DefaultConnPool = connpool.NewConnectionPool(
 	connpool.WithHealthChecker(HealthChecker),
 )
 
-// DefaultMuxPool is default muxtiplex pool used by tnet.
-var DefaultMuxPool = multiplex.NewPool(Dial)
-
 // NewConnectionPool creates a new connection pool. Use it instead
 // of connpool.NewConnectionPool when use tnet transport because
 // it will dial tnet connection, otherwise error will occur.
@@ -49,12 +44,6 @@ func NewConnectionPool(opts ...connpool.Option) connpool.Pool {
 		connpool.WithDialFunc(Dial),
 		connpool.WithHealthChecker(HealthChecker))
 	return connpool.NewConnectionPool(opts...)
-}
-
-// NewMuxPool creates a new multiplexing pool. Use it instead
-// of mux.NewPool when use tnet transport because it will dial tnet connection.
-func NewMuxPool(opts ...multiplex.OptPool) multiplexed.Pool {
-	return multiplex.NewPool(Dial, opts...)
 }
 
 type clientTransport struct{}
@@ -83,7 +72,7 @@ func (c *clientTransport) switchNetworkToRoundTrip(
 		return nil, err
 	}
 	if err := canUseTnet(option); err != nil {
-		log.Error("switch to gonet default transport, ", err)
+		log.Trace("switch to gonet default transport, ", err)
 		return transport.DefaultClientTransport.RoundTrip(ctx, req, opts...)
 	}
 	log.Tracef("roundtrip to:%s is using tnet transport, current number of pollers: %d",
@@ -103,7 +92,7 @@ func (c *clientTransport) switchNetworkToRoundTrip(
 func buildRoundTripOptions(opts ...transport.RoundTripOption) (*transport.RoundTripOptions, error) {
 	rtOpts := &transport.RoundTripOptions{
 		Pool:        DefaultConnPool,
-		Multiplexed: DefaultMuxPool,
+		Multiplexed: DefaultMultiplexPool,
 	}
 	for _, o := range opts {
 		o(rtOpts)
@@ -178,7 +167,7 @@ func canUseTnet(opts *transport.RoundTripOptions) error {
 	switch opts.Network {
 	case "tcp", "tcp4", "tcp6":
 	default:
-		return fmt.Errorf("tnet doesn't support network [%s]", opts.Network)
+		return fmt.Errorf("tnet client transport doesn't support network [%s]", opts.Network)
 	}
 	return nil
 }
