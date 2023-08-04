@@ -1,57 +1,57 @@
 # tRPC-Go framework
 
-tRPC-Go 框架是公司统一微服务框架的 golang 版本，主要是以高性能，可插拔，易测试为出发点而设计的 rpc 框架。
+The tRPC-Go framework is the Golang version of the company's unified microservices framework, mainly designed as an RPC framework with high performance, pluggability, and easy testing in mind.
 
-## 文档地址：[iwiki](https://trpc.group/trpc-go/trpc-wiki)
+## Documentation: [iwiki](https://trpc.group/trpc-go/trpc-wiki)
 
 ## TRY IT
 
-## 整体架构
+## Overall Architecture
 
-![架构图](TODO: 开源后，图片上传到 github，务必调整图片链接)
+![Architecture Diagram](TODO: After open sourcing, upload the image to GitHub and make sure to adjust the image link)
 
-- 一个 server 进程内支持启动多个 service 服务，监听多个地址。
-- 所有部件全都可插拔，内置 transport 等基本功能默认实现，可替换，其他组件需由第三方业务自己实现并注册到框架中。
-- 所有接口全都可 mock，使用 gomock&mockgen 生成 mock 代码，方便测试。
-- 支持任意的第三方业务协议，只需实现业务协议打解包接口即可。默认支持 trpc 和 http 协议，随时切换，无差别开发 cgi 与后台 server。
-- 提供生成代码模板的 trpc 命令行工具。
+- A server process supports starting multiple service instances and listening to multiple addresses.
+- All components are pluggable, with built-in default implementations for basic functions like transport, which can be replaced. Other components need to be implemented by third-party businesses and registered with the framework.
+- All interfaces can be mocked, using gomock & mockgen to generate mock code for easy testing.
+- Supports any third-party business protocol, just need to implement the business protocol encoding and decoding interface. Default support for trpc and http protocols, switchable at any time, seamless development of CGI and backend servers.
+- Provides a trpc command-line tool for generating code templates.
 
-## 插件管理
+## Plugin Management
 
-- 框架插件化管理设计只提供标准接口及接口注册能力。
-- 外部组件由第三方业务作为桥梁把系统组件按框架接口包装起来，并注册到框架中。
-- 业务使用时，只需要 import 包装桥梁路径。
-- 具体插件原理可参考 [plugin](plugin) 。
+- The framework's plugin management design only provides standard interfaces and interface registration capabilities.
+- External components are wrapped by third-party businesses as bridges, wrapping system components according to the framework interface, and registering them with the framework.
+- When using, just import the wrapper bridge path.
+- For specific plugin principles, refer to [plugin](plugin).
 
-## 生成工具
+## Generation Tool
 
-- 安装
+- Installation
 
 ```
-# 初次安装，请确保环境变量 PATH 已配置$GOBIN 或者$GOPATH/bin
+# For the first-time installation, make sure the environment variable PATH is configured with $GOBIN or $GOPATH/bin
 go get -u trpc.tech/trpc-go/trpc-go-cmdline/v2/trpc
 
-# 配置依赖工具，如 protoc、protoc-gen-go、mockgen 等等
+# Configure dependent tools, such as protoc, protoc-gen-go, mockgen, etc.
 trpc setup
 
-# 后续更新、回退版本
-trpc version                            # 检查版本
-trpc upgrade -l                         # 检查版本更新
-trpc upgrade [--version <version>]      # 更新到指定版本
+# Subsequent updates, rollback versions
+trpc version                            # Check version
+trpc upgrade -l                         # Check for version updates
+trpc upgrade [--version <version>]      # Update to the specified version
 ```
 
-- 使用
+- Usage
 
 ```bash
 trpc help create
 ```
 
 ```bash
-指定 pb 文件快速创建工程或 rpcstub，
+Specify the pb file to quickly create a project or rpcstub,
 
-'trpc create' 有两种模式：
-- 生成一个完整的服务工程
-- 生成被调服务的 rpcstub，需指定'-rpconly'选项。
+'trpc create' has two modes:
+- Generate a complete service project
+- Generate an rpcstub for the called service, specify the '-rpconly' option.
 
 Usage:
   trpc create [flags]
@@ -72,21 +72,21 @@ Flags:
   -v, --verbose                show verbose logging info
 ```
 
-## 服务协议
+## Service Protocol
 
-- trpc 框架支持任意的第三方协议，同时默认支持了 trpc 和 http 协议
-- 只需在配置文件里面指定 protocol 字段等于 http 即可启动一个 cgi 服务
-- 使用同样的服务描述协议，完全一模一样的代码，可以随时切换 trpc 和 http，达到真正意义上无差别开发 cgi 和后台服务的效果
-- 请求数据使用 http post 方法携带，并解析到 method 里面的 request 结构体，通过 http header content-type(application/json or application/pb) 指定使用 pb 还是 json
-- 第三方自定义业务协议可以参考 [codec](codec)
+- The trpc framework supports any third-party protocol and defaults to trpc and http protocols
+- Just specify the protocol field in the configuration file to be equal to http to start a CGI service
+- Using the same service description protocol, completely identical code, can switch between trpc and http at any time, achieving truly seamless development of CGI and backend services
+- Request data is carried using the http post method and parsed into the method's request structure, specifying the use of pb or json through the http header content-type (application/json or application/pb)
+- Third-party custom business protocols can refer to [codec](codec)
 
-## 相关文档
+## Related Documentation
 
-- [框架设计文档](https://trpc.group/trpc-go/trpc-wiki)
-- [trpc 工具详细说明](https://trpc.group/trpc-go/trpc-go-cmdline)
-- [helloworld 开发指南](examples/helloworld)
-- [第三方协议实现 demo](https://trpc.group/trpc-go/trpc-codec)
+- [Framework Design Document](https://trpc.group/trpc-go/trpc-wiki)
+- [Detailed description of trpc tool](https://trpc.group/trpc-go/trpc-go-cmdline)
+- [helloworld Development Guide](examples/helloworld)
+- [Third-party protocol implementation demo](https://trpc.group/trpc-go/trpc-codec)
 
-## 如何贡献
+## How to Contribute
 
-有兴趣的同学可以先看一下 [贡献指南](CONTRIBUTING.md)，再看看 Issue 里尚未认领的问题，自己认领任务，一起为 tRPC-Go 做贡献。
+Interested students can first take a look at the [Contribution Guide](CONTRIBUTING.md), then look at the unclaimed issues in the Issue, claim tasks for themselves, and contribute to tRPC-Go together.
