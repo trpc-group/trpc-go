@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package  trpc.examples.echo;
+
+option  go_package ="trpc.group/trpc-go/trpc-go/examples/attachment/proto/echo";
+
+// EchoRequest is the request for echo.
+message EchoRequest {
+  string message = 1;
+}
+
+// EchoResponse is the response for echo.
+message EchoResponse {
+  string message = 1;
+}
+
+// Echo is the echo service.
+service Echo {
+  // UnaryEcho is unary echo.
+  rpc UnaryEcho(EchoRequest) returns (EchoResponse) {}
+}

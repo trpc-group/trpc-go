@@ -1,0 +1,32 @@
+global:
+  namespace: Development
+  env_name: test
+
+server:
+  app: examples
+  server: rpcz
+  bin_path: /usr/local/trpc/bin/
+  conf_path: /usr/local/trpc/conf/
+  data_path: /usr/local/trpc/data/
+  admin:
+    ip: 127.0.0.1
+    port: 9528
+    read_timeout: 3000
+    write_timeout: 60000
+    rpcz: # The RPCZ config.
+      fraction: 1.0     # the sampling rate of RPCZ, with a value range of [0.0, 1.0], and a default value of 0.0, indicating no sampling. Manual configuration is required.
+      capacity: 10000   # the storage capacity of RPCZ, with a default value of 10000, indicating the maximum number of spans that can be stored.
+      record_when:      # the specify configuration.
+        error_codes: [21]       # the specify error code for span, Representing multiple integer error codes, indicating sampling spans containing any one of the error codes, such as 0(RetOk), 21(RetServerTimeout).
+        min_duration: 2s        # the minimum sampling time, representing the minimum duration of a span, collecting only spans exceeding the min_duration, can be used for latency analysis.
+        sampling_fraction: 1.0  # the sampling rate of RPCZ, with a value range of [0.0, 1.0], and a default value of 0.0, indicating no sampling. Manual configuration is required.
+  service:
+    - name: trpc.examples.rpcz.RPCZ
+      ip: 127.0.0.1
+      nic: eth0
+      port: 8000
+      network: tcp
+      protocol: trpc
+      timeout: 1000
+      idletime: 300000
+      registry: polaris

@@ -1,0 +1,8 @@
+Test.HelloServer:
+  Network: tcp # network.
+  Target: cl5://4234234:32423424 # cl5 target.
+  Timeout: 3 # ms.
+Test.HelloServer2:
+  Network: tcp # network.
+  Target: cl5://4234234:32423424 # cl5 target.
+  Timeout: 5 # ms.

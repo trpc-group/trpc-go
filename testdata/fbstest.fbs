@@ -1,0 +1,5 @@
+namespace fbstest;
+
+table HelloReq{
+	message:string;
+}

@@ -1,0 +1,4 @@
+[server]
+app = "test"
+port = 1000
+protocol = ["tcp","http"]

@@ -1,0 +1,42 @@
+global:                   # 全局配置
+  namespace: Development  # 环境类型，分正式 Production 和非正式 Development 两种类型
+  env_name: test          # 环境名称，非正式环境下多环境的名称
+
+server:                                    # 服务端配置
+  app: test                                # 业务的应用名
+  server: helloworld                       # 进程服务名
+  bin_path: /usr/local/trpc/bin/           # 二进制可执行文件和框架配置文件所在路径
+  conf_path: /usr/local/trpc/conf/         # 业务配置文件所在路径
+  data_path: /usr/local/trpc/data/         # 业务数据文件所在路径
+  service:                                 # 业务服务提供的 service，可以有多个
+    - name: trpc.test.helloworld.Greeter1  # service 的名字服务路由名称
+      ip: 127.0.0.1                        # 服务监听 ip 地址
+      port: 8000                           # 服务监听端口
+      #address: 127.0.0.1:8000             # 如果使用则忽略 ip:port，可以用于 unix socket，例如 temp.sock
+      network: tcp                         # 网络监听类型 tcp udp unix
+      protocol: trpc                       # 应用层协议 trpc http
+      timeout: 1000                        # 请求最长处理时间 单位 毫秒
+    - name: trpc.test.helloworld.Greeter2  # service 的名字服务路由名称
+      ip: 127.0.0.1                        # 服务监听 ip 地址
+      port: 8080                           # 服务监听端口
+      network: tcp                         # 网络监听类型 tcp udp
+      protocol: http                       # 应用层协议 trpc http
+      timeout: 1000                        # 请求最长处理时间 单位 毫秒
+
+client:                                     # 客户端调用的后端配置
+  timeout: 1000                             # 针对所有后端的请求最长处理时间
+  namespace: Development                    # 针对所有后端的环境
+  service:                                  # 针对单个后端的配置
+    - callee: trpc.test.helloworld.Greeter  # 后端服务协议文件的 service name, 如果 callee 和下面的 name 一样，那只需要配置一个即可
+      name: trpc.test.helloworld.Greeter1   # 后端服务名字路由的 service name，有注册到名字服务的话，下面 target 可以不用配置
+      target: ip://127.0.0.1:8000           # 后端服务地址，例如：unix://temp.sock
+      network: tcp                          # 后端服务的网络类型 tcp udp unix
+      protocol: trpc                        # 应用层协议 trpc http
+      timeout: 800                          # 请求最长处理时间
+      serialization: 0                      # 序列化方式 0-pb 1-jce 2-json 3-flatbuffer，默认不要配置
+
+plugins:                 # 插件配置
+  log:                   # 日志配置
+    default:             # 默认日志的配置，可支持多输出
+      - writer: console  # 控制台标准输出 默认
+        level: debug     # 标准输出日志的级别

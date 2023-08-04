@@ -1,0 +1,125 @@
+global:                             # global config.
+  namespace: Development            # environment type, two types: production and development.
+  env_name: test                    # environment name, names of multiple environments in informal settings.
+
+server:                                            # server configuration.
+  app: test                                        # business application name.
+  server: helloworld                               # service process name.
+  bin_path: /usr/local/trpc/bin/                   # paths to binary executables and framework configuration files.
+  conf_path: /usr/local/trpc/conf/                 # paths to business configuration files.
+  data_path: /usr/local/trpc/data/                 # paths to business data files.
+  admin:
+    ip: 127.0.0.1         # ip.
+    port: 9528            # default: 9028.
+    read_timeout: 3000    # ms. the timeout setting for the request is accepted and the request information is completely read to prevent slow clients.
+    write_timeout: 60000  # ms. the timeout setting for processing.
+    enable_tls: false     # whether to enable TLS, currently not supported.
+  service: # business service configuration，can have multiple.
+    - name: trpc.test.helloworld.Greeter1          # the route name of the service.
+      nic: ethxxxx                                    # the service listening network card address, if configures ip, you don't need to configure it.
+      port: 8000                                   # the service listening port, can use the placeholder ${port}.
+      network: tcp                                 # the service listening network type,  tcp or udp.
+      protocol: trpc                               # application layer protocol, trpc or http.
+      timeout: 1000                                # maximum request processing time in milliseconds.
+      idletime: 300000                             # connection idle time in milliseconds.
+      registry: polaris                            # The service registration method used when the service starts.
+    - name: trpc.test.helloworld.Greeter2          # the route name of the service.
+      ip: 127.0.0.1                                # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
+      nic: eth0                                    # the service listening network card address, if configures ip, you don't need to configure it.
+      port: 8080                                   # the service listening port, can use the placeholder ${port}.
+      network: tcp                                 # the service listening network type,  tcp or udp.
+      protocol: http                               # application layer protocol, trpc or http.
+      timeout: 1000                                # maximum request processing time in milliseconds.
+      idletime: 300000                             # connection idle time in milliseconds.
+      registry: polaris                            # The service registration method used when the service starts.
+
+client:                                            # configuration for client calls.
+  timeout: 1000                                    # maximum request processing time for all backends.
+  service:                                         # configuration for a single backend.
+    - name: trpc.test.helloworld.Greeter1          # backend service name.
+      namespace: Development                       # backend service environment.
+      network: tcp                                 # backend service network type, tcp or udp, configuration takes precedence.
+      discovery: etcd                              # the name of the service discovery component of the backend service, which can be empty.
+      protocol: trpc                               # application layer protocol, trpc or http.
+      timeout: 800                                 # maximum request processing time in milliseconds.
+    - name: trpc.test.helloworld.Greeter2          # backend service name.
+      namespace: Production                        # backend service environment.
+      network: tcp                                 # backend service network type, tcp or udp, configuration takes precedence.
+      target: cl5://11111:222222                   # the specific address of the backend service, generally not configures, compatible with the old routing method, (ip://127.0.0.1:8080, cl5://modid:cmdid, cmlb://appid).
+      protocol: http                               # application layer protocol, trpc or http.
+      timeout: 2000                                # maximum request processing time in milliseconds.
+
+plugins:                                          # plugins configurations.
+  registry:                                       # service registration configuration.
+    polaris:                                      # configuration of polaris name registration service.
+      heartbeat_only: true                        # just report the heartbeat.
+      heartbeat_interval: 3000                    # name registration service heartbeat reporting interval.
+      heartbeat_timeout: 1000                     # name registration service heartbeat timeout.
+      service:
+        - name:  trpc.test.helloworld.Greeter1    # service name, one-to-one correspondence with the above service configuration.
+          namespace: ${namespace}                 # environment type, two types: production and development.
+          token: ${service_token}                 # token required for service registration.
+          instance_id: ${instance_id}             # instance_id required for service registration.
+        - name: trpc.test.helloworld.Greeter2
+          namespace: ${namespace}                 # environment type, two types: production and development.
+          token: ${service_token}                 # token required for service registration.
+          instance_id: ${instance_id}             # instance_id required for service registration.
+
+  selector:                                       # configuration for user-defined selectors.
+    polaris:                                      # internal configuration for polaris overall api.
+      discovery:                                  # service discovery configuration for polaris overall api.
+        refresh_interval: 10000                   # the time when the name routing information is refreshed synchronously.
+        timeout: 2000                             # name service request timeout in milliseconds.
+        protocol: grpc                            # name Service remote interaction protocol type.
+      loadbalance:                                # load balancing configuration of polaris overall api.
+        name: wr                                  # load balancing strategy of polaris overall api.
+      curcuitbreaker:                             # circuit breaker configuration of polaris overall api.
+        name: rate                                # circuit breaker strategy of polaris overall api.
+      address_list: ${polaris_address_list}       # name service remote address list.
+    cmlb:                                         # configuration for cmlb name service.
+      refresh_interval: 10000                     # sync refresh time.
+      agent_address: ${cmlb_agent_address}        # local agent address.
+
+  discovery:                                      # service discovery configuration.
+    polaris:                                      # configuration for polaris service discovery.
+      refresh_interval: 10000                     # sync refresh time.
+      timeout: 2000                               # request timeout in milliseconds.
+      protocol: trpc                              # name Service remote interaction protocol type.
+    etcd:                                         # configuration for etcd service discovery.
+      timeout: 2000                               # request timeout in milliseconds.
+      address: 127.0.0.1:2379                     # etcd remote address.
+
+  loadbalance:                                    # load balancing configuration.
+    wrr:                                          # the configuration of the wrr algorithm implemented by trpc.
+      interval: 10                                # interval time.
+    polaris_wr:                                   # the configuration of polaris wr algorithm.
+      interval: 10                                # interval time.
+    polaris_random:                               # the configuration of polaris random algorithm.
+      interval: 10                                # interval time.
+
+  curcuitbreaker:                                 # circuit breaker configuration.
+    polaris_rate:                                 # the configuration of polaris rate algorithm.
+      threshold: 10                               # threshold.
+    polaris_err:                                  # the configuration of polaris err algorithm.
+      threshold: 10                               # threshold.
+
+  config:                                         # the configuration of business configuration center.
+    tconf:                                        # tconf: the name of the remote configuration center.
+      refresh_interval: 10000                     # sync update interval time.
+      timeout: 1000                               # pull remote configuration timeout.
+      app_id: test                                # pull remote configuration appid.
+
+  tracing:                                # tracing configuration.
+    jaeger:                               # uber jaeger.
+      serviceName: trpc-ecosystem
+      disabled: false
+      sampler:
+        type: const
+        param: 1
+      reporter:
+        localAgentHostPort: localhost:6831
+    tjg:                                # tpstelemetry.
+      agent: localhost:4534
+      sample_rate: 1000                             # sampling rate.
+      min_speed_rate: 100                           # minimum speed rate.
+      max_speed_rate: 1000                          # maximum speed rate.

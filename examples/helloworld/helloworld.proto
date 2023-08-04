@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package trpc.test.helloworld;
+option go_package="trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld";
+
+service Greeter {
+  rpc SayHello (HelloRequest) returns (HelloReply) {}
+  rpc SayHi (HelloRequest) returns (HelloReply) {}
+}
+
+message HelloRequest {
+  string msg = 1;
+}
+
+message HelloReply {
+  string msg = 1;
+}

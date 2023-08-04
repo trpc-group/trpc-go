@@ -1,0 +1,22 @@
+syntax = "proto3";
+package   trpc.examples.rpcz;
+
+// option go_package is required.
+option  go_package ="trpc.group/trpc-go/trpc-go/examples/features/rpcz/proto";
+
+// The RPCZ service definition.
+service RPCZ {
+  // Defined Hello RPC
+  rpc Hello(HelloReq) returns (HelloRsp);
+}
+
+// The request message containing the msg.
+message HelloReq {
+  string msg = 1; // request message
+  uint32 code = 2; // want error code
+}
+
+// The response message containing the msg.
+message HelloRsp { 
+  string msg = 1;
+}
