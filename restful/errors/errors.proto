@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package errors;
+
+option go_package = ".;errors";
+
+// tRPC error represented in protobuf
+message err {
+    // error code
+    int32 code = 1;
+    // error message
+    string message = 2;
+}

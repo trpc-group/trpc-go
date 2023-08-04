@@ -1,0 +1,6 @@
+custom :                            # Customize configuration.
+  test : customConfigFromServer
+  test_obj :
+    key1 : value1
+    key2 : true
+    key3 : 1234

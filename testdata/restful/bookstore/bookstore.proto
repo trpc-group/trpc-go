@@ -1,0 +1,168 @@
+syntax = "proto3";
+
+package trpc.examples.restful.bookstore;
+
+option go_package = "trpc.group/trpc-go/trpc-go/examples/restful/bookstore";
+
+import "trpc/api/annotations.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/empty.proto";
+
+// 书店服务
+service Bookstore {
+  // 获取所有的书柜
+  rpc ListShelves(google.protobuf.Empty) returns (ListShelvesResponse) {
+    option (trpc.api.http) = {
+      get: "/shelves"
+      response_body: "shelves"
+    };
+  }
+
+  // 创建一个书柜
+  rpc CreateShelf(CreateShelfRequest) returns (Shelf) {
+    option (trpc.api.http) = {
+      post: "/shelf"
+      body: "*"
+      additional_bindings: {
+        post: "/shelf/theme/{shelf.theme}"
+      }
+    };
+  }
+
+  // 获取一个书柜
+  rpc GetShelf(GetShelfRequest) returns (Shelf) {
+    option (trpc.api.http) = {
+      get: "/shelf/{shelf}"
+    };
+  }
+
+  // 删除一个书柜
+  rpc DeleteShelf(DeleteShelfRequest) returns (google.protobuf.Empty) {
+    option (trpc.api.http) = {
+      delete: "/shelf/{shelf}"
+    };
+  }
+
+  // 获取所有的书
+  rpc ListBooks(ListBooksRequest) returns (ListBooksResponse) {
+    option (trpc.api.http) = {
+      get: "/books/shelf/{shelf}"
+    };
+  }
+
+  // 创建一本书
+  rpc CreateBook(CreateBookRequest) returns (Book) {
+    option (trpc.api.http) = {
+      post: "/book/shelf/{shelf}"
+      body: "book"
+    };
+  }
+
+  // 获取一本书
+  rpc GetBook(GetBookRequest) returns (Book) {
+    option (trpc.api.http) = {
+      get: "/book/shelfid/{shelf}/bookid/{book}"
+    };
+  }
+
+  // 删除一本书
+  rpc DeleteBook(DeleteBookRequest) returns (google.protobuf.Empty) {
+    option (trpc.api.http) = {
+      delete: "/book/shelfid/{shelf}/bookid/{book}"
+    };
+  }
+
+  // 更新一本书
+  rpc UpdateBook(UpdateBookRequest) returns (Book) {
+    option (trpc.api.http) = {
+      patch: "/book/shelfid/{shelf}/bookid/{book.id}"
+      body: "book"
+    };
+  }
+
+  rpc UpdateBooks(UpdateBooksRequest) returns (ListBooksResponse) {
+    option (trpc.api.http) = {
+      patch: "/book/shelfid/{shelf}"
+      body: "books"
+    };
+  }
+}
+
+// 书柜
+message Shelf {
+  int64 id = 1;
+  string theme = 2;
+}
+
+// 书
+message Book {
+  int64 id = 1;
+  string author = 2;
+  string title = 3;
+  Content content = 4;
+}
+
+// 书内容
+message Content {
+  string summary = 1;
+}
+
+// 获取所有的书柜响应
+message ListShelvesResponse {
+  repeated Shelf shelves = 1;
+}
+
+// 创建一个书柜请求
+message CreateShelfRequest {
+  Shelf shelf = 1;
+}
+
+// 获取一个书柜请求
+message GetShelfRequest {
+  int64 shelf = 1;
+}
+
+// 删除一个书柜请求
+message DeleteShelfRequest {
+  int64 shelf = 1;
+}
+
+// 获取所有的书请求
+message ListBooksRequest {
+  int64 shelf = 1;
+}
+
+// 获取所有的书
+message ListBooksResponse {
+  repeated Book books = 1;
+}
+
+// 创建一本书请求
+message CreateBookRequest {
+  int64 shelf = 1;
+  Book book = 2;
+}
+
+// 获取一本书请求
+message GetBookRequest {
+  int64 shelf = 1;
+  int64 book = 2;
+}
+
+// 删除一本书请求
+message DeleteBookRequest {
+  int64 shelf = 1;
+  int64 book = 2;
+}
+
+// 更新一本书请求
+message UpdateBookRequest {
+  int64 shelf = 1;
+  Book book = 2;
+  google.protobuf.FieldMask update_mask = 3;
+}
+
+message UpdateBooksRequest {
+  int64 shelf = 1;
+  repeated Book books = 2;
+}

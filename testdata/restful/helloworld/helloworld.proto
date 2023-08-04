@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package trpc.examples.restful.helloworld;
+
+option go_package = "trpc.group/trpc-go/trpc-go/examples/restful/helloworld";
+
+import "trpc/api/annotations.proto";
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/field_mask.proto";
+
+// Greeter 服务
+service Greeter {
+  rpc SayHello(HelloRequest) returns (HelloReply) {
+    option (trpc.api.http) = {
+      post: "/v1/foobar"
+      body: "*"
+      additional_bindings: {
+        post: "/v1/foo/{name}"
+      }
+      additional_bindings: {
+        get: "/v2/bar"
+      }
+    };
+  }
+}
+
+// Hello 请求
+message HelloRequest {
+  string name = 1;
+  NestedOuter single_nested = 2;
+  bytes primitive_bytes_value = 3;
+  bool primitive_bool_value = 4;
+  float primitive_float_value = 5;
+  double primitive_double_value = 6;
+  int32 primitive_int32_value = 7;
+  uint32 primitive_uint32_value = 8;
+  int64 primitive_int64_value = 9;
+  uint64 primitive_uint64_value = 10;
+  fixed32 primitive_fixed32_value = 11;
+  fixed64 primitive_fixed64_value = 12;
+  sint32 primitive_sint32_value = 13;
+  sint64 primitive_sint64_value = 14;
+  sfixed32 primitive_sfixed32_value = 15;
+  sfixed64 primitive_sfixed64_value = 16;
+  NumericEnum enum_value = 17;
+  oneof oneof_value {
+    google.protobuf.Empty oneof_empty = 18;
+    string oneof_string = 19;
+  }
+  repeated string repeated_string_value = 20;
+  repeated NumericEnum repeated_enum_value = 21;
+  repeated NestedOuter repeated_nested_value = 22;
+  map<string, string> mapped_string_value = 23;
+  map<string, NumericEnum> mapped_enum_value = 24;
+  map<string, NestedOuter> mapped_nested_value = 25;
+  google.protobuf.Timestamp time = 26;
+  google.protobuf.Duration duration = 27;
+  google.protobuf.StringValue wrapped_str_value = 28;
+  google.protobuf.FloatValue wrapped_float_value = 29;
+  google.protobuf.DoubleValue wrapped_double_value = 30;
+  google.protobuf.BoolValue wrapped_bool_value = 31;
+  google.protobuf.BytesValue wrapped_bytes_value = 32;
+  google.protobuf.Int32Value wrapped_int32_value = 33;
+  google.protobuf.UInt32Value wrapped_uint32_value = 34;
+  google.protobuf.Int64Value wrapped_int64_value = 35;
+  google.protobuf.UInt64Value wrapped_uint64_value = 36;
+  google.protobuf.FieldMask mask_value = 37;
+}
+
+// Hello 响应
+message HelloReply {
+  string message = 1;
+}
+
+// 数字枚举
+enum NumericEnum {
+  ZERO = 0;
+  ONE = 1;
+}
+
+// 嵌套外层
+message NestedOuter {
+  string name = 1;
+  uint32 amount = 2;
+  enum DeepEnum {
+    FALSE = 0;
+    TRUE = 1;
+  }
+  DeepEnum ok = 3;
+  NestedInner inner = 4;
+}
+
+// 嵌套内层
+message NestedInner {
+  bool a = 1;
+  bool b = 2;
+}

@@ -1,0 +1,15 @@
+global:
+  namespace: Development
+  env_name: test
+server:
+  app: testing
+  server: end2end
+  admin:
+    ip: 127.0.0.1
+    port: 9028
+    rpcz:
+       fraction: 1.0
+  service:
+    - name: trpc.testing.end2end.TestTRPC
+      protocol: trpc
+      network: tcp

@@ -1,0 +1,28 @@
+syntax = "proto3";
+package   trpc.examples.stream;
+
+// option go_package is required.
+option  go_package ="trpc.group/trpc-go/trpc-go/examples/features/stream";
+
+// The stream service definition.
+service TestStream {
+  // Defined Client-side streaming RPC
+  // Add stream in front of HelloReq
+  rpc ClientStream (stream HelloReq) returns (HelloRsp);
+  // Defined Server-side streaming RPC
+  // Add stream in front of HelloRsp
+  rpc ServerStream (HelloReq) returns (stream HelloRsp);
+  // Defined Bidirectional streaming RPC
+  // Add stream in front of HelloReq and HelloRsp
+  rpc BidirectionalStream (stream HelloReq) returns (stream HelloRsp);
+}
+
+// The request message containing the msg.
+message HelloReq {
+  string msg = 1;
+}
+
+// The response message containing the msg.
+message HelloRsp { 
+  string msg = 1;
+}
