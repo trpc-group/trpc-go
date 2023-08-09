@@ -40,10 +40,10 @@ require (
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
 	golang.org/x/net v0.5.0 // indirect
+	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.4.0 // indirect
 	golang.org/x/text v0.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	trpc.group/trpc-go/go_reuseport v1.7.1-0.20230423021710-f5eeff5d87a3 // indirect
-	trpc.group/trpc-go/jce v0.0.0-20230424070841-15a24b5c5646 // indirect
 	trpc.group/trpc-go/tnet v0.0.12-0.20230423031524-5eb1cc42f225 // indirect
 )

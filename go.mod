@@ -29,7 +29,6 @@ require (
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/yaml.v3 v3.0.1
 	trpc.group/trpc-go/go_reuseport v1.7.1-0.20230423021710-f5eeff5d87a3
-	trpc.group/trpc-go/jce v0.0.0-20230424070841-15a24b5c5646
 	trpc.group/trpc-go/tnet v0.0.12-0.20230423031524-5eb1cc42f225
 	trpc.group/trpc/trpc-protocol/pb/go/trpc v0.1.2-0.20230530025122-c44533fe44bd
 )

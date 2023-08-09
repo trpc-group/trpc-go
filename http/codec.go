@@ -50,7 +50,6 @@ var contentTypeSerializationType = map[string]int{
 	"application/x-protobuf":            codec.SerializationTypePB,
 	"application/pb":                    codec.SerializationTypePB,
 	"application/proto":                 codec.SerializationTypePB,
-	"application/jce":                   codec.SerializationTypeJCE,
 	"application/flatbuffer":            codec.SerializationTypeFlatBuffer,
 	"application/octet-stream":          codec.SerializationTypeNoop,
 	"application/x-www-form-urlencoded": codec.SerializationTypeForm,
@@ -62,7 +61,6 @@ var contentTypeSerializationType = map[string]int{
 var serializationTypeContentType = map[int]string{
 	codec.SerializationTypeJSON:       "application/json",
 	codec.SerializationTypePB:         "application/proto",
-	codec.SerializationTypeJCE:        "application/jce",
 	codec.SerializationTypeFlatBuffer: "application/flatbuffer",
 	codec.SerializationTypeNoop:       "application/octet-stream",
 	codec.SerializationTypeForm:       "application/x-www-form-urlencoded",

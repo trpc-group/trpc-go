@@ -14,7 +14,7 @@ type Serializer interface {
 }
 
 // SerializationType defines the code of different serializers, such as
-// protobuf, jce, json, http-get-query and http-get-restful.
+// protobuf, json, http-get-query and http-get-restful.
 //
 //   - code 0-127 is used for common modes in all language versions of trpc.
 //   - code 128-999 is used for modes in any language specific version of trpc.
@@ -23,8 +23,8 @@ type Serializer interface {
 const (
 	// SerializationTypePB is protobuf serialization code.
 	SerializationTypePB = 0
-	// SerializationTypeJCE is jce serialization code.
-	SerializationTypeJCE = 1
+	// 1 is reserved by Tencent for internal usage.
+	_ = 1
 	// SerializationTypeJSON is json serialization code.
 	SerializationTypeJSON = 2
 	// SerializationTypeFlatBuffer is flatbuffer serialization code.
