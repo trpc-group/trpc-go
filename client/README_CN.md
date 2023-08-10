@@ -37,7 +37,7 @@ client:                                    # 客户端调用的后端配置
       network: tcp                         # 后端服务的网络类型 tcp udp
       protocol: trpc                       # 应用层协议 trpc http
       timeout: 800                         # 当前这个请求最长处理时间
-      serialization: 0                     # 序列化方式 0-pb 1-jce 2-json 3-flatbuffer，默认不要配置
+      serialization: 0                     # 序列化方式 0-pb 2-json 3-flatbuffer，默认不要配置
       compression: 1                       # 压缩方式 1-gzip 2-snappy 3-zlib，默认不要配置
       filter:                              # 针对单个后端的拦截器配置数组
         - tjg                              # 只有当前这个后端上报 tjg

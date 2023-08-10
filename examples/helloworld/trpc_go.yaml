@@ -33,7 +33,7 @@ client:                                     # 客户端调用的后端配置
       network: tcp                          # 后端服务的网络类型 tcp udp unix
       protocol: trpc                        # 应用层协议 trpc http
       timeout: 800                          # 请求最长处理时间
-      serialization: 0                      # 序列化方式 0-pb 1-jce 2-json 3-flatbuffer，默认不要配置
+      serialization: 0                      # 序列化方式 0-pb 2-json 3-flatbuffer，默认不要配置
 
 plugins:                 # 插件配置
   log:                   # 日志配置

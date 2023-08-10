@@ -35,7 +35,7 @@ client:                                    # Backend configurations for client c
       network: tcp                         # Network type of the backend service (tcp udp)
       protocol: trpc                       # Application layer protocol (trpc http)
       timeout: 800                         # Maximum processing time for the current request
-      serialization: 0                     # Serialization method 0-pb 1-jce 2-json 3-flatbuffer (default: do not configure)
+      serialization: 0                     # Serialization method 0-pb 2-json 3-flatbuffer (default: do not configure)
       compression: 1                       # Compression method 1-gzip 2-snappy 3-zlib (default: do not configure)
       filter:                              # Array of interceptor configurations for the individual backend
         - tjg                              # Filter reporting to tjg is added to the current backend after m007 
