@@ -84,7 +84,7 @@ func getTCPSockaddr(proto, addr string) (sa syscall.Sockaddr, soType int, err er
 func determineTCPProto(proto string, ip *net.TCPAddr) (string, error) {
 	// If the protocol is set to "tcp", we try to determine the actual protocol
 	// version from the size of the resolved IP address. Otherwise, we simple use
-	// the protcol given to us by the caller.
+	// the protocol given to us by the caller.
 
 	if ip.IP.To4() != nil {
 		return "tcp4", nil
