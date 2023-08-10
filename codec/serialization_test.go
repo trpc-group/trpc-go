@@ -5,7 +5,6 @@ import (
 
 	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/stretchr/testify/assert"
-	"trpc.group/trpc-go/jce"
 	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	"trpc.group/trpc-go/trpc-go/codec"
@@ -197,97 +196,6 @@ func TestFlatbuffers(t *testing.T) {
 	err = s.Unmarshal(data, req)
 	assert.Nil(t, err)
 	assert.Equal(t, "this is a string", string(req.Message()))
-}
-
-// GetReq struct implement
-// GetReq is code generate by
-// [trpc4videopacket]
-// source jce content:
-//
-// module Hello
-//
-//	{
-//	   struct GetReq {
-//	      0 optional int a;
-//	      1 optional int b;
-//	   };
-//	}
-type GetReq struct {
-	A int32 `json:"a"`
-	B int32 `json:"b"`
-}
-
-func (st *GetReq) ResetDefault() {
-}
-
-// ReadFrom reads  from _is and put into struct.
-func (st *GetReq) ReadFrom(_is *jce.Reader) error {
-	var err error
-	var length int32
-	var have bool
-	var ty byte
-	st.ResetDefault()
-
-	err = _is.Read_int32(&st.A, 0, false)
-	if err != nil {
-		return err
-	}
-
-	err = _is.Read_int32(&st.B, 1, false)
-	if err != nil {
-		return err
-	}
-
-	_ = err
-	_ = length
-	_ = have
-	_ = ty
-	return nil
-}
-
-// WriteTo encode struct to buffer
-func (st *GetReq) WriteTo(_os *jce.Buffer) error {
-	var err error
-	_ = err
-	err = _os.Write_int32(st.A, 0)
-	if err != nil {
-		return err
-	}
-
-	err = _os.Write_int32(st.B, 1)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-type GetReqNotJce struct {
-	A int32 `json:"a"`
-	B int32 `json:"b"`
-}
-
-func TestJCE(t *testing.T) {
-	s := codec.GetSerializer(codec.SerializationTypeJCE)
-
-	// 异常用例
-	p1 := &GetReqNotJce{A: 100, B: 1000}
-	data, err := s.Marshal(p1)
-	assert.Nil(t, data)
-
-	p2 := &GetReqNotJce{}
-	err = s.Unmarshal(data, p2)
-	assert.NotNil(t, err)
-
-	// 正常用例
-	p3 := &GetReq{A: 100, B: 1000}
-	data, err = s.Marshal(p3)
-	assert.Nil(t, err)
-
-	p4 := &GetReq{}
-	err = s.Unmarshal(data, p4)
-	assert.Nil(t, err)
-	assert.Equal(t, p3.A, p4.A)
-	assert.Equal(t, p3.B, p4.B)
 }
 
 func TestXML(t *testing.T) {

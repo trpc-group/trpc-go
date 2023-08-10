@@ -16,7 +16,7 @@ type Codec interface {
     Encode(message Msg, rspbody []byte) (response-buffer []byte, err error)
 }
 ```
-- Serializer：body 序列化接口，目前支持 protobuf json jce。可插拔，用户可自己定义并注册进来。
+- Serializer：body 序列化接口，目前支持 protobuf json fb xml。可插拔，用户可自己定义并注册进来。
 ```golang
 type Serializer interface {
     //server解包出二进制包体后，调用该函数解析到具体的reqbody结构体

@@ -21,7 +21,7 @@ type Codec interface {
 }
 ```
 
-- Serializer: body serialization interface, now tRPC-Go supports protobuf, json and jce protocol. This serializer is pluggable and users can define their own and register it. 
+- Serializer: body serialization interface, now tRPC-Go supports protobuf, json, fb and xml protocol. This serializer is pluggable and users can define their own and register it. 
 ```golang
 type Serializer interface {
 	// Unmarshal deserialize the in bytes into body

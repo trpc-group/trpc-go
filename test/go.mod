@@ -47,7 +47,5 @@ require (
 	golang.org/x/sys v0.4.0 // indirect
 	golang.org/x/text v0.6.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
-	trpc.group/trpc-go/jce v0.0.0-20230424070841-15a24b5c5646 // indirect
 	trpc.group/trpc-go/tnet v0.0.12-0.20230423031524-5eb1cc42f225 // indirect
-
 )
