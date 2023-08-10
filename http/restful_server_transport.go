@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/valyala/fasthttp"
-	reuseport "trpc.group/trpc-go/go_reuseport"
+	"trpc.group/trpc-go/trpc-go/internal/reuseport"
 	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	"trpc.group/trpc-go/trpc-go/codec"
