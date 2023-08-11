@@ -101,7 +101,7 @@ func determineUDPProto(proto string, ip *net.UDPAddr) (string, error) {
 }
 
 // NewReusablePortPacketConn returns net.FilePacketConn that created from
-// a file discriptor for a socket with SO_REUSEPORT option.
+// a file descriptor for a socket with SO_REUSEPORT option.
 func NewReusablePortPacketConn(proto, addr string) (net.PacketConn, error) {
 	sockaddr, soType, err := getSockaddr(proto, addr)
 	if err != nil {

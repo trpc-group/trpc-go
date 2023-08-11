@@ -45,7 +45,7 @@ feat(transport): add transport stream support
  
 - support only client stream 
 - support only server stream 
-- supoort both client and server stream
+- support both client and server stream
  
 Close #1
 ```

@@ -103,7 +103,7 @@ func determineTCPProto(proto string, ip *net.TCPAddr) (string, error) {
 }
 
 // NewReusablePortListener returns net.FileListener that created from
-// a file discriptor for a socket with SO_REUSEPORT option.
+// a file descriptor for a socket with SO_REUSEPORT option.
 func NewReusablePortListener(proto, addr string) (l net.Listener, err error) {
 	var (
 		soType, fd int
