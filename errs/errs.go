@@ -161,8 +161,8 @@ func (e *Error) Format(s fmt.State, verb rune) {
 			if e.stack != nil {
 				stackTrace = e.stack
 			}
-			if e.Cause() != nil {
-				_, _ = fmt.Fprintf(s, "\nCause by %+v", e.Cause())
+			if e.Unwrap() != nil {
+				_, _ = fmt.Fprintf(s, "\nCause by %+v", e.Unwrap())
 			}
 			return
 		}
@@ -178,9 +178,6 @@ func (e *Error) Format(s fmt.State, verb rune) {
 
 // Unwrap support Go 1.13+ error chains.
 func (e *Error) Unwrap() error { return e.cause }
-
-// Cause return internal error
-func (e *Error) Cause() error { return e.cause }
 
 // IsTimeout checks whether this error is a timeout error with error type typ.
 func (e *Error) IsTimeout(typ int) bool {
@@ -330,7 +327,7 @@ func Msg(e error) string {
 	}
 	// For cases of error chains, err.Error() will print the entire chain,
 	// including the current error and the nested error messages, in an appropriate format.
-	if err.Cause() != nil {
+	if err.Unwrap() != nil {
 		return err.Error()
 	}
 	return err.Msg
