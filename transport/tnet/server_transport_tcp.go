@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/panjf2000/ants/v2"
-	reuseport "trpc.group/trpc-go/go_reuseport"
 	"trpc.group/trpc-go/tnet"
 	"trpc.group/trpc-go/tnet/tls"
+	"trpc.group/trpc-go/trpc-go/internal/reuseport"
 
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"

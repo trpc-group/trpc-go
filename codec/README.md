@@ -2,7 +2,7 @@
 tRPC-Go codec package defines the business communication protocol of packing and unpacking.
 - tRPC-Go can support any third party business communication protocol, which implements codec interface.
 - Every business protocol uses one single go module, and the `go get` command only pulls the specific codec module.
-- There are two typical business protocol patten: IDL protocol, such as tars, and non-IDL protocol, such as oidb. those two examples can be refer when implements other protocol.
+- There are two typical business protocol pattern: IDL protocol, such as tars, and non-IDL protocol, such as oidb. those two examples can be refer when implements other protocol.
 
 ## Business Protocol Implementation Repository: https://trpc.group/trpc-go/trpc-codec
 

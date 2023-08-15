@@ -132,7 +132,7 @@ func TestBasic(t *testing.T) {
 		return id, opts
 	}
 
-	t.Run("Mutiple Conns Concurrent Read Write", func(t *testing.T) {
+	t.Run("Multiple Conns Concurrent Read Write", func(t *testing.T) {
 		pool := multiplex.NewPool(
 			tnet.Dial,
 			multiplex.WithEnableMetrics(),

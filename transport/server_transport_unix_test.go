@@ -6,7 +6,6 @@ package transport_test
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"net"
 	"os"
 	"testing"
@@ -17,29 +16,31 @@ import (
 	"trpc.group/trpc-go/trpc-go/transport"
 )
 
-func TestServerTransport_ListenAndServeUnix(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
-	t.Run("disable reuse port", func(t *testing.T) {
-		require.Nil(t, transport.NewServerTransport(
-			transport.WithReusePort(false),
-		).ListenAndServe(
-			context.Background(),
-			transport.WithListenNetwork("unix"),
-			transport.WithListenAddress(fmt.Sprintf("test%d.sock", rand.Int63())),
-			transport.WithServerFramerBuilder(&framerBuilder{}),
-		))
+func TestST_UnixDomain(t *testing.T) {
+	// Disable reuse port
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() {
+		cancel()
+		time.Sleep(time.Millisecond * 100) // Ensure the unix listener is closed.
 	})
+	require.Nil(t, transport.NewServerTransport(
+		transport.WithReusePort(false),
+	).ListenAndServe(
+		ctx,
+		transport.WithListenNetwork("unix"),
+		transport.WithListenAddress(fmt.Sprintf("%s/test.sock", t.TempDir())),
+		transport.WithServerFramerBuilder(&framerBuilder{}),
+	))
 
-	t.Run("enable reuse port", func(t *testing.T) {
-		require.Nil(t, transport.NewServerTransport(
-			transport.WithReusePort(true),
-		).ListenAndServe(
-			context.Background(),
-			transport.WithListenNetwork("unix"),
-			transport.WithListenAddress(fmt.Sprintf("test%d.sock", rand.Int63())),
-			transport.WithServerFramerBuilder(&framerBuilder{}),
-		))
-	})
+	// Enable reuse port
+	require.Nil(t, transport.NewServerTransport(
+		transport.WithReusePort(true),
+	).ListenAndServe(
+		ctx,
+		transport.WithListenNetwork("unix"),
+		transport.WithListenAddress(fmt.Sprintf("%s/test.sock", t.TempDir())),
+		transport.WithServerFramerBuilder(&framerBuilder{}),
+	))
 }
 
 func TestGetPassedListenerErr(t *testing.T) {
