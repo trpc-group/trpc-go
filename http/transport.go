@@ -22,7 +22,7 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
-	reuseport "trpc.group/trpc-go/go_reuseport"
+	"trpc.group/trpc-go/trpc-go/internal/reuseport"
 	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	"trpc.group/trpc-go/trpc-go/codec"

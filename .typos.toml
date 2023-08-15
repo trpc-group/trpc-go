@@ -1,0 +1,14 @@
+# Typos check: https://github.com/crate-ci/typos
+
+# ignore *.crt files
+[type.csr]
+extend-glob = ["*.csr"]
+check-file = false
+
+# ignore LICENSE 
+[files]
+extend-exclude = ["LICENSE"]
+
+[default.extend-identifiers]
+# Don't correct the identifiers "O_WRONLY"
+O_WRONLY = "O_WRONLY"

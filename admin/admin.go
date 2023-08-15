@@ -15,7 +15,7 @@ import (
 	"strings"
 	"sync"
 
-	reuseport "trpc.group/trpc-go/go_reuseport"
+	"trpc.group/trpc-go/trpc-go/internal/reuseport"
 	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	"trpc.group/trpc-go/trpc-go/config"
@@ -185,8 +185,8 @@ func (s *Server) WatchStatus(serviceName string, onStatusChanged func(healthchec
 }
 
 // HandleFunc registers the handler function for the given pattern.
-func (s *Server) HandleFunc(patten string, handler func(w http.ResponseWriter, r *http.Request)) {
-	_ = s.router.add(patten, handler)
+func (s *Server) HandleFunc(pattern string, handler func(w http.ResponseWriter, r *http.Request)) {
+	_ = s.router.add(pattern, handler)
 }
 
 func (s *Server) listen(network, addr string) (net.Listener, error) {

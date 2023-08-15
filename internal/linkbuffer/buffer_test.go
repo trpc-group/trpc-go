@@ -381,9 +381,9 @@ func TestBuf_PrependAfterRead(t *testing.T) {
 }
 
 func TestBuf_UseBytesAfterRelease(t *testing.T) {
-	ba := newBytesAllocator()
+	bytesAllocator := newBytesAllocator()
 
-	b1 := NewBuf(ba, 4)
+	b1 := NewBuf(bytesAllocator, 4)
 	n, err := b1.Write([]byte("123"))
 	require.Nil(t, err)
 	require.Equal(t, 3, n)
@@ -396,7 +396,7 @@ func TestBuf_UseBytesAfterRelease(t *testing.T) {
 	require.Equal(t, "123", string(bts))
 	b1.Release()
 
-	b2 := NewBuf(ba, 4)
+	b2 := NewBuf(bytesAllocator, 4)
 	n, err = b2.Write([]byte("1234"))
 	require.Nil(t, err)
 	require.Equal(t, 4, n)

@@ -51,7 +51,7 @@ func (s *TRPCService) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (
 
 	rsp := &testpb.SimpleResponse{Payload: payload}
 	if in.FillUsername {
-		// Validata the user name in request.
+		// Validate the user name in request.
 		if in.Username != validUserNameForAuth {
 			return nil, errs.NewFrameError(errs.RetServerAuthFail, "need valid user name!")
 		}
