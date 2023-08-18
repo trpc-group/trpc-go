@@ -1,3 +1,8 @@
+// Tencent is pleased to support the open source community by making tRPC available.
+// Copyright (C) 2023 THL A29 Limited, a Tencent company. All rights reserved.
+// If you have downloaded a copy of the tRPC source code from Tencent,
+// please note that tRPC source code is licensed under the Apache 2.0 License that can be found in the LICENSE file.
+
 // Package rpcz is a tool that monitors the running state of RPC, recording various things that happen in a rpc,
 // such as serialization/deserialization, compression/decompression, and the execution of filter,
 // which can be applied to debug and performance optimization.

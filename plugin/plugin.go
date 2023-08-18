@@ -1,3 +1,8 @@
+// Tencent is pleased to support the open source community by making tRPC available.
+// Copyright (C) 2023 THL A29 Limited, a Tencent company. All rights reserved.
+// If you have downloaded a copy of the tRPC source code from Tencent,
+// please note that tRPC source code is licensed under the Apache 2.0 License that can be found in the LICENSE file.
+
 // Package plugin implements a general plugin factory system which provides plugin registration and loading.
 // It is mainly used when certain plugins must be loaded by configuration.
 // This system is not supposed to register plugins that do not rely on configuration like codec. Instead, plugins
