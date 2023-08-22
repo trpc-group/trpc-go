@@ -1,0 +1,3 @@
+[submodule "examples/features/restful/pb/trpc"]
+	path = examples/features/restful/pb/trpc
+	url = git@github.com:trpc-group/trpc.git
