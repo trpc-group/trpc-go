@@ -173,6 +173,8 @@ func (s *Server) Serve() error {
 		return err
 	}
 
+	log.Infof("admin service launch success, %s:%s, serving ...", ln.Addr().Network(), ln.Addr().String())
+
 	s.server = &http.Server{
 		Addr:         ln.Addr().String(),
 		ReadTimeout:  cfg.readTimeout,
