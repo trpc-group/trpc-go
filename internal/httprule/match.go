@@ -1,7 +1,6 @@
 package httprule
 
 import (
-	"bytes"
 	"errors"
 	"strings"
 	"sync"
@@ -64,24 +63,21 @@ func (wildcard) handle(m *matcher) error {
 // handle implements segment.
 func (deepWildcard) handle(m *matcher) error {
 	// prevent out-of-bounds error.
-	// m.pos = len(m.components) is allowed, because "**" could match any number of components.
 	if m.pos > len(m.components) {
 		return errNotMatch
 	}
-
-	// use bytes.Buffer to concatenate every component starting from m.pos.
-	// then push it into the stack.
-	var concat bytes.Buffer
-	for i := len(m.components) - 1; i >= m.pos; i-- {
-		concat.WriteString(m.components[i])
-		if i != m.pos {
-			concat.WriteString("/")
-		}
+	// m.pos = len(m.components) is allowed, because "**" could match any number of components.
+	if m.pos == len(m.components) {
+		m.st.Push("")
+		return nil
 	}
-	m.st.Push(concat.String())
-	// "**" has to be the last segment.
-	// set m.pos to be the end of all components.
-	m.pos = len(m.components)
+
+	var sb strings.Builder
+	for ; m.pos < len(m.components); m.pos++ {
+		sb.WriteRune('/')
+		sb.WriteString(m.components[m.pos])
+	}
+	m.st.Push(sb.String()[1:])
 
 	return nil
 }
