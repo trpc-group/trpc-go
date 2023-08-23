@@ -1,0 +1,21 @@
+global:                             # global config.
+  namespace: development            # environment type, two types: production and development.
+  env_name: test                    # environment name, names of multiple environments in informal settings.
+  container_name: ${container_name} # container name, the placeholder is replaced by the actual container name by platform.
+  local_ip: ${local_ip}             # local ip，it is the container's ip in container and is local ip in physical machine or virtual machine.
+
+client:                                            # configuration for client calls.
+  timeout: 1000                                    # maximum request processing time for all backends.
+  namespace: development                           # environment type for all backends.
+  service:                                         # configuration for a single backend.
+    - name: greeterRestfulService                  # backend service name
+      target: ip://127.0.0.1:9092                  # backend service address：ip://ip:port.
+      network: tcp                                 # backend service network type, tcp or udp, configuration takes precedence.
+      protocol: http                               # application layer protocol, trpc or http.
+      timeout: 800                                 # maximum request processing time in milliseconds.
+
+plugins:                                          # configuration for plugins
+  log:                                            # configuration for log
+    default:                                      # default configuration for log, and can support multiple output.
+      - writer: console                           # console stdout, default.
+        level: debug                              # level of stdout.
