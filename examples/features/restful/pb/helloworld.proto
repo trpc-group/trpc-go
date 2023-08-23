@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package trpc.examples.restful.helloworld;
+
+option go_package = "trpc.group/trpc-go/trpc-go/examples/features/restful/pb";
+
+import "trpc/api/annotations.proto";
+
+// Greeter service
+service Greeter {
+  rpc SayHello(HelloRequest) returns (HelloReply) {
+    option (trpc.api.http) = {
+      // http method is GET and path is /v1/greeter/hello/{name}
+      // {name} is a path parameter , it will be mapped to HelloRequest.name
+      get: "/v1/greeter/hello/{name}"
+    };
+  }
+
+  rpc Message(MessageRequest) returns (MessageInfo) {
+    option (trpc.api.http) = {
+      // http method is GET and path is /v1/greeter/message/{name=messages/*}
+      // messages/* * is a wildcard , it will be mapped to MessageRequest.name
+      get: "/v1/greeter/message/{name=messages/*}"
+    };
+  }
+
+  rpc UpdateMessage(UpdateMessageRequest) returns (MessageInfo) {
+    option (trpc.api.http) = {
+      // http method is PATCH and path is /v1/greeter/message/{message_id}
+      // message_id is a path parameter, it will be mapped to UpdateMessageRequest.message_id
+      patch: "/v1/greeter/message/{message_id}"
+      // body is message, the HTTP Body will be mapped to UpdateMessageRequest.message
+      body: "message"
+    };
+  }
+
+  rpc UpdateMessageV2(UpdateMessageV2Request) returns (MessageInfo) {
+    option (trpc.api.http) = {
+      // http method is PATCH and path is /v2/greeter/message/{message_id}
+      // message_id is a path parameter, it will be mapped to UpdateMessageV2Request.message_id
+      patch: "/v2/greeter/message/{message_id}"
+      // body is * , the HTTP Body will be mapped to UpdateMessageV2Request
+      body: "*"
+    };
+  }
+}
+
+// Hello Request
+message HelloRequest {
+  string name = 1;
+}
+
+// Hello Reply
+message HelloReply {
+  string message = 1;
+}
+
+// GetMessage Request
+message MessageRequest {
+  string name = 1;      // Mapped to URL query parameter `name`.
+  SubMessage sub = 2;   // Mapped to URL query parameter `sub.subfield`.
+  message SubMessage {
+    string subfield = 1;
+  }
+}
+
+// Message Info
+message MessageInfo {
+  string message = 1;
+}
+
+// UpdateMessage Request
+message UpdateMessageRequest {
+  string message_id = 1;     // mapped to the URL
+  MessageInfo message = 2;   // mapped to the body
+}
+
+// UpdateMessageV2 Request
+message UpdateMessageV2Request {
+  string message_id = 1;  // mapped to the URL
+  string message = 2;     // mapped to the body
+}
+
