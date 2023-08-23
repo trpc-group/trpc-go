@@ -78,6 +78,40 @@ func TestMatch(t *testing.T) {
 			wantErr:      true,
 			desc:         "MatchTest07",
 		},
+		{
+			toParse:      "/foo/bar/{a=*}",
+			toMatch:      "/foo/bar/x/y/z",
+			wantCaptured: nil,
+			wantErr:      true,
+			desc:         "MatchTest08",
+		},
+		{
+			toParse: "/foo/bar/{a=**}",
+			toMatch: "/foo/bar/x/y/z",
+			wantCaptured: map[string]string{
+				"a": "x/y/z",
+			},
+			wantErr: false,
+			desc:    "MatchTest09",
+		},
+		{
+			toParse: "/foo/bar/{a=**}",
+			toMatch: "/foo/bar/",
+			wantCaptured: map[string]string{
+				"a": "",
+			},
+			wantErr: false,
+			desc:    "MatchTest10",
+		},
+		{
+			toParse: "/foo/bar/{a=**}",
+			toMatch: "/foo/bar",
+			wantCaptured: map[string]string{
+				"a": "",
+			},
+			wantErr: false,
+			desc:    "MatchTest11",
+		},
 	}
 
 	for _, test := range tests {
