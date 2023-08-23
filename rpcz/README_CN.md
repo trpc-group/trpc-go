@@ -1,17 +1,154 @@
-# RPCZ
+# RPCZ [English](README.md)
 
-RPCZ 是一个监控 RPC 过程运行状态的工具，记录了一次 rpc 中发生的各种事情，如序列化/反序列，压缩/解压缩和运行拦截器。
-RPCZ 在调试和性能优化两个方面有非常重要的应用。
-在调试方面，RPCZ 提供给用户记录各种事情发生的接口，通过 admin 管理界面可以查看记录的事件，能帮助用户快速准确的定位问题。
-在性能优化方面，RPCZ 记录了各种事件（序列化/反序列，压缩/解压缩和运行拦截器）的持续时间和收发数据包的大小，能够帮助用户优化耗时和存储，分析超时事件。
+RPCZ 是一个监控 RPC 的工具，记录了一次  rpc 中发生的各种事件，如序列化/反序列，压缩解压缩和执行拦截器。
+RPCZ 可以帮助用户调试服务，它允许用户自行配置需要被记录的事件，用户可以通过 admin 工具可以查看记录的事件，能帮助用户快速准确的定位问题。
+除此之外，由于 RPCZ 记录了 RPC 中各种事件的持续时间和收发数据包的大小，因此可以帮助用户分析超时事件，优化服务的性能。
+
+## 术语解释
+
+### 事件（Event）
+
+事件（Event）[1, 2, 3] 用来描述某一特定时刻（`Event.Time`）发生了某件事情（`Event.Name`）。
+
+```go
+type Event struct {
+	Name string
+	Time time.Time
+}
+```
+在一个普通 RPC 调用中会发生一系列的事件，例如发送请求的 Client 端按照时间先后顺序，一般会发生如下一系列事件：
+
+1. 开始运行前置拦截器
+2. 结束运行前置拦截器
+3. 开始序列化
+4. 结束序列化
+5. 开始压缩
+6. 结束压缩
+7. 开始编码协议头部字段
+8. 结束编码协议头部字段
+9. 开始发送二进制文件到网络
+10. 结束发送二进制文件到网络
+11. 开始从网络中接收二进制文件
+12. 结束从网络中接收二进制文件
+13. 开始解码协议头部字段
+14. 结束解码协议头部字段
+15. 开始解压缩
+16. 结束解压缩
+17. 开始反序列化
+18. 结束反序列化
+19. 开始运行后置拦截器
+20. 结束运行后置拦截器
+
+而处理请求的 server 端，按照时间先后顺序，一般会发生如下一系列事件：
+
+1. 开始解码协议头部字段
+2. 结束解码协议头部字段
+3. 开始解压缩
+4. 结束解压缩
+5. 开始反序列化
+6. 结束反序列化
+7. 开始运行前置拦截器
+8. 结束运行前置拦截器
+9. 开始运行用户自定义处理函数
+10. 结束运行用户自定义处理函数
+11. 开始运行后置拦截器
+12. 结束运行后置拦截器
+13. 开始序列化
+14. 结束序列化
+15. 开始压缩
+16. 结束压缩
+17. 开始编码协议头部字段
+18. 结束解码协议头部字段
+19. 开始发送二进制文件到网络
+20. 结束发送二进制文件到网络
+
+### Span
+
+Span[4, 5] 用来描述某段时间间隔（具有开始时间和结束时间）的单个操作，例如客户端发送远程请求，服务端处理请求或函数调用。
+根据划分的时间间隔大小不同，一个大的 Span 可以包含多个小的 Span，就像一个函数中可能调用多个其他函数一样，会形成树结构的层次关系。
+因此一个 Span 除了包含名字、内部标识 span-id[6]，开始时间、结束时间和这段时间内发生的一系列事件（Event）外，还可能包含许多子 Span。
+
+rpcz 中存在两种类型的 Span。
+1. client-Span：描述 client 从开始发送请求到接收到回复这段时间间隔内的操作（涵盖上一节 Event 中描述的 client 端发生一系列事件）。
+
+2. server-Span：描述 server 从开始接收请求到发送完回复这段时间间隔内的操作（涵盖上一节 Event 中描述的 server 端发生一系列事件）。
+   server-Span 运行用户自定义处理函数的时候，可能会创建 client 调用下游服务，此时 server-Span 会包含多个子 client-Span。
+
+```
+server-Span
+    client-Span-1
+    client-Span-2
+    ......
+    client-Span-n
+```
+
+Span 被存储在 context 中，rpcz 会自动调用 ContextWithSpan 往 context 中存 Span，在函数调用过程中需要保证 context 中的 Span 不会丢失。
+
+## Span 的生命周期
+
+考察 Span 对象的生命周期，rpcz 中对 Span 的绝大多数操作，都需要考虑并发安全。
+除此之外采用了 sync.Pool 和 预先分配的循环数组来降低 Span 的内存分配时对性能的影响。
+
+### Span 的构造
+
+rpcz 在启动时会初始化一个全局 GlobalRPCZ，用于生成和存储 Span。
+在框架内部 Span 只可能在两个位置被构造，
+第一个位置是在 server 端的 transport 层的 handle 函数刚开始处理接收到的请求时；
+第二个位置是在 client 端的桩代码中调用 Invoke 函数开始发起 rpc 请求时。
+虽然两个位置创建的 Span 类型是不同，但是代码逻辑是相似的，都会调用 rpczNewSpanContext，该函数实际上执行了三个操作
+1. 调用 SpanFromContext 函数，从 context 中获取 span。
+2. 调用 span.NewChild 方法，创建新的 child span。
+3. 调用 ContextWithSpan 函数，将新创建的 child span 设置到 context 中。
+
+### Span 在 context 中传递
+
+被创建 Span 在提交前，会一直在存放在 context 中，沿着 rpc 调用的链路传递。
+在调用链路上使用 `rpcz.AddEvent` 往当前 context 中的 Span 中添加新的事件。
+
+### Span 的提交
+
+在 server 端的 transport 层的 handle 函数处理完请求后，会调用 `ender.End()` 把 Span 提交到 GlobalRPCZ 当中。
+此后虽然 context 中仍然存放着 Span，但是从语义上来说，已经调用过的 End 函数的 Span 不允许再被继续操作，其行为是未定义的。
+
+### 在 admin 中访问 Span
+
+admin 模块调用 `rpcz.Query` 和 `rpcz.BatchQuery` 从 GlobalRPCZ 中读取 Span。
+有一点需要注意的是，admin 获取的 Span 是只读类型的 Span（ReadOnlySpan），只读类型的 Span 是由可写入的 Span 导出得到的，这样做的原因是保证并发访问安全。
+
+### 删除多余的 Span
+
+当哈希表中存储的 Span 过多时就需要按照某种淘汰规则，删除多余的 Span。
+目前的实现是当 GlobalRPCZ 中的 Span 个数超过最大容量上限时会删除最老的 Span。
+
+## RPCZ 名字的由来
+
+关于 "RPCZ" 的这个名字的由来，后缀 -z 有在英文中一般有两种含义 [7]: 一是用于名词，实现单数变复数，如 Boy**z** are always trouble；二是用于动词实现动词形态的变化 He love**z** me。
+总的来说，在单词后面加 -z 的效果类似于加 -s。
+所以 "RPCZ" 就是指各种类型的 RPC，从一个分布式全局的调用链路视角来看的确是成立的，各种 RPC 调用存在树状的父子关系，组合成了 "RPCZ"。
+
+"RPCZ" 这一术语最早来源于 google 内部的 RPC 框架 Stubby，在此基础上 google 在开源的 grpc 实现了类似功能的 channelz[8]，channelz 中除了包括各种 channel 的信息，也涵盖 trace 信息。
+之后，百度开源的 brpc 在 google 发表的分布式追踪系统 Dapper 论文 [9] 的基础上，实现了一个非分布式的 trace 工具，模仿 channelz 取名为 brpc-rpcz[10]。
+接着就是用户在使用 tRPC 中需要类似于 brpc-rpcz 的工具来进行调试和优化，所以 tRPC-Cpp 首先支持类似功能 [11, 12]，仍然保留了 RPCZ 这个名字。
+
+最后就是在 tRPC-Go 支持类似 "RPCZ" 的功能，在实现过程中发现随着分布式追踪系统的发展，社区中出现了 opentracing[13] 和 opentelemetry[14] 的开源系统，公司内部也做起了天机阁 [15]。
+tRPC-Go-RPCZ 在 span 和 event 设计上部分借鉴了 opentelemetry-trace 的 go 语言实现，可以认为是 tRPC-Go 框架内部的 trace 系统。
+严格来说，tRPC-Go-RPCZ 是非分布式，因为不同服务之间没有在协议层面实现通信。
+现在看来，brpc, tRPC-Cpp 和 tRPC-Go 实现的 rpcz，取名叫 spanz 或许更符合后缀 "-z" 本来的含义。
 
 ## 如何配置 rpcz
 
-rpcz 的配置分为基本配置、进阶配置和代码配置，更多配置例子见 `config_test.go`。
+rpcz 的配置包括基本配置，进阶配置和代码配置，更多配置例子见 `config_test.go`。
+
+### 不同 tRPC-GO 版本的支持情况
+
+- v0.15.0：支持 tRPC 流式和 tnet。
+- v0.14.0：支持 http 协议。
+- v0.11.0：支持 tRPC 一元调用。
+- v0.11.0 之前的版本：不支持。
 
 ### 基本配置
 
-在 server 端配置 admin，同时在 admin 下面配置 rpcz :
+在 server 端配置 admin，同时在 admin 里面配置 rpcz :
 
 ```yaml
 server:
@@ -23,21 +160,21 @@ server:
       capacity: 10000
 ```
 
-- `fraction` 字段为采样率，取值范围为`[0.0, 1.0]`，默认值为 0.0，即不进行任何采样，需要手动配置。
-- `capacity` 为 rpcz 的存储容量，默认值为 10000，表示最多能存储的 span 数量。
+- `fraction` : 采样率，其取值范围为`[0.0, 1.0]`，默认值为 0.0 代表不采样，需要手动配置。
+- `capacity`:  rpcz 的存储容量，默认值为 10000，表示最多能存储的 span 数量。
 
 ### 进阶配置
 
-进阶配置允许用户自行过滤感兴趣的 span，在使用进阶配置之前需要先了解 rpcz 的采样机制。
+进阶配置允许你自行过滤感兴趣的 span，在使用进阶配置之前需要先了解 rpcz 的采样机制。
 
 ####  采样机制
 
-rpcz 使用采样机制来控制性能开销和过滤用户不感兴趣的 Span。
+rpcz 使用采样机制来控制性能开销和过滤你不感兴趣的 Span。
 采样可能发生在 Span 的生命周期的不同阶段，最早的采样发生在 Span 创建之前，最晚的采样发生在 Span 提交之前。
 
 ##### 采样结果表
 
-只有创建和提交之前都被采样到的 Span 才会最终被收集到 GlobalRPCZ 中，供用户通过 admin 接口查询。
+只有创建和提交之前都被采样到的 Span 才会最终被收集到 GlobalRPCZ 中，供你通过 admin 接口查询。
 
 | 在 Span 创建之前采样？   | 在 Span 提交之前采样？ | Span 最终是否会被收集？ |
 |:-----------------|:--------------:|:--------------:|
@@ -54,27 +191,45 @@ rpcz 使用采样机制来控制性能开销和过滤用户不感兴趣的 Span�
 
 ##### 在 Span 提交之前采样
 
-对于一个已经创建好的 Span，会记录一次 rpc 中的各种信息，而用户可能只关心包含某些特定信息的 Span，例如出现 rpc 错误的 Span，高耗时的 Span 以及包含特定属性信息的 Span。
-这时，就需要在 Span 最终提交前对上述用户感兴趣的 Span 进行采样。
-rpcz 提供了一个灵活的对外接口，允许用户在服务在启动之前，通过配置文件设置 `rpcz.record` 字段来自定义 Span 提交之前采样逻辑。
+已经创建好的 Span 会记录 rpc 中的各种信息，但是你可能只关心包含某些特定信息的 Span，例如出现 rpc 错误的 Span，高耗时的 Span 以及包含特定属性信息的 Span。
+这时，就需要在 Span 最终提交前只对你需要的 Span 进行采样。
+rpcz 提供了一个灵活的对外接口，允许你在服务在启动之前，通过配置文件设置 `rpcz.record_when` 字段来自定义 Span 提交之前采样逻辑。
+record_when 提供3种常见的布尔操作：`AND`， `OR` 和 `NOT`，7种返回值为布尔值的基本操作，`__min_request_size`, `__min_response_size`, `__error_code`, `__error_message`, `__rpc_name`, `__min_duration` 和 `__has_attribute`。
+**需要注意的是 record_when 本身是一个 `AND` 操作**。
+你可以通过对这些操作进行任意组合，灵活地过滤出感兴趣的 Span。
 
 ```yaml
-server:
+server:  # server configuration.
   admin:
-    rpcz:
-      record_when:
-        error_codes: [0,]      
-        min_duration: 1000ms   # ms or s
-        sampling_fraction: 1        # [0.0, 1.0]
+    ip: 127.0.0.1  # ip.
+    port: 9528  # default: 9028.
+    rpcz:  # tool that monitors the running state of RPC, recording various things that happen in a rpc.
+      fraction: 0.0  # sample rate, 0.0 <= fraction <= 1.0.
+      record_when: #  record_when is actually an AND operation
+        - AND:
+            - __min_request_size: 30  # record span whose request_size is greater than__min_request_size in bytes.
+            - __min_response_size: 40  # record span whose response_size is greater than __min_response_size in bytes.
+        - OR:
+            - __error_code: 1  # record span whose error codes is 1.
+            - __error_code: 2  # record span whose error codes is  2.
+            - __error_message: "unknown" # record span whose error messages contain  "unknown".
+            - __error_message: "not found" # record span whose error messages contain  "not found".
+        - NOT: {__rpc_name: "/trpc.app.server.service/method1"}  # record span whose RPCName doesn't contain __rpc_name.
+        - NOT: # record span whose RPCName doesn't contain "/trpc.app.server.service/method2, or "/trpc.app.server.service/method3".
+            OR:
+              - __rpc_name: "/trpc.app.server.service/method2"
+              - __rpc_name: "/trpc.app.server.service/method3"
+        - __min_duration: 1000ms  # record span whose duration is greater than __min_duration.
+        # record span that has the attribute: name1, and name1's value contains "value1"
+        # valid attribute form: (key, value) only one space character after comma character, and key can't contain comma(',') character.
+        - __has_attribute:  (name1, value1)
+        # record span that has the attribute: name2, and name2's value contains "value2".
+        - __has_attribute:  (name2, value2)
 ```
-
-- `error_codes` 代表多个整数错误码，表示采样包含其中任意一个错误码的 span，例如 0(RetOk), 21(RetServerTimeout)。
-- `min_duration` 代表 span 的最小持续时间，只采集超过 `min_duration` 的 span，可用于耗时分析。
-- `sampling_fraction` 为提交采样比率，取值范围为 `[0, 1]`
 
 #### 配置举例
 
-##### 对包含包含错误码为 1(RetServerDecodeFail) 或持续时间大于 1s 的  span 进行提交
+##### 对包含错误码为 1(RetServerDecodeFail)，且错误信息中包含 “unknown” 字符串，且持续时间大于 1s 的 span 进行提交
 
 ```yaml
 server:
@@ -85,12 +240,14 @@ server:
       fraction: 1.0
       capacity: 10000
       record_when:
-        error_codes: 0       
-        min_duration: 1000ms
-        sampling_fraction: 1         
+        - __error_code: 1       
+        - __min_duration: 1000ms
+        - __sampling_fraction: 1         
 ```
 
-##### 对包含错误码为 1(RetServerDecodeFail) 或 21(RetServerTimeout) 的或持续时间大于 2s 的 span 以二分之一的概率进行提交
+注意: record_when 本身是一个 AND 节点，还可以有以下写法：写法1， 写法2
+
+写法1:
 
 ```yaml
 server:
@@ -101,14 +258,90 @@ server:
       fraction: 1.0
       capacity: 10000
       record_when:
-        error_codes: [1, 21]     
-        min_duration: 2s
-        sampling_fraction: 0.5      
+        - AND:
+            - __error_code: 1       
+            - __min_duration: 1000ms
+            - __sampling_fraction: 1         
+```
+
+写法2:
+
+```yaml
+server:
+  admin:
+    ip: 127.0.0.1
+    port: 9028
+    rpcz:
+      fraction: 1.0
+      capacity: 10000
+      record_when:
+        - AND:
+            - __error_code: 1
+        - AND:
+            - __min_duration: 1000ms
+            - __sampling_fraction: 1         
+```
+
+写法3:
+
+```yaml
+server:
+  admin:
+    ip: 127.0.0.1
+    port: 9028
+    rpcz:
+      fraction: 1.0
+      capacity: 10000
+      record_when:
+        - AND:
+            - __error_code: 1
+        - AND:
+            - __min_duration: 1000ms
+        - AND:
+            - __sampling_fraction: 1         
+```
+
+还有其他写法，你可以自行尝试。
+
+##### 对包含错误码为 1(RetServerDecodeFail) 或 21(RetServerTimeout) 的或持续时间大于 2s 的 span 以 1/2 的概率进行提交
+
+```yaml
+server:
+  admin:
+    ip: 127.0.0.1
+    port: 9028
+    rpcz:
+      fraction: 1.0
+      capacity: 10000
+      record_when:
+        - OR:
+          - error_code: 1
+          - error_code: 21
+          - min_duration: 2s
+        - __sampling_fraction: 0.5      
+```
+
+##### 对持续时间大于 10s, 且 rpc name 包含 "TDXA/Transfer" 字样，且 error message 里不能包含 "pseudo" 字样的 span 进行提交
+
+```yaml
+server:
+  admin:
+    ip: 127.0.0.1
+    port: 9028
+    rpcz:
+      fraction: 1.0
+      capacity: 10000
+      record_when:
+        - min_duration: 2s
+        - __rpc_name: "TDXA/Transfer"
+        - NOT:
+            __error_message: "pseudo" 
+        - __sampling_fraction: 1     
 ```
 
 ### 代码配置
 
-在读取配置文件之后且在服务启动前，可以通过代码设置 `rpcz.GlobalRPCZ` 灵活设置 rpcz，此时的提交采样逻辑需要实现 `ShouldRecord` 函数。
+在读取配置文件之后且在服务启动前，可以通过 `rpcz.GlobalRPCZ` 来配置 rpcz，此时的提交采样逻辑需要实现 `ShouldRecord` 函数。
 
 ```go
 // ShouldRecord determines if the Span should be recorded.
@@ -120,16 +353,14 @@ type ShouldRecord = func(Span) bool
 ```go
 const attributeName = "SpecialAttribute"
 rpcz.GlobalRPCZ = rpcz.NewRPCZ(&rpcz.Config{
-    Fraction: 1.0,
-    Capacity: 1000,
-    ShouldRecord: func(s rpcz.Span) bool {
-        _, ok = s.Attribute(attributeName)
-        return ok
-    },
+Fraction: 1.0,
+Capacity: 1000,
+ShouldRecord: func(s rpcz.Span) bool {
+_, ok = s.Attribute(attributeName)
+return ok
+},
 })
 ```
-
-## 使用 admin 命令查询 span 信息
 
 ### 查询最近提交的多条 span 的概要信息
 
@@ -143,18 +374,18 @@ http://ip:port/cmds/rpcz/spans?num=xxx
 
 ```html
 1:
-  span: (client, 65744150616107367)
-    time: (Dec  1 20:57:43.946627, Dec  1 20:57:43.946947)
-    duration: (0, 319.792µs, 0)
-    attributes: (RPCName, /trpc.testing.end2end.TestTRPC/EmptyCall),(Error, <nil>)
-2:
+span: (client, 65744150616107367)
+time: (Dec  1 20:57:43.946627, Dec  1 20:57:43.946947)
+duration: (0, 319.792µs, 0)
+attributes: (RPCName, /trpc.testing.end2end.TestTRPC/EmptyCall),(Error, <nil>)
+  2:
   span: (server, 1844470940819923952)
-    time: (Dec  1 20:57:43.946677, Dec  1 20:57:43.946912)
-    duration: (0, 235.5µs, 0)
-    attributes: (RequestSize, 125),(ResponseSize, 18),(RPCName, /trpc.testing.end2end.TestTRPC/EmptyCall),(Error, success)
+  time: (Dec  1 20:57:43.946677, Dec  1 20:57:43.946912)
+  duration: (0, 235.5µs, 0)
+  attributes: (RequestSize, 125),(ResponseSize, 18),(RPCName, /trpc.testing.end2end.TestTRPC/EmptyCall),(Error, success)
 ```
 
-每个 span 的概要信息和如下的模版匹配： 
+每个 span 的概要信息和如下的模版匹配：
 
 ```html
 span: (name, id)
@@ -179,7 +410,7 @@ attributes: (name1, value1) (name2, value2)
   - RPCName：对端的服务名 + 接口名 (/trpc.app.server.service/method)
   - Error：错误信息，根据框架返回码判断请求是否成功，success 或 nil 表示成功
 
-如果不指定查询的个数，则下列查询将会默认返回最近 [^1] 10 个 span 的概要信息：
+如果不指定查询的个数，则下列查询将会默认返回最近提交成功的 [^1] 10 个 span 的概要信息：
 
 ```html
 http://ip:port/cmds/rpcz/spans
@@ -189,7 +420,7 @@ http://ip:port/cmds/rpcz/spans
 
 ### 查询某个 span 的详细信息
 
-查询 span id 为 "xxx" 的 span 的详细信息，可以访问如下的 url：
+查询包含 id  的 span 的详细信息，可以访问如下的 url：
 
 ```html
 http://ip:port/cmds/rpcz/spans/{id}
@@ -214,15 +445,15 @@ span: (server, 6673650005084645130)
   span: (filter1, 6673650005084645130)
     time: (Dec  2 10:43:55.296161, Dec  2 10:43:55.399249)
     duration: (225.708µs, 103.088ms, 12.292µs)
-    event: (user's annotation at pre-filter, Dec  2 10:43:55.296163)
+    event: (your annotation at pre-filter, Dec  2 10:43:55.296163)
     span: (filter2, 6673650005084645130)
       time: (Dec  2 10:43:55.296164, Dec  2 10:43:55.399249)
       duration: (2.75µs, 103.085ms, 250ns)
-      event: (user's annotation at pre-filter, Dec  2 10:43:55.296165)
+      event: (your annotation at pre-filter, Dec  2 10:43:55.296165)
       span: (server.WithFilter, 6673650005084645130)
         time: (Dec  2 10:43:55.296165, Dec  2 10:43:55.399249)
         duration: (1.208µs, 103.083625ms, 167ns)
-        event: (user's annotation at pre-filter, Dec  2 10:43:55.296165)
+        event: (your annotation at pre-filter, Dec  2 10:43:55.296165)
         span: (, 6673650005084645130)
           time: (Dec  2 10:43:55.296166, Dec  2 10:43:55.399249)
           duration: (792ns, 103.082583ms, 250ns)
@@ -316,9 +547,9 @@ span: (server, 6673650005084645130)
                       span: (Unmarshal, 6673650005084645130)
                         time: (Dec  2 10:43:55.399242, Dec  2 10:43:55.399243)
                         duration: (237.292µs, 750ns, 333ns)
-        event: (user's annotation at post-filter, Dec  2 10:43:55.399249)
-      event: (user's annotation at post-filter, Dec  2 10:43:55.399249)
-    event: (user's annotation at post-filter, Dec  2 10:43:55.399249)
+        event: (your annotation at post-filter, Dec  2 10:43:55.399249)
+      event: (your annotation at post-filter, Dec  2 10:43:55.399249)
+    event: (your annotation at post-filter, Dec  2 10:43:55.399249)
   span: (Marshal, 6673650005084645130)
     time: (Dec  2 10:43:55.399250, Dec  2 10:43:55.399251)
     duration: (103.314625ms, 1.208µs, 10.167µs)
@@ -335,10 +566,10 @@ span: (server, 6673650005084645130)
 
 在 span 的详细信息中新增了 `event` 字段，以及内嵌的子 span。
 
-- event: 表示描述了在某一时刻发生的事情，相当于打日志
-可以由用户自行插入的事件，如上面例子中的 `Nov  4 14:39:23.594147: user's annotation at pre-filter`。
-- span：在 server 处理用户自定义函数时，可能会以中转模式新起 client 调用下游服务，此时会创建子 span 
-可以看到，所有的 子 span 都是在 `HandleFunc` 内发生的。
+- event:  描述了在某一时刻发生的事情，类似于日志。
+  可以由你自行插入的事件，如上面例子中的 `Nov  4 14:39:23.594147: your annotation at pre-filter`。
+- span：在 server 处理你自定义函数时，可能会创建新的 client 调用下游服务，此时会创建子 span
+  可以看到，所有的 子 span 都是在 `HandleFunc` 内发生的。
 
 需要注意的是，endTime、duration 中的 middleDur 和 postDur 的值可能为 "unknown"，例如上面的 span 中包含如下的子 span：
 
@@ -349,30 +580,30 @@ duration: (1.698709ms, unknown, unknown)
 event: (awake, Dec  2 10:43:55.398954)
 ```
 
-## 提供给用户的接口
+## Span 接口
 
-用户可以先调用 `rpcz.SpanFromContext`[^2] 获取当前 `context` 中的 `Span`，然后 Span interface 提供的接口来操作 Span。
+你可以先调用 `rpcz.SpanFromContext`[^2] 获取当前 `context` 中的 `Span`，然后使用下面的接口来操作 Span。
 
-```golang
+```go
 type Span interface {
-	// AddEvent adds a event.
-	AddEvent(name string)
+// AddEvent adds a event.
+AddEvent(name string)
 
-	// SetAttribute sets Attribute with (name, value).
-	SetAttribute(name string, value interface{})
-	
-	// ID returns SpanID.
-	ID() SpanID
+// SetAttribute sets Attribute with (name, value).
+SetAttribute(name string, value interface{})
 
-	// NewChild creates a child span from current span.
-	// Ender ends this span if related operation is completed.
-    NewChild(name string) (Span, Ender)
+// ID returns SpanID.
+ID() SpanID
+
+// NewChild creates a child span from current span.
+// Ender ends this span if related operation is completed. 
+NewChild(name string) (Span, Ender)
 }
 ```
 
 [^2]: 当 `context` 中不含有任何 `span` 的时候会返回一个 `noopSpan`，对 `noopSpan` 的任何操作都是空操作，不会生效。
 
-### 使用 AddEvent 添加事件
+### 使用 AddEvent 来添加事件
 
 ```go
 // If no Span is currently set in ctx an implementation of a Span that performs no operations is returned.
@@ -390,7 +621,7 @@ mutex.Unlock()
 
 ### 使用 SetAttribute 来设置属性
 
-```golang
+```go
 ctx, msg := codec.EnsureMessage(ctx)
 span := SpanFromContext(ctx context.Context)
 span.SetAttribute("RPCName", msg.ClientRPCName())
@@ -399,144 +630,14 @@ span.SetAttribute("Error", msg.ClientRspErr())
 
 ### 创建新的子 Span
 
-**特别需要注意的是：创建的子 Span 应该由调用者自行调用一次 end.End() 函数来结束子 Span 的生命周期，未调用 End 和 多次调用 End 的行为是未定义的**
+**特别需要注意的是：创建的子 Span 应该由调用者只调用一次 end.End() 函数来结束子 Span 的生命周期，未调用 End 和 多次调用 End 的行为是未定义的**
 
-```golang
+```go
 span := SpanFromContext(ctx context.Context)
 cs, end := span.NewChild("Decompress")
 reqBodyBuf, err := codec.Decompress(compressType, reqBodyBuf)
 end.End()
 ```
-
-## 术语解释
-
-### 事件（Event）
-
-事件（Event）[1, 2, 3] 用来描述某一特定时刻（`Event.Time`）发生了某件事情（`Event.Name`）。
-
-```go
-type Event struct {
-	Name string
-	Time time.Time
-}
-```
-在一个普通 RPC 调用中会发生一系列的事件，例如发送请求的 Client 端按照时间先后顺序，一般会发生如下一系列事件：
-
-1. 开始运行前置拦截器
-2. 结束运行前置拦截器
-3. 开始序列化
-4. 结束序列化
-5. 开始压缩
-6. 结束压缩
-7. 开始编码协议头部字段
-8. 结束编码协议头部字段
-9. 开始发送二进制文件到网络
-10. 结束发送二进制文件到网络
-11. 开始从网络中接收二进制文件
-12. 结束从网络中接收二进制文件
-13. 开始解码协议头部字段
-14. 结束解码协议头部字段
-15. 开始解压缩
-16. 结束解压缩
-17. 开始反序列化
-18. 结束反序列化
-19. 开始运行后置拦截器
-20. 结束运行后置拦截器
-
-而处理请求的 server 端，按照时间先后顺序，一般会发生如下一系列事件：
-
-1. 开始解码协议头部字段
-2. 结束解码协议头部字段
-3. 开始解压缩
-4. 结束解压缩
-5. 开始反序列化
-6. 结束反序列化
-7. 开始运行前置拦截器
-8. 结束运行前置拦截器
-9. 开始运行用户自定义处理函数
-10. 结束运行用户自定义处理函数
-11. 开始运行后置拦截器
-12. 结束运行后置拦截器
-13. 开始序列化
-14. 结束序列化
-15. 开始压缩
-16. 结束压缩
-17. 开始编码协议头部字段
-18. 结束解码协议头部字段
-19. 开始发送二进制文件到网络
-20. 结束发送二进制文件到网络
-
-### Span
-
-Span[4, 5] 用来描述某段时间间隔（具有开始时间和结束时间）的单个操作，例如客户端发送远程请求，服务端处理请求或函数调用。
-根据划分的时间间隔大小不同，一个大的 Span 可以包含多个小的 Span，就像一个函数中可能调用多个其他函数一样，会形成树结构的层次关系。
-因此一个 Span 除了包含名字、内部标识 span-id[6]，开始时间、结束时间和 这段时间内发生的一系列事件（Event）外，还可能包含许多子 Span。
-
-rpcz 中存在两种类型的 Span。
-1. client-Span：描述 client 从开始发送请求到接收到回复这段时间间隔内的操作（涵盖上一节 Event 中描述的 client 端发生一系列事件）。
-2. server-Span：描述 server 从开始接收请求到发送完回复这段时间间隔内的操作（涵盖上一节 Event 中描述的 server 端发生一系列事件）。
-server-Span 运行用户自定义处理函数的时候，可能会创建 client 调用下游服务，此时 server-Span 会包含多个子 client-Span。
-
-```
-server-Span
-    client-Span-1
-    client-Span-2
-    ......
-    client-Span-n
-```
-
-Span 被存储在 context 中，rpcz 会自动调用 ContextWithSpan 往 context 中存 Span，在函数调用过程中需要保证 context 中的 Span 不会丢失。
-
-## Span 的生命周期
-
-考察 Span 对象的生命周期，rpcz 中对 Span 的绝大多数操作，都需要考虑并发安全。
-除此之外采用了 sync.Pool 和 预先分配的循环数组来降低 Span 的内存分配时对性能的影响。
-
-### Span 的构造
-
-rpcz 在启动后会初始化一个全局 GlobalRPCZ，用于生成和存储 Span。
-在框架内部 Span 只可能在两个位置被构造，
-第一个位置是在 server 端的 transport 层的 handle 函数刚开始处理接收到的请求时；
-第二个位置是在 client 端的桩代码中调用 Invoke 函数开始发起 rpc 请求时。
-虽然两个位置创建的 Span 类型是不同，但是代码逻辑是相似的，都会调用 `rpcz.NewSpanContext`，该函数实际上执行了三个操作：
-1. 调用 SpanFromContext 函数，从 context 中获取 span。
-2. 调用 span.NewChild 方法，创建新的 child span。
-3. 调用 ContextWithSpan 函数，将新创建的 child span 设置到 context 中。
-
-### Span 在 context 中传递
-
-被创建 Span 在提交前，会一直在存放在 context 中，沿着 rpc 调用的链路传递。
-在调用链路上使用 `rpcz.AddEvent` 往当前 context 中的 Span 中添加新的事件。
-
-### Span 的提交
-
-在 server 端的 transport 层的 handle 函数处理完请求后，会调用 `ender.End()` 把 Span 提交到 GlobalRPCZ 当中。
-此后虽然 context 中仍然存放着 Span，但是从语义上来说，已经调用过的 End 函数的 Span 不允许再被继续操作，其行为是未定义的。
-
-### 在 admin 中访问 Span
-
-admin 模块调用 `rpcz.Query` 和 `rpcz.BatchQuery` 从 GlobalRPCZ 中读取 Span。
-有一点需要注意的是，admin 获取的 Span 是只读类型的 Span（ReadOnlySpan），只读类型的 Span 是由可写入的 Span 导出得到的，这样做的原因是保证并发访问安全。
-
-### 删除多余的 Span
-
-当哈希表中存储的 Span 过多时就需要按照某种淘汰规则，删除多余的 Span。 
-目前的实现是当 GlobalRPCZ 中的 Span 个数超过最大容量上限时会删除最老的 Span。
-
-## RPCZ 名字的由来
-
-关于 "RPCZ" 的这个名字的由来，后缀 -z 有在英文中一般有两种含义 [7]: 一是用于名词，实现单数变复数，如 Boy**z** are always trouble；二是用于动词实现动词形态的变化 He love**z** me。
-总的来说，在单词后面加 -z 的效果类似于加 -s。
-所以 "RPCZ" 就是指各种类型的 RPC，从一个分布式全局的调用链路视角来看的确是成立的，各种 RPC 调用存在树状的父子关系，组合成了 "RPCZ"。
-
-"RPCZ" 这一术语最早来源于 google 内部的 RPC 框架 Stubby，在此基础上 google 在开源的 grpc 实现了类似功能的 channelz[8]，channelz 中除了包括各种 channel 的信息，也涵盖 trace 信息。
-之后，百度开源的 brpc 在 google 发表的分布式追踪系统 Dapper 论文 [9] 的基础上，实现了一个非分布式的 trace 工具，模仿 channelz 取名为 brpc-rpcz[10]。
-接着就是用户在使用 tRPC 中需要类似于 brpc-rpcz 的工具来进行调试和优化，所以 tRPC-Cpp 首先支持类似功能 [11, 12]，仍然保留了 RPCZ 这个名字。
-
-最后就是在 tRPC-Go 支持类似 "RPCZ" 的功能，在实现过程中发现随着分布式追踪系统的发展，社区中出现了 opentracing[13] 和 opentelemetry[14] 的开源系统，公司内部也做起了天机阁 [15]。
-tRPC-Go-RPCZ 在 span 和 event 设计上部分借鉴了 opentelemetry-trace 的 go 语言实现，可以认为是 tRPC-Go 框架内部的 trace 系统。
-严格来说，tRPC-Go-RPCZ 是非分布式，因为不同服务之间没有在协议层面实现通信。
-现在看来，brpc, tRPC-Cpp 和 tRPC-Go 实现的 rpcz，取名叫 spanz 或许更符合后缀 "-z" 本来的含义。
 
 ## 参考
 
@@ -550,6 +651,10 @@ tRPC-Go-RPCZ 在 span 和 event 设计上部分借鉴了 opentelemetry-trace 的
 - [8] https://github.com/grpc/proposal/blob/master/A14-channelz.md
 - [9] Dapper, a Large-Scale Distributed Systems Tracing Infrastructure: http://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36356.pdf
 - [10] brpc-rpcz: https://github.com/apache/incubator-brpc/blob/master/docs/cn/rpcz.md
+- [11] tRPC-Cpp rpcz wiki. todo
+- [12] tRPC-Cpp rpcz proposal. https://git.woa.com/trpc/trpc-proposal/blob/master/L17-cpp-rpcz.md
 - [13] opentracing: https://opentracing.io/
 - [14] opentelemetry: https://opentelemetry.io/
+- [15] https://tpstelemetry.pages.woa.com/
+- [16] 天机阁 2.0-sdk-go：https://git.woa.com/opentelemetry/opentelemetry-go-ecosystem/blob/master/sdk/trace/dyeing_sampler.go
 - [17] open-telemetry-sdk-go- traceIDRatioSampler: https://github.com/open-telemetry/opentelemetry-go/blob/main/sdk/trace/sampling.go

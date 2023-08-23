@@ -196,27 +196,11 @@ stream_filter:
 }
 
 func TestRecordWhen(t *testing.T) {
-	t.Run("empty MinDuration", func(t *testing.T) {
-		var rw RecordWhenConfig
-		require.Nil(t, yaml.Unmarshal([]byte(`min_duration:`), &rw))
-		require.Nil(t, rw.MinDuration)
-		bts, err := yaml.Marshal(rw)
-		require.Nil(t, err)
-		require.Equal(t, "min_duration: null\nsampling_fraction: 0\n", string(bts))
-	})
-	t.Run("MinDuration", func(t *testing.T) {
-		var rw RecordWhenConfig
-		require.Nil(t, yaml.Unmarshal([]byte(`min_duration: 1000ms`), &rw))
-		require.Equal(t, *rw.MinDuration, time.Second)
-		*rw.MinDuration = time.Minute
-		bts, err := yaml.Marshal(rw)
-		require.Nil(t, err)
-		require.Equal(t, "min_duration: 1m0s\nsampling_fraction: 0\n", string(bts))
-	})
 	t.Run("empty record-when", func(t *testing.T) {
 		config := &RPCZConfig{}
 		require.Nil(t, yaml.Unmarshal(
-			[]byte(`fraction: 1.0
+			[]byte(`
+fraction: 1.0
 capacity: 10`),
 			config,
 		))
@@ -232,73 +216,169 @@ capacity: 10`),
 			require.True(t, ok)
 		}
 	})
+	t.Run("unknown node", func(t *testing.T) {
+		config := &RecordWhenConfig{}
+		err := yaml.Unmarshal(
+			[]byte(`
+- XOR:
+    - __min_request_size: 30
+    - __min_response_size: 40
+`),
+			config,
+		)
+		require.Contains(t, errs.Msg(err), "unknown node: XOR")
+	})
+	t.Run("AND node is map type", func(t *testing.T) {
+		config := &RecordWhenConfig{}
+		err := yaml.Unmarshal(
+			[]byte(`
+- AND: {__rpc_name: "/trpc.app.server.service/method"}
+`),
+			config,
+		)
+		require.Contains(t, errs.Msg(err), "cannot unmarshal !!map into []map[trpc.nodeKind]yaml.Node")
+	})
+	t.Run("OR node is map type", func(t *testing.T) {
+		config := &RecordWhenConfig{}
+		err := yaml.Unmarshal(
+			[]byte(`
+- OR: {__rpc_name: "/trpc.app.server.service/method"}
+`),
+			config,
+		)
+		require.Contains(t, errs.Msg(err), "cannot unmarshal !!map into []map[trpc.nodeKind]yaml.Node")
+	})
+
 }
-func TestRPCZ_RecordWhen_SamplingFraction(t *testing.T) {
-	config := &RPCZConfig{}
-	require.Nil(t, yaml.Unmarshal(
-		[]byte(
-			`fraction: 1.0
-capacity: 10
+func TestRecordWhen_NotNode(t *testing.T) {
+	t.Run("NOT node is empty", func(t *testing.T) {
+		config := &RPCZConfig{}
+		err := yaml.Unmarshal([]byte(`
 record_when:
-  error_codes: [0] 
-  min_duration: 10ms
-  sample_rate: 0
-`), config))
-	r := rpcz.NewRPCZ(config.generate())
-	var unexpectedIDs []rpcz.SpanID
-	{
-		s, ender := r.NewChild("")
-		s.SetAttribute(rpcz.TRPCAttributeError, errs.NewFrameError(errs.RetOK, ""))
-		// mimic some time-consuming operation.
-		time.Sleep(15 * time.Millisecond)
-		unexpectedIDs = append(unexpectedIDs, s.ID())
-		ender.End()
-	}
-	{
-		s, ender := r.NewChild("")
-		s.SetAttribute(rpcz.TRPCAttributeError, errs.NewFrameError(errs.RetOK, ""))
-		// mimic some time-consuming operation.
-		time.Sleep(20 * time.Millisecond)
-		unexpectedIDs = append(unexpectedIDs, s.ID())
-		ender.End()
-	}
-	{
-		s, _ := r.NewChild("")
-		s.SetAttribute(rpcz.TRPCAttributeError, errs.NewFrameError(errs.RetOK, ""))
-		unexpectedIDs = append(unexpectedIDs, s.ID())
-	}
-	{
-		s, ender := r.NewChild("")
-		s.SetAttribute(rpcz.TRPCAttributeError, errs.NewFrameError(errs.RetOK, ""))
-		// mimic some time-consuming operation.
-		time.Sleep(1 * time.Millisecond)
-		unexpectedIDs = append(unexpectedIDs, s.ID())
-		ender.End()
-	}
-	{
-		s, ender := r.NewChild("")
-		s.SetAttribute(rpcz.TRPCAttributeError, errs.NewFrameError(errs.RetOK, ""))
-		// mimic some time-consuming operation.
-		time.Sleep(2 * time.Millisecond)
-		unexpectedIDs = append(unexpectedIDs, s.ID())
-		ender.End()
-	}
-	for _, id := range unexpectedIDs {
-		_, ok := r.Query(id)
-		require.False(t, ok)
-	}
+  - NOT:
+`),
+			config,
+		)
+		require.ErrorContains(t, err, "value is empty")
+	})
+	t.Run("NOT node has two children", func(t *testing.T) {
+		config := &RecordWhenConfig{}
+		err := yaml.Unmarshal(
+			[]byte(`
+    - NOT: {__rpc_name: "/trpc.app.server.service/method", __min_duration: 1000ms}
+    `),
+			config,
+		)
+		require.Contains(t, errs.Msg(err), "the valid number of child node can only be 1")
+	})
+	t.Run("NOT has a leaf child", func(t *testing.T) {
+		config := &RecordWhenConfig{}
+		require.Nil(t, yaml.Unmarshal(
+			[]byte(`
+    - NOT:
+        __rpc_name: "/trpc.app.server.service/method"
+    `),
+			config,
+		))
+	})
+	t.Run("NOT has a internal child", func(t *testing.T) {
+		config := &RecordWhenConfig{}
+		require.Nil(t, yaml.Unmarshal(
+			[]byte(`
+- NOT:
+    OR:
+      - __min_duration: 1000ms
+      - __rpc_name: "/trpc.app.server.service/method"
+`),
+			config,
+		))
+	})
+	t.Run("NOT node is slice type", func(t *testing.T) {
+		config := &RecordWhenConfig{}
+		err := yaml.Unmarshal(
+			[]byte(`
+- NOT: 
+    - __rpc_name: "/trpc.app.server.service/method"
+`),
+			config,
+		)
+		require.Contains(t, errs.Msg(err), "cannot unmarshal !!seq into map[trpc.nodeKind]yaml.Node")
+	})
+}
+func TestRecordWhen_ANDNode(t *testing.T) {
+	t.Run("AND node is empty", func(t *testing.T) {
+		config := &RPCZConfig{}
+		err := yaml.Unmarshal([]byte(`
+record_when:
+  - AND:
+`),
+			config,
+		)
+		require.ErrorContains(t, err, "value is empty")
+	})
+	t.Run("AND node has two children", func(t *testing.T) {
+		config := &RecordWhenConfig{}
+		require.Nil(t, yaml.Unmarshal(
+			[]byte(`
+- AND: 
+    - __rpc_name: "/trpc.app.server.service/method" 
+    - __min_duration: 1000ms
+`),
+			config,
+		))
+	})
+	t.Run("AND has a leaf child", func(t *testing.T) {
+		config := &RecordWhenConfig{}
+		require.Nil(t, yaml.Unmarshal(
+			[]byte(`
+- AND:
+    - __rpc_name: "/trpc.app.server.service/method"
+`),
+			config,
+		))
+	})
+	t.Run("AND has a internal child", func(t *testing.T) {
+		config := &RecordWhenConfig{}
+		require.Nil(t, yaml.Unmarshal(
+			[]byte(`
+- AND:
+    - OR:
+        - __min_duration: 1000ms
+        - __rpc_name: "/trpc.app.server.service/method"
+`),
+			config,
+		))
+	})
+	t.Run("AND node is map type", func(t *testing.T) {
+		config := &RecordWhenConfig{}
+		err := yaml.Unmarshal(
+			[]byte(`
+- AND: 
+    __rpc_name: "/trpc.app.server.service/method"
+`),
+			config,
+		)
+		require.Contains(t, errs.Msg(err), "cannot unmarshal !!map into []map[trpc.nodeKind]yaml.Node")
+	})
 }
 func TestRPCZ_RecordWhen_ErrorCode(t *testing.T) {
 	config := &RPCZConfig{}
-	require.Nil(t, yaml.Unmarshal(
-		[]byte(
-			`fraction: 1.0
+	mustYamlUnmarshal(t, []byte(`
+fraction: 1.0
 capacity: 10
 record_when:
-  error_codes: [1, 2] # RetServerDecodeFail = 1, RetServerEncodeFail = 2
-  min_duration: 1s
-  sampling_fraction: 1
-`), config))
+  - __sampling_fraction: 1
+  - OR:
+      - __error_code: 1  # RetServerDecodeFail = 1
+      - __error_code: 2  # RetServerEncodeFail = 2
+      - __error_message: "service codec"
+      - __error_message: "client codec"
+  - NOT:
+      OR:
+        - __error_code: 1
+        - __error_message: "service codec"
+`), config)
+
 	r := rpcz.NewRPCZ(config.generate())
 	var (
 		expectedIDs   []rpcz.SpanID
@@ -306,61 +386,142 @@ record_when:
 	)
 	{
 		s, ender := r.NewChild("")
-		s.SetAttribute(rpcz.TRPCAttributeError, errs.NewFrameError(errs.RetServerDecodeFail, ""))
+		s.SetAttribute(rpcz.TRPCAttributeError, errs.NewFrameError(errs.RetServerDecodeFail, "service codec"))
+		unexpectedIDs = append(unexpectedIDs, s.ID())
+		ender.End()
+	}
+	{
+		s, ender := r.NewChild("")
+		s.SetAttribute(rpcz.TRPCAttributeError, errs.NewFrameError(errs.RetServerEncodeFail, "service codec"))
+		unexpectedIDs = append(unexpectedIDs, s.ID())
+		ender.End()
+	}
+	{
+		s, ender := r.NewChild("")
+		s.SetAttribute(rpcz.TRPCAttributeError, errs.NewFrameError(errs.RetServerDecodeFail, "client codec"))
+		unexpectedIDs = append(unexpectedIDs, s.ID())
+		ender.End()
+	}
+	{
+		s, ender := r.NewChild("")
+		s.SetAttribute(rpcz.TRPCAttributeError, errs.NewFrameError(errs.RetServerEncodeFail, "client codec"))
 		expectedIDs = append(expectedIDs, s.ID())
 		ender.End()
 	}
-	{
-		s, ender := r.NewChild("")
-		s.SetAttribute(rpcz.TRPCAttributeError, errs.NewFrameError(errs.RetServerEncodeFail, ""))
-		expectedIDs = append(expectedIDs, s.ID())
-		ender.End()
-	}
-	{
-		s, ender := r.NewChild("")
-		s.SetAttribute(rpcz.TRPCAttributeError, errs.NewFrameError(errs.RetUnknown, ""))
-		unexpectedIDs = append(unexpectedIDs, s.ID())
-		ender.End()
-	}
-	{
-		s, ender := r.NewChild("")
-		unexpectedIDs = append(unexpectedIDs, s.ID())
-		ender.End()
-	}
-	{
-		s, ender := r.NewChild("")
-		s.SetAttribute(rpcz.TRPCAttributeError, nil)
-		unexpectedIDs = append(unexpectedIDs, s.ID())
-		ender.End()
-	}
-	for _, id := range expectedIDs {
+	for i, id := range expectedIDs {
 		_, ok := r.Query(id)
-		require.True(t, ok)
+		require.True(t, ok, i)
 	}
-	for _, id := range unexpectedIDs {
+	for i, id := range unexpectedIDs {
 		_, ok := r.Query(id)
-		require.False(t, ok)
+		require.False(t, ok, i)
 	}
 }
+func TestRPC_RecordWhen_CustomAttribute(t *testing.T) {
+	config := &RPCZConfig{}
+	mustYamlUnmarshal(t, []byte(`
+fraction: 1.0
+capacity: 10
+record_when:
+  - __sampling_fraction: 1
+  - OR:
+      - __has_attribute: (race, elf)
+      - __has_attribute: (class, wizard)
+  - NOT:
+      OR:
+        - __has_attribute: (race, dwarf)
+        - __has_attribute: (class, warlock)
+`), config)
 
+	r := rpcz.NewRPCZ(config.generate())
+	var (
+		expectedIDs   []rpcz.SpanID
+		unexpectedIDs []rpcz.SpanID
+	)
+	{
+		s, ender := r.NewChild("")
+		s.SetAttribute("race", "elf")
+		s.SetAttribute("class", "wizard")
+		expectedIDs = append(expectedIDs, s.ID())
+		ender.End()
+	}
+	{
+		s, ender := r.NewChild("")
+		s.SetAttribute("race", "elf")
+		s.SetAttribute("class", "wizard, warlock")
+		unexpectedIDs = append(unexpectedIDs, s.ID())
+		ender.End()
+	}
+	{
+		s, ender := r.NewChild("")
+		s.SetAttribute("race", "elf, dwarf")
+		s.SetAttribute("class", "wizard")
+		unexpectedIDs = append(unexpectedIDs, s.ID())
+		ender.End()
+	}
+	{
+		s, ender := r.NewChild("")
+		s.SetAttribute("race", "elf, dwarf")
+		s.SetAttribute("class", "wizard, warlock")
+		unexpectedIDs = append(unexpectedIDs, s.ID())
+		ender.End()
+	}
+	for i, id := range expectedIDs {
+		_, ok := r.Query(id)
+		require.True(t, ok, i)
+	}
+	for i, id := range unexpectedIDs {
+		_, ok := r.Query(id)
+		require.False(t, ok, i)
+	}
+}
+func TestRPC_RecordWhen_InvalidCustomAttribute(t *testing.T) {
+	t.Run("miss left parenthesis", func(t *testing.T) {
+		config := &RPCZConfig{}
+		require.ErrorContains(t, yaml.Unmarshal([]byte(`
+record_when:
+  - __has_attribute: race, elf)
+`), config), "invalid attribute form")
+	})
+	t.Run("miss right parenthesis", func(t *testing.T) {
+		config := &RPCZConfig{}
+		require.ErrorContains(t, yaml.Unmarshal([]byte(`
+record_when:
+  - __has_attribute: (race, elf
+`), config), "invalid attribute form")
+	})
+	t.Run("middle delimiter space", func(t *testing.T) {
+		config := &RPCZConfig{}
+		require.ErrorContains(t, yaml.Unmarshal([]byte(`
+record_when:
+  - __has_attribute: (race,elf)
+`), config), "invalid attribute form")
+	})
+	t.Run("middle delimiter comma", func(t *testing.T) {
+		config := &RPCZConfig{}
+		require.ErrorContains(t, yaml.Unmarshal([]byte(`
+record_when:
+  - __has_attribute: (race elf)
+`), config), "invalid attribute form")
+	})
+}
 func TestRPCZ_RecordWhen_MinDuration(t *testing.T) {
 	t.Run("not empty", func(t *testing.T) {
 		config := &RPCZConfig{}
-		require.Nil(t, yaml.Unmarshal(
-			[]byte(
-				`fraction: 1.0
+		mustYamlUnmarshal(t, []byte(`
+fraction: 1.0
 capacity: 10
 record_when:
-  error_codes: [0,] 
-  min_duration: 100ms
-  sampling_fraction: 1
-`), config))
+  - __error_code: 999 # RetUnknown = 0
+  - __min_duration: 100ms
+  - __sampling_fraction: 1
+`), config)
+
 		r := rpcz.NewRPCZ(config.generate())
 		var (
 			expectedIDs   []rpcz.SpanID
 			unexpectedIDs []rpcz.SpanID
 		)
-
 		{
 			s, ender := r.NewChild("")
 			s.SetAttribute(rpcz.TRPCAttributeError, errs.NewFrameError(errs.RetUnknown, ""))
@@ -410,14 +571,14 @@ record_when:
 	})
 	t.Run("empty", func(t *testing.T) {
 		config := &RPCZConfig{}
-		require.Nil(t, yaml.Unmarshal(
-			[]byte(
-				`fraction: 1.0
+		mustYamlUnmarshal(t, []byte(`
+fraction: 1.0
 capacity: 10
 record_when:
-  error_codes: [0,]
-  sampling_fraction: 1
-`), config))
+  - __error_code: 0 # RetOK = 0
+  - __sampling_fraction: 1
+`), config)
+
 		r := rpcz.NewRPCZ(config.generate())
 		var (
 			unexpectedID rpcz.SpanID
@@ -446,17 +607,139 @@ record_when:
 		require.True(t, ok)
 	})
 }
-func TestRPCZ_RecordWhen_ErrorCodeAndMinDuration(t *testing.T) {
+func TestRPCZ_RecordWhen_MinRequestSize(t *testing.T) {
 	config := &RPCZConfig{}
-	require.Nil(t, yaml.Unmarshal(
-		[]byte(
-			`fraction: 1.0
+	mustYamlUnmarshal(t, []byte(`
+fraction: 1.0
 capacity: 10
 record_when:
-  error_codes: [0] # RetOK: 0
-  min_duration: 100ms
-  sampling_fraction: 1
-`), config))
+  - __sampling_fraction: 1
+  - __min_request_size: 30
+`), config)
+
+	r := rpcz.NewRPCZ(config.generate())
+	t.Run("unset request size", func(t *testing.T) {
+		s, ender := r.NewChild("")
+		unexpectedID := s.ID()
+		ender.End()
+		_, ok := r.Query(unexpectedID)
+		require.False(t, ok)
+	})
+	t.Run("request size less than min_request_size", func(t *testing.T) {
+		s, ender := r.NewChild("")
+		s.SetAttribute(rpcz.TRPCAttributeRequestSize, 29)
+		unexpectedID := s.ID()
+		ender.End()
+		_, ok := r.Query(unexpectedID)
+		require.False(t, ok)
+	})
+	t.Run("request size equals to min_request_size", func(t *testing.T) {
+		s, ender := r.NewChild("")
+		s.SetAttribute(rpcz.TRPCAttributeRequestSize, 30)
+		expectedID := s.ID()
+		ender.End()
+		_, ok := r.Query(expectedID)
+		require.True(t, ok)
+	})
+	t.Run("request size greater than min_request_size", func(t *testing.T) {
+		s, ender := r.NewChild("")
+		s.SetAttribute(rpcz.TRPCAttributeRequestSize, 31)
+		expectedID := s.ID()
+		ender.End()
+		_, ok := r.Query(expectedID)
+		require.True(t, ok)
+	})
+}
+func TestRPCZ_RecordWhen_MinResponseSize(t *testing.T) {
+	config := &RPCZConfig{}
+	mustYamlUnmarshal(t, []byte(`
+fraction: 1.0
+capacity: 10
+record_when:
+  - __sampling_fraction: 1
+  - __min_response_size: 40
+`), config)
+
+	r := rpcz.NewRPCZ(config.generate())
+	t.Run("unset response size", func(t *testing.T) {
+		s, ender := r.NewChild("")
+		unexpectedID := s.ID()
+		ender.End()
+		_, ok := r.Query(unexpectedID)
+		require.False(t, ok)
+	})
+	t.Run("request size less than min_response_size", func(t *testing.T) {
+		s, ender := r.NewChild("")
+		s.SetAttribute(rpcz.TRPCAttributeResponseSize, 39)
+		unexpectedID := s.ID()
+		ender.End()
+		_, ok := r.Query(unexpectedID)
+		require.False(t, ok)
+	})
+	t.Run("request size equals to min_response_size", func(t *testing.T) {
+		s, ender := r.NewChild("")
+		s.SetAttribute(rpcz.TRPCAttributeResponseSize, 40)
+		expectedID := s.ID()
+		ender.End()
+		_, ok := r.Query(expectedID)
+		require.True(t, ok)
+	})
+	t.Run("request size greater than min_response_size", func(t *testing.T) {
+		s, ender := r.NewChild("")
+		s.SetAttribute(rpcz.TRPCAttributeResponseSize, 41)
+		expectedID := s.ID()
+		ender.End()
+		_, ok := r.Query(expectedID)
+		require.True(t, ok)
+	})
+}
+func TestRPCZ_RecordWhen_RPCName(t *testing.T) {
+	config := &RPCZConfig{}
+	mustYamlUnmarshal(t, []byte(`
+fraction: 1.0
+capacity: 10
+record_when:
+  - __sampling_fraction: 1
+  - __rpc_name: trpc.app.server.service
+`), config)
+
+	r := rpcz.NewRPCZ(config.generate())
+	t.Run("unset RPCName", func(t *testing.T) {
+		s, ender := r.NewChild("")
+		unexpectedID := s.ID()
+		ender.End()
+		_, ok := r.Query(unexpectedID)
+		require.False(t, ok)
+	})
+	t.Run("RPCName does not contain rpc_name", func(t *testing.T) {
+		s, ender := r.NewChild("")
+		s.SetAttribute(rpcz.TRPCAttributeRPCName, "/xxx.app.server.service/method")
+		unexpectedID := s.ID()
+		ender.End()
+		_, ok := r.Query(unexpectedID)
+		require.False(t, ok)
+	})
+	t.Run("RPCName contains  rpc_name", func(t *testing.T) {
+		s, ender := r.NewChild("")
+		s.SetAttribute(rpcz.TRPCAttributeRPCName, "/trpc.app.server.service/method")
+		expectedID := s.ID()
+		ender.End()
+		_, ok := r.Query(expectedID)
+		require.True(t, ok)
+	})
+}
+func TestRPCZ_RecordWhen_ErrorCodeAndMinDuration(t *testing.T) {
+	config := &RPCZConfig{}
+	mustYamlUnmarshal(t, []byte(`
+fraction: 1.0
+capacity: 10
+record_when:
+  - AND:
+      - __error_code: 0 # RetOK = 0
+      - __min_duration: 100ms
+  - __sampling_fraction: 1
+`), config)
+
 	r := rpcz.NewRPCZ(config.generate())
 	var (
 		expectedIDs   []rpcz.SpanID
@@ -476,7 +759,7 @@ record_when:
 		s.SetAttribute(rpcz.TRPCAttributeError, errs.NewFrameError(errs.RetUnknown, ""))
 		// mimic some time-consuming operation.
 		time.Sleep(2 * time.Second)
-		expectedIDs = append(expectedIDs, s.ID())
+		unexpectedIDs = append(unexpectedIDs, s.ID())
 		ender.End()
 	}
 	{
@@ -484,7 +767,7 @@ record_when:
 		s.SetAttribute(rpcz.TRPCAttributeError, errs.NewFrameError(errs.RetOK, ""))
 		// mimic some time-consuming operation.
 		time.Sleep(1 * time.Millisecond)
-		expectedIDs = append(expectedIDs, s.ID())
+		unexpectedIDs = append(unexpectedIDs, s.ID())
 		ender.End()
 	}
 	{
@@ -501,13 +784,20 @@ record_when:
 		s.SetAttribute(rpcz.TRPCAttributeError, errs.NewFrameError(errs.RetOK, ""))
 		unexpectedIDs = append(unexpectedIDs, s.ID())
 	}
-	for _, id := range expectedIDs {
+	for i, id := range expectedIDs {
 		_, ok := r.Query(id)
-		require.True(t, ok)
+		require.True(t, ok, i)
 	}
-	for _, id := range unexpectedIDs {
+	for i, id := range unexpectedIDs {
 		_, ok := r.Query(id)
-		require.False(t, ok)
+		require.False(t, ok, i)
+	}
+}
+
+func mustYamlUnmarshal(t *testing.T, in []byte, out interface{}) {
+	t.Helper()
+	if err := yaml.Unmarshal(in, out); err != nil {
+		t.Fatal(err)
 	}
 }
 func TestRepairServiceIdleTime(t *testing.T) {
