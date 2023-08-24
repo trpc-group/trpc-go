@@ -18,7 +18,7 @@ var (
 )
 
 func init() {
-	// regster selector
+	// register selector
 	selector.Register(exampleScheme, &exampleSelector{})
 }
 

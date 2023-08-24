@@ -64,7 +64,7 @@ service Greeter {
 client:
   service:
     - callee: pbpackage.service  # 必须同时配置 callee 和 name，callee 是 pb 的 service name，用于匹配 client proxy 和配置
-      name: polaris-serivce-name # 北极星名字服务的 service name，用于寻址
+      name: polaris-service-name # 北极星名字服务的 service name，用于寻址
       protocol: trpc
 ```
 通过 pb 生成的 client 桩代码，默认会把 pb servicename 填入到 client 中，所以 client 寻找配置时只会 `以 callee 为 key`（也就是 pb 的 service name）来匹配
@@ -77,20 +77,20 @@ client:
 client:
   service:
     - callee: pbpackage.service  # 必须同时配置 callee 和 name，callee 是 pb 的 service name，用于匹配 client proxy 和配置
-      name: polaris-serivce-name1 # 北极星名字服务的 service name，用于寻址
+      name: polaris-service-name1 # 北极星名字服务的 service name，用于寻址
       protocol: trpc
     - callee: pbpackage.service  # 必须同时配置 callee 和 name，callee 是 pb 的 service name，用于匹配 client proxy 和配置
-      name: polaris-serivce-name2 # 北极星名字服务的 service name，用于寻址
+      name: polaris-service-name2 # 北极星名字服务的 service name，用于寻址
       protocol: trpc
 ```
 
-用户在代码中可以使用 `client.WithServiceName` 来同时用 `calle` 以及 `name` 作为 key 进行配置的寻找：
+用户在代码中可以使用 `client.WithServiceName` 来同时用 `called` 以及 `name` 作为 key 进行配置的寻找：
 
 ```golang
 // proxy1 使用第一项配置
-proxy1 := pb.NewClientProxy(client.WithServiceName("polaris-serivce-name1"))
+proxy1 := pb.NewClientProxy(client.WithServiceName("polaris-service-name1"))
 // proxy2 使用第二项配置
-proxy2 := pb.NewClientProxy(client.WithServiceName("polaris-serivce-name2"))
+proxy2 := pb.NewClientProxy(client.WithServiceName("polaris-service-name2"))
 ```
 
 在 < v0.10.0 的版本中，上述写法都只会找到第二项配置 (存在 `callee` 相同的配置时，后面的会覆盖前面的)

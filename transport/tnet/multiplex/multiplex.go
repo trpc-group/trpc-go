@@ -154,7 +154,7 @@ func (p *pool) GetMuxConn(
 			return nil, err
 		}
 		// create new connection when the number of virtual connections exceeds the limit.
-		virConn, err = newVirConn(ctx, []*connnection{conn}, opts.VID, isFull)
+		virConn, err = newVirConn(ctx, []*connection{conn}, opts.VID, isFull)
 		if virConn != nil || err != nil {
 			return virConn, err
 		}
@@ -239,7 +239,7 @@ type host struct {
 	sfg                          singleflight.Group
 	deleteHostFromPool           func()
 	mu                           stateRWMutex
-	conns                        []*connnection
+	conns                        []*connection
 	maxConcurrentVirConnsPerConn int
 }
 
@@ -276,7 +276,7 @@ func (h *host) singleflightDial() <-chan singleflight.Result {
 	return ch
 }
 
-func waitDialing(ctx context.Context, dialing <-chan singleflight.Result) (*connnection, error) {
+func waitDialing(ctx context.Context, dialing <-chan singleflight.Result) (*connection, error) {
 	select {
 	case result := <-dialing:
 		return expandSFResult(result)
@@ -285,14 +285,14 @@ func waitDialing(ctx context.Context, dialing <-chan singleflight.Result) (*conn
 	}
 }
 
-func (h *host) wrapRawConn(rawConn net.Conn, fp multiplexed.FrameParser) (*connnection, error) {
+func (h *host) wrapRawConn(rawConn net.Conn, fp multiplexed.FrameParser) (*connection, error) {
 	// TODO: support tls
 	tc, ok := rawConn.(tnet.Conn)
 	if !ok {
 		return nil, errors.New("dialed connection must implements tnet.Conn")
 	}
 
-	c := &connnection{
+	c := &connection{
 		rawConn:               tc,
 		fp:                    fp,
 		idToVirConn:           newShardMap(defaultShardSize),
@@ -312,17 +312,17 @@ func (h *host) wrapRawConn(rawConn net.Conn, fp multiplexed.FrameParser) (*connn
 	return c, nil
 }
 
-func (h *host) loadAllConns() ([]*connnection, error) {
+func (h *host) loadAllConns() ([]*connection, error) {
 	if !h.mu.rLock() {
 		return nil, ErrConnClosed
 	}
 	defer h.mu.rUnlock()
-	conns := make([]*connnection, len(h.conns))
+	conns := make([]*connection, len(h.conns))
 	copy(conns, h.conns)
 	return conns, nil
 }
 
-func (h *host) storeConn(conn *connnection) error {
+func (h *host) storeConn(conn *connection) error {
 	if !h.mu.lock() {
 		return ErrConnClosed
 	}
@@ -331,7 +331,7 @@ func (h *host) storeConn(conn *connnection) error {
 	return nil
 }
 
-func (h *host) deleteConn(conn *connnection) (isLastConn bool) {
+func (h *host) deleteConn(conn *connection) (isLastConn bool) {
 	if !h.mu.lock() {
 		return false
 	}
@@ -362,15 +362,15 @@ func (h *host) metrics() {
 		"concurrent virtual connection number: %d\n", h.network, h.address, len(conns), virConnNum)
 }
 
-func expandSFResult(result singleflight.Result) (*connnection, error) {
+func expandSFResult(result singleflight.Result) (*connection, error) {
 	if result.Err != nil {
 		return nil, result.Err
 	}
-	return result.Val.(*connnection), nil
+	return result.Val.(*connection), nil
 }
 
-// connnection wraps the underlying tnet.Conn, and manages many virtualConnections.
-type connnection struct {
+// connection wraps the underlying tnet.Conn, and manages many virtualConnections.
+type connection struct {
 	rawConn               tnet.Conn
 	deleteConnFromHost    func()
 	fp                    multiplexed.FrameParser
@@ -380,7 +380,7 @@ type connnection struct {
 	maxConcurrentVirConns int
 }
 
-func (c *connnection) onRequest(conn tnet.Conn) error {
+func (c *connection) onRequest(conn tnet.Conn) error {
 	vid, buf, err := c.fp.Parse(conn)
 	if err != nil {
 		c.close(err)
@@ -396,11 +396,11 @@ func (c *connnection) onRequest(conn tnet.Conn) error {
 	return nil
 }
 
-func (c *connnection) canTakeNewVirConn() bool {
+func (c *connection) canTakeNewVirConn() bool {
 	return c.maxConcurrentVirConns == 0 || c.idToVirConn.length() < uint32(c.maxConcurrentVirConns)
 }
 
-func (c *connnection) close(cause error) {
+func (c *connection) close(cause error) {
 	if !c.isClosed.CAS(false, true) {
 		return
 	}
@@ -409,7 +409,7 @@ func (c *connnection) close(cause error) {
 	c.rawConn.Close()
 }
 
-func (c *connnection) deleteAllVirConn(cause error) {
+func (c *connection) deleteAllVirConn(cause error) {
 	if !c.mu.lock() {
 		return
 	}
@@ -421,7 +421,7 @@ func (c *connnection) deleteAllVirConn(cause error) {
 	c.idToVirConn.reset()
 }
 
-func (c *connnection) newVirConn(ctx context.Context, vid uint32) (*virtualConnection, error) {
+func (c *connection) newVirConn(ctx context.Context, vid uint32) (*virtualConnection, error) {
 	if !c.mu.rLock() {
 		return nil, ErrConnClosed
 	}
@@ -457,7 +457,7 @@ func (c *connnection) newVirConn(ctx context.Context, vid uint32) (*virtualConne
 	return vc, nil
 }
 
-func (c *connnection) deleteVirConn(id uint32) {
+func (c *connection) deleteVirConn(id uint32) {
 	c.idToVirConn.delete(id)
 }
 
@@ -540,7 +540,7 @@ func (vc *virtualConnection) wrapError(err error) error {
 	return err
 }
 
-func filterOutConn(in []*connnection, exclude *connnection) []*connnection {
+func filterOutConn(in []*connection, exclude *connection) []*connection {
 	out := in[:0]
 	for _, v := range in {
 		if v != exclude {
@@ -556,7 +556,7 @@ func filterOutConn(in []*connnection, exclude *connnection) []*connnection {
 
 func newVirConn(
 	ctx context.Context,
-	conns []*connnection,
+	conns []*connection,
 	vid uint32,
 	isTolerable func(error) bool,
 ) (*virtualConnection, error) {

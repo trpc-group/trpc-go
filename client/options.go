@@ -190,7 +190,7 @@ func WithCalleeMethod(method string) Option {
 }
 
 // WithCallerMetadata returns an Option that sets metadata of caller.
-// It should not be used fot env/set as specific methods are provided for env/set.
+// It should not be used for env/set as specific methods are provided for env/set.
 func WithCallerMetadata(key string, val string) Option {
 	return func(o *Options) {
 		o.SelectOptions = append(o.SelectOptions, selector.WithSourceMetadata(key, val))
@@ -198,7 +198,7 @@ func WithCallerMetadata(key string, val string) Option {
 }
 
 // WithCalleeMetadata returns an Option that sets metadata of callee.
-// It should not be used fot env/set as specific methods are provided for env/set.
+// It should not be used for env/set as specific methods are provided for env/set.
 func WithCalleeMetadata(key string, val string) Option {
 	return func(o *Options) {
 		o.SelectOptions = append(o.SelectOptions, selector.WithDestinationMetadata(key, val))
