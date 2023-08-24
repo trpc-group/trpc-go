@@ -4,7 +4,7 @@ tRPC-Go 框架是公司统一微服务框架的 golang 版本，主要是以高�
 
 ## 整体架构
 
-![架构图](.resources/developer_guide/architecture_design/overall_zh_CN.png)
+![架构图](.resources/overall_zh_CN.png)
 
 - 一个 server 进程内支持启动多个 service 服务，监听多个地址。
 - 所有部件全都可插拔，内置 transport 等基本功能默认实现，可替换，其他组件需由第三方业务自己实现并注册到框架中。

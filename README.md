@@ -4,7 +4,7 @@ The tRPC-Go framework is the Golang version of the company's unified microservic
 
 ## Overall Architecture
 
-![Architecture](.resources/developer_guide/architecture_design/overall.png)
+![Architecture](.resources/overall.png)
 
 - A server process supports starting multiple service instances and listening to multiple addresses.
 - All components are pluggable, with built-in default implementations for basic functions like transport, which can be replaced. Other components need to be implemented by third-party businesses and registered with the framework.
