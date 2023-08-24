@@ -1,5 +1,7 @@
 # tRPC-Go framework
 
+[English](README.md) | 中文
+
 tRPC-Go 框架是公司统一微服务框架的 golang 版本，主要是以高性能，可插拔，易测试为出发点而设计的 rpc 框架。
 
 ## 整体架构

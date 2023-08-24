@@ -1,5 +1,7 @@
 # tRPC-Go framework
 
+English | [中文](README_CN.md)
+
 The tRPC-Go framework is the Golang version of the company's unified microservices framework, mainly designed as an RPC framework with high performance, pluggability, and easy testing in mind.
 
 ## Overall Architecture
