@@ -1,7 +1,3 @@
-[TOC]
-
-
-
 # Introduction
 
 The tRPC framework uses PB to define services, but it is still a common requirement to provide REST-style APIs based on

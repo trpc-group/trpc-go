@@ -1,5 +1,3 @@
-[TOC]
-
 # tRPC-Go 模块：transport
 
 ## 背景

@@ -1,9 +1,3 @@
-[TOC]
-
-
-
-
-
 # 前言
 
 tRPC 框架使用 PB 定义服务，但是服务提供基于 HTTP 协议的 REST 风格 API 仍然是一个广泛的需求。RPC 和 REST 的统一是一件不容易的事情，tRPC-Go 框架本身的 HTTP RPC 协议，就是希望可以做到定义同一套 PB 文件，提供的服务既可以通过 RPC 方式调用（即通过桩代码提供的客户端 NewXXXClientProxy 调用），也可以通过原生 HTTP 请求调用，但这样的 HTTP 调用是不满足 RESTful 规范的，譬如说：无法自定义路由，不支持通配符，报错时 response body 为空（错误信息只能塞到 response header 里）等。所以我们额外支持了 RESTful 协议，而且不再尝试强行统一 RPC 和 REST，如果服务指定为 RESTful 协议，则其不支持用桩代码调用，仅支持 http 客户端调用，但是获得的好处是可以在同一套 PB 文件中通过 protobuf annotation 提供满足 RESTful 规范的 API，而且可以使用 tRPC 框架的各种 插件/filter 能力。

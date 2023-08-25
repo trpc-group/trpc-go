@@ -1,5 +1,3 @@
-[TOC]
-
 # Introduction
 
 Based on the design principles of the tRPC framework, the framework needs plugin support for commonly used protocols in other business scenarios. To meet this requirement, the framework has designed a codec module that supports protocol registration.

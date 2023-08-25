@@ -1,5 +1,3 @@
-[TOC]
-
 # tRPC-Go Develop distributed tracing plugin
 
 ## Introduction

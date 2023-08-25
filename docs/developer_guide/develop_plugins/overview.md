@@ -1,5 +1,3 @@
-[TOC]
-
 tRPC-Go Plugin Development Guide
 
 

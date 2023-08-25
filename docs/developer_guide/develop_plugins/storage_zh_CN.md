@@ -1,5 +1,3 @@
-[TOC]
-
 # 1. 前言
 
 在平时的开发过程中，大家总会对 ckv、db、hippo、kafka 等存储进行操作。为了减少重复代码，统一存储插件的操作行为，trpc-go 提供了相关存储的 api 库，代码路径：https://git.woa.com/trpc-go/trpc-database

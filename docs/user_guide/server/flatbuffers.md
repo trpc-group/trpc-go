@@ -1,8 +1,3 @@
-[TOC]
-
-
-
-
 # <a id="1"></a> 1 Background
 
 [flatbuffers](https://flatbuffers.dev/) introduction: A serialization library launched by Google, mainly used in gaming and mobile scenarios. Its function is similar to Protobuf, and its main advantages are:

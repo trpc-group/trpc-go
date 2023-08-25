@@ -1,5 +1,3 @@
-[TOC]
-
 # 前言
 
 本文介绍如何开发日志插件，具体细节可参考[鹰眼日志](https://git.woa.com/trpc-go/trpc-log-atta)，需要提前了解框架 [log](https://git.woa.com/trpc-go/trpc-go/tree/master/log) 的相关概念。

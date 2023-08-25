@@ -1,5 +1,3 @@
-[TOC]
-
 # Introduction
 tRPC-Go supports naming plugins, users can use different suitable naming plugins, or develop a new naming plugin for specific needs.
 

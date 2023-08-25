@@ -1,5 +1,3 @@
-[TOC]
-
 # Introduction
 
 The tRPC-Go framework supports graceful restart (hot restart). During the restart process, established connections are not interrupted to ensure that accepted requests are handled correctly (including consumer services), while allowing the new process to establish a new connection and handle new requests.

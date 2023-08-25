@@ -1,5 +1,3 @@
-[TOC]
-
 # 前言
 
 metrics 定义了一些常用的指标监控，比如 counter、gauge、timer、histogram，接下来介绍下大致的实现原理、使用。

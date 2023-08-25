@@ -1,5 +1,3 @@
-[TOC]
-
 # 前言
 全链路透传：框架支持在 client 和 server 之间透传字段，并在整个调用链路自动透传下去。
 字段以 key-value 的形式存在，key 是 string 类型，value 是 []byte 类型，value 可以是任何数据，透传字段对于 RPC 请求来说是透明的，提供了关于本次 RPC 请求的额外信息。同时框架通过 ctx 来透传字段。

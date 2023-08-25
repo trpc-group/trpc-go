@@ -1,5 +1,3 @@
-[TOC]
-
 # 前言
 
 本节展示如何使 tRPC-Go 服务调用 flatbuffers 协议服务

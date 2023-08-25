@@ -1,5 +1,3 @@
-[TOC]
-
 tRPC-Go access to high-performance network library
 
 

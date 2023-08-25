@@ -1,7 +1,3 @@
-[TOC]
-
-
-
 # 前言
 tRPC 的多语言统一的错误由错误码`code`和错误描述`msg`组成，这与 go 语言常规的 error 只有一个字符串不是很匹配，所以 tRPC-Go 这边通过 [errs](https://git.woa.com/trpc-go/trpc-go/tree/master/errs) 包装了一层，方便用户使用，用户在接口失败时，返回错误码应该使用`errs.New(code, msg)`来返回，而不是直接返回标准库的`errors.New(msg)`，如：
 ```golang

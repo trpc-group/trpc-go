@@ -1,5 +1,3 @@
-[TOC]
-
 # Getting Started with tRPC-Go
 
 

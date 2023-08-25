@@ -1,5 +1,3 @@
-[TOC]
-
 ## tRPC-Go 模块：metrics
 
 ### 背景

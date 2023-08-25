@@ -1,8 +1,3 @@
-[TOC]
-
-
-
-
 # <a id="1"></a> 1 背景
 
 [flatbuffers](https://flatbuffers.dev/) 简介：由 Google 推出的序列化库，主要用于游戏、移动端场景，作用类似于 protobuf

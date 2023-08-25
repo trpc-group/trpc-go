@@ -1,5 +1,3 @@
-[TOC]
-
 # Introduction
 Metadata transparent transmission: The framework supports transparent transmission of metadata fields between the client and server, and automatically transmits them throughout the entire call chain. The fields exist in the form of key-value pairs, where the key is of string type and the value is of `[]byte` type. The value can be any data. The transparent transmission of fields is transparent to RPC requests and provides additional information about the RPC request. At the same time, the framework passes metadata fields through `ctx`.
 

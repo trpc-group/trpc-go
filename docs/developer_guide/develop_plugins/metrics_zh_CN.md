@@ -1,5 +1,3 @@
-[TOC]
-
 # 前言
 
 本文介绍如何开发监控插件，具体细节可参考 [m007](https://git.woa.com/trpc-go/trpc-metrics-m007/tree/master)代码，模调监控使用的是框架的拦截器能力，需要先了解框架的[filter](https://git.woa.com/trpc-go/trpc-go/tree/master/filter)和[metrics](https://git.woa.com/trpc-go/trpc-go/tree/master/metrics) 。

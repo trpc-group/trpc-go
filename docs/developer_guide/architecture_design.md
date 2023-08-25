@@ -1,7 +1,3 @@
-[TOC]
-
-
-
 # Introduction
 
 First of all, welcome everyone to read the tRPC-Go architecture design document. This is a great opportunity to share some of the thoughts behind the tRPC-Go design with everyone. A lot of people may wonder what innovations tRPC-Go has, what advantages it has over external open-source frameworks, and why they should spend a lot of effort to learn a new framework, etc.

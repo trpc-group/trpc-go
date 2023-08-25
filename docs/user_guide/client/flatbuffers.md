@@ -1,5 +1,3 @@
-[TOC]
-
 # Introduction
 
 This section shows how to call flatbuffers services in tRPC-Go.

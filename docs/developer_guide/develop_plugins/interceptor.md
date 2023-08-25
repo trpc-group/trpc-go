@@ -1,5 +1,3 @@
-[TOC]
-
 # Developing Interceptor Plugins for tRPC-Go
 
 

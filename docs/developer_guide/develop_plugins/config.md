@@ -1,5 +1,3 @@
-[TOC]
-
 # 1. Introduction
 
 This document refers to the business configuration plugin for developing remote configuration centers, not framework configurations. Check [here](https://git.woa.com/trpc-go/trpc-wiki/blob/main/user_guide/framework_conf.md) for the framework configuration document.

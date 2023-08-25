@@ -1,7 +1,3 @@
-[TOC]
-
-
-
 ## 1. Preface
 
 tRPC's error handling mechanism, which functions across different languages, consists of an error code and an error description message. It does not comply with the native practice in Go, which only returns a single string.

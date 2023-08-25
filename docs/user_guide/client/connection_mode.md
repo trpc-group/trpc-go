@@ -1,5 +1,3 @@
-[TOC]
-
 # tRPC-Go client connection mode
 
 

@@ -1,5 +1,3 @@
-[TOC]
-
 # Building Stream Services with tRPC-Go
 
 

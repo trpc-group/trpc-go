@@ -1,5 +1,3 @@
-[TOC]
-
 # 1. 前言
 
 本篇文档指的是开发远程配置中心的业务配置插件，不是框架配置，框架配置文档见[这里](https://git.woa.com/trpc-go/trpc-wiki/blob/main/user_guide/framework_conf_zh_cn.md)。

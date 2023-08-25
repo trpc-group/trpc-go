@@ -1,5 +1,3 @@
-[TOC]
-
 # Introduction
 
 Metrics define some commonly used monitoring metrics, such as `counter`, `gauge`, `timer`, and `histogram`.

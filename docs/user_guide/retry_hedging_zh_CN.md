@@ -1,5 +1,3 @@
-[TOC]
-
 slime version: [v0.3.0](https://git.woa.com/trpc-go/trpc-filter/tree/slime/v0.3.0/slime)
 slime [changelog](https://git.woa.com/trpc-go/trpc-filter/tree/slime/v0.3.0/slime/CHANGELOG.md)
 

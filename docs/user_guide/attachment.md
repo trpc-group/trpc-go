@@ -1,5 +1,3 @@
-[TOC]
-
 #  tRPC-Go Attachment (Large Binary Data) Transmission
 
 tRPC protocol now supports sending attachments over simple RPC.

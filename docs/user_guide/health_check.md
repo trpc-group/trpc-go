@@ -1,5 +1,3 @@
-[TOC]
-
 # Introduction
 
 When a process starts, the code service may not have finished initializing, such as services that require hot loading during startup.

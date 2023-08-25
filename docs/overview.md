@@ -1,5 +1,3 @@
-[TOC]
-
 # Preface
 
 First, welcome to the tRPC-Go development documentation!

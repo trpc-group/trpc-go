@@ -1,5 +1,3 @@
-[TOC]
-
 # tRPC-Go Framework Configuration
 
 

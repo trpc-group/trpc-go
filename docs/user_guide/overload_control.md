@@ -1,5 +1,3 @@
-[TOC]
-
 # TRPC-Go Overload Control
 
 ## Introduction

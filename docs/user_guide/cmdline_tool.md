@@ -1,8 +1,3 @@
-[TOC]
-
-
-
-
 # Introduction
 
 The **trpc** command is a command-line tool supporting the tRPC framework. The command name is trpc. It assists

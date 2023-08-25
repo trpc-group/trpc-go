@@ -1,5 +1,3 @@
-[TOC]
-
 # 1. Introduction
 
 During the development process, you often need to operate on various storage systems, such as ckv, db, hippo, kafka, etc.

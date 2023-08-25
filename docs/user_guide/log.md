@@ -1,7 +1,3 @@
-[TOC]
-
-
-
 # Introduction
 
 Logs are an important part of software development, and a good log is an important source of information for us to analyze the running status of the software.

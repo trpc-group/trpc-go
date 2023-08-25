@@ -1,6 +1,3 @@
-[TOC]
-
-
 # Introduction
 
 This article introduces how to develop monitoring plugins, for details, please refer to [m007](https://git.woa.com/trpc-go/trpc-metrics-m007/tree/master) code

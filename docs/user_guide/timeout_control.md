@@ -1,7 +1,3 @@
-[TOC]
-
-
-
 # 1、Introduction
 
 tRPC-Go's timeout control only occurs when the client calls the service, controlling the time for the call to wait. If the set time is exceeded, the client call immediately returns a timeout failure.

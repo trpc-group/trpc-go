@@ -1,5 +1,3 @@
-[TOC]
-
 # Introduction
 
 This document introduces how to develop a log plug-in.

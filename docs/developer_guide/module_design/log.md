@@ -1,8 +1,3 @@
-[TOC]
-
-
-
-
 # background
 
 It is essential to leverage logs to identify service transactions, anomalies, and errors during service delivery, and the log package is utilized to facilitate the logging of service activities.
