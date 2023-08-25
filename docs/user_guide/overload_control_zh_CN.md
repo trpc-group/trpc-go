@@ -282,5 +282,3 @@ server:
 Q1：过载时的错误码是什么？
 - 过载保护：server 端返回 22，client 端返回 124。
 - 北极星限流：server 端返回 23，client 端返回 123。
-## OWNER
-cooperyan

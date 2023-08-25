@@ -96,5 +96,3 @@ type Error struct {
 # FAQ
 todo
 
-# OWNER
-## nickzydeng

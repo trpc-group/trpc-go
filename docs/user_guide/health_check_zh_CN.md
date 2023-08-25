@@ -71,6 +71,3 @@ func main() {
 
 对于显式注册了健康检查的 service，只有当 service 状态变为 `healthcheck.Serving` 时，才会开始第一次心跳上报。服务运行中，如果 service 状态变为 `healthcheck.NotServing` 或者 `healthcheck.Unknown`，就会停止心跳，直到再次变更为 `healthcheck.Serving` 才恢复（变更的瞬间，会立即发起一次心跳上报）。
 
-# OWNER
-## cooperyan
-

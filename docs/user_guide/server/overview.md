@@ -325,6 +325,3 @@ tRPC-Go supports service-level synchronous/asynchronous packet processing modes.
 
 todo
 
-# OWNER
-
-nickzydeng

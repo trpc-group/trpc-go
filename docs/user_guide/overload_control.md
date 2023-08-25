@@ -233,5 +233,3 @@ Q1: What is the error code for overload?
 - Overload protection: server returns `22`, client returns `124`.
 - Polaris rate limiting: server returns `23`, client returns `123`.
 
-## OWNER
-cooperyan

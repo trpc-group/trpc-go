@@ -48,5 +48,3 @@ rsp, err := proxy.SayHello(ctx, options...) // 注意：框架传过来的 ctx
 head.TransInfo // 框架透传回来的信息 key-value 对（map[string][]byte）
 ```
 
-# OWNER 
-## misakachen

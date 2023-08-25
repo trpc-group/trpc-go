@@ -74,6 +74,3 @@ serverSpan.Finish()
 
 ## Example
 
-## Owner
-
-tensorchen

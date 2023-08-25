@@ -1,30 +1,3 @@
-[TOC]
-
-<!-- TOC -->
-
-- [1 Introduction](#1-introduction)
-- [2 List of management commands](#2-list-of-management-commands)
-   - [2.1 View all management commands](#21-view-all-management-commands)
-   - [2.2 View framework version information](#22-view-framework-version-information)
-   - [2.3 View framework log level](#23-view-framework-log-level)
-   - [2.4 Set framework log level](#24-set-framework-log-level)
-   - [2.5 View framework configuration file](#25-view-framework-configuration-file)
-- [3 Customize management commands](#3-customize-management-commands)
-   - [3.1 Define a function](#31-define-a-function)
-   - [3.2 Register a route](#32-register-a-route)
-   - [3.3 Trigger a command](#33-trigger-a-command)
-- [4 Pprof performance analysis](#4-pprof-performance-analysis)
-   - [4.1 To use pprof on a machine with a configured Go environment and network connectivity to the IDC](#41-to-use-pprof-on-a-machine-with-a-configured-go-environment-and-network-connectivity-to-the-idc)
-   - [4.2 To download pprof files to the local machine and analyze them using local Go tools](#42-to-download-pprof-files-to-the-local-machine-and-analyze-them-using-local-go-tools)
-   - [4.3 The official flame graph proxy service](#43-the-official-flame-graph-proxy-service)
-   - [4.4 Memory management commands debug/pprof/heap](#44-memory-management-commands-debugpprofheap)
-   - [4.5 PCG 123 release platform view flame graph](#45-pcg-123-release-platform-view-flame-graph)
-- [5 FAQ](#5-faq)
-- [6 OWNER](#6-owner)
-  - [nickzydeng](#nickzydeng)
-  - [leoxhyang (For PCG 123 platform flame graph issues, please contact leoxhyang)](#leoxhyangfor-pcg-123-platform-flame-graph-issues-please-contact-leoxhyang)
-<!-- /TOC -->
-
 # Introduction
 
 The management command (admin) is the internal management background of the service. It is an additional http service provided by the framework in addition to the normal service port. Through this http interface, instructions can be sent to the service, such as viewing the log level, dynamically setting the log level, etc. The specific command See the list of commands below.
@@ -278,8 +251,3 @@ Note: only tRPC-Go has a flame graph, trpc does not have other languages! !
 
 <todo>
 
-# OWNER
-
-## nickzydeng
-
-## leoxhyang (For PCG 123 platform flame graph issues, please contact leoxhyang)

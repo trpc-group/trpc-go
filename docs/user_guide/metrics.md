@@ -85,5 +85,3 @@ During development, you can refer to the examples in the sample code. Depending 
 
 Please refer to documents in trpc-go/trpc-metrics-${name}.
 
-# OWNER
-## zhijiezhang

@@ -258,6 +258,3 @@ RegisterCodec(&JSONCodec{})
 [tconf](https://git.woa.com/trpc-go/trpc-config-tconf)
 [rainbow](https://git.woa.com/trpc-go/trpc-config-rainbow)
 
-# 5. OWNER
-
-treycheng

@@ -161,6 +161,3 @@ https://git.woa.com/trpc-go/trpc-codec/tree/master/tars
 
 To implement a business protocol, you need to implement a Framer to extract complete business packets from TCP. You also need to implement the server codec and client codec interfaces, as well as the serializer if necessary. Additionally, make sure to set some metadata in the encode and decode methods to find the processing methods or perform marshal and unmarshal operations.
 
-# OWNER
-
-## yifhao

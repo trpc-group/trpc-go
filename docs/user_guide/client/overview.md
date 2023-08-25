@@ -674,6 +674,3 @@ The tRPC-Go framework allows businesses to define their own serialization and de
 
 todo
 
-# OWNER
-
-nickzydeng

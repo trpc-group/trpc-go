@@ -365,7 +365,3 @@ filter.Register("name1", serverFilter, nil)  // Note that the name1 interceptor 
 filter.Register("name2", nil, clientFilter)  // Note that the name2 interceptor can only be configured in the client's filter list. Configuring it in the server will cause the server to fail to start.
 ```
 
-## OWNER
-
-### tensorchen
-### leoxhyang (Streaming Interceptor)

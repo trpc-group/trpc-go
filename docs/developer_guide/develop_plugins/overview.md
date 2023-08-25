@@ -225,4 +225,3 @@ plugins:
       name: "default_foo"
 ```
 
-# OWNER

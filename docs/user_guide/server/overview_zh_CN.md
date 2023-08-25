@@ -325,6 +325,3 @@ tRPC-Go 支持服务级别的同/异步包处理模式，对于异步模式采�
 
 todo
 
-# OWNER
-
-nickzydeng

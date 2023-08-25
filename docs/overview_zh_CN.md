@@ -43,5 +43,3 @@ tRPC-Go 框架是 tRPC 的 Golang 版本，主要是以 [高性能](todo)，[可
 ## 主调/上游 和 被调/下游
 有两个服务 A -> B，A 调用 B，则 A 是`caller，主调方，上游`，B 是`callee，被调方，下游`
 
-# OWNER
-## nickzydeng

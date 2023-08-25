@@ -356,7 +356,3 @@ filter.Register("name1", serverFilter, nil)  // 注意，此时的 name1 拦截�
 filter.Register("name2", nil, clientFilter)  // 注意，此时的 name2 拦截器只能配置在 client 的 filter 列表里面，配置到 server 里面会启动失败
 ```
 
-## OWNER
-
-### tensorchen
-### leoxhyang（流式拦截器）

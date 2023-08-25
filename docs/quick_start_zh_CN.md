@@ -286,6 +286,3 @@ GDP/ODP 是 IEG 云原生开发者平台，提供了 trpc 的线上部署、持�
 
 **更多问题请查找：** [tRPC-Go 常见问题](todo)
 
-# OWNER
-
-## nickzydeng

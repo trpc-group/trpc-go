@@ -72,6 +72,3 @@ For any service that has not explicitly registered for health check, its heartbe
 
 For any service that has explicitly registered for health check, only when its status become `healthcheck.Serving`, the first heartbeat starts. If the status changed to `healthcheck.NotServing` or `healthcheck.Unknown`, Polaris heartbeat will be paused until status changed to `healthcheck.Serving` (one heartbeat will be immediately sent upon change).
 
-# OWNER
-## cooperyan
-

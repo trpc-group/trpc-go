@@ -239,7 +239,3 @@ IEG 增值服务部 2022 年 9 月技术沙龙分享
 
 [tnet 高性能网络库设计实现与性能优化](todo)
 
-# OWNER
-
-leoxhyang
-wineguo

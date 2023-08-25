@@ -87,5 +87,3 @@ h.AddSample(time.Second * 3)
 
 监控请参考格式 trpc-go/trpc-metrics-${name} 进行检索。
 
-# OWNER
-## zhijiezhang

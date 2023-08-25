@@ -141,6 +141,3 @@ The connection pool used internally by the client is actually referenced in the 
 
 Here is a brief summary of the overall architecture design of tRPC-Go, as well as the rough workflow of the client and server, with mentions of the functions of related modules. More information on this part will be provided in the subsequent module design documentation in more detail.
 
-# Owner
-
-zhijiezhang

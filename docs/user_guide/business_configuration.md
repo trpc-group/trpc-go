@@ -353,5 +353,3 @@ import (
 
 The integration between tRPC and Tconf is complete. Users can use the interfaces described in Section 3 to retrieve configurations.
 
-# OWNER
-* treycheng

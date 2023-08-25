@@ -186,5 +186,3 @@ func main() {
 }
 ```
 
-# OWNER
-## misakachen

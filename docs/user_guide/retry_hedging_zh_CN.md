@@ -461,6 +461,3 @@ prometheus 的使用方式可以参考[官方文档](https://prometheus.io/docs/
 # 用户案例
 https://mk.woa.com/note/6739?ADTAG=rb_tag_8205
 
-# OWNER
-如果你们有使用重试和对冲的计划，请线上联系我们（cooperyan/jessemjchen），我们需要业务的效果和反馈，以进一步优化。
-## cooperyan

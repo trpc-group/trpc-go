@@ -126,6 +126,3 @@ SerializationType 主要用于网络调用的上下文传递，CurrentSerializat
 `SerializationType`指的是 body 的原始序列化方式，正常情况都会在协议字段里面指定，tRPC 默认序列化类型是 pb。
 `CurrentSerializationType`指的是框架接收到数据时，真正用来执行序列化操作的方式，一般不用填，默认等于 SerializationType，当用户设置 CurrentSerializationType 时，则以用户设置为准，这样就可以允许用户自己设置任意的序列化方式，代理透传时指定[NoopSerializationType](https://git.woa.com/trpc-go/trpc-go/blob/master/codec/serialization_noop.go)即可。
 
-## OWNER
-
-### nickzydeng

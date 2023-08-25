@@ -47,5 +47,3 @@ rsp, err := proxy.SayHello(ctx, options...) // Note: ctx passed by the framework
 head.TransInfo // Key-value pairs of information transmitted by the framework (map[string][]byte)
 ```
 
-# OWNER 
-## misakachen

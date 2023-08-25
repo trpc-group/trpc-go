@@ -168,6 +168,3 @@ https://git.woa.com/trpc-go/trpc-codec/tree/master/tars
 实现一个业务协议，需要实现一个 Framer 用于从 tcp 中解出完整业务包，实现 server codec 接口和 client codec 接口，serializer(可能需要).
 同时需要注意，在 encode 和 decode 方法中，设置一些元信息，用于寻找处理方法或者 marshal, unmarshal.
 
-# OWNER
-
-## yifhao

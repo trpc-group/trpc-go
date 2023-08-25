@@ -140,6 +140,3 @@ client 内部使用的连接池，其实是 client transport 中引用的，clie
 
 这里简单总结了 tRPC-Go 的整体架构设计，以及 client、server 的大致工作流程，中间穿插着提及了相关模块的的功能，这部分内容的更多信息，我们在后续模块设计相关的文档中进行更详细的介绍。
 
-# OWNER
-
-zhijiezhang

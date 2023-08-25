@@ -192,6 +192,3 @@ log.Info("req:%v, rsp:%v, err:%v", req, rsp, err)
 
 todo
 
-## OWNER
-
-**misakachen**

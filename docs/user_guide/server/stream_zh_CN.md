@@ -378,6 +378,3 @@ https://git.woa.com/trpc-go/trpc-wiki/blob/main/developer_guide/develop_plugins/
 
 todo
 
-# OWNER
-
-## jessemjchen

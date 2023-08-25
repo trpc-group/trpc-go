@@ -106,6 +106,3 @@ func init() {
 
 ## [tglog 日志](https://git.woa.com/trpc-go/trpc-log-tglog)
 
-# OWNER
-
-evannzhang

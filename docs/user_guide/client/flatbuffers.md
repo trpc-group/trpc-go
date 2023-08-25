@@ -92,5 +92,3 @@ proxy := fb.NewGreeterClientProxy(
 
 # FAQ
 
-# OWNER
-## wineguo

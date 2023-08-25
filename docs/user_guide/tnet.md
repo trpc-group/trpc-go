@@ -241,7 +241,3 @@ Technical salon sharing by IEG Value-added Services Department in September 2022
 
 [Design, implementation, and performance optimization of tnet high-performance network library](todo)
 
-# OWNER
-
-leoxhyang
-wineguo

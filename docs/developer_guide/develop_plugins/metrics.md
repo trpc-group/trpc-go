@@ -108,6 +108,3 @@ func (m *M007Sink) Report(rec metrics.Record, opts ...metrics.Option) error {
 
 ```
 
-# OWNER
-
-## luisyjliu

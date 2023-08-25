@@ -74,5 +74,3 @@ func (p *closablePlugin) Close() error {...}
 
 # FAQ
 
-# OWNER
-## zhijiezhang

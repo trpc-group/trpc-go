@@ -287,5 +287,3 @@ Refer to the following usage examples on https://git.woa.com/trpc-go/trpc-go-cmd
 
 The run*.sh scripts corresponding to these usage examples are available in the directory linked above.
 
-# OWNER
-## wineguo

@@ -284,6 +284,3 @@ To create a business project, services can be built using the trpc template and 
 
 For more questions, please refer to [tRPC-Go FAQ](todo).
 
-## OWNER
-
-**nickzydeng**

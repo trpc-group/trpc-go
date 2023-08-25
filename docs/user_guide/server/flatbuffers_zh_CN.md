@@ -285,5 +285,3 @@ req.Message() // 访问 req 中的 message 字段
 
 这些使用示例对应的运行脚本见上述链接目录下的 run*.sh
 
-# OWNER
-## wineguo

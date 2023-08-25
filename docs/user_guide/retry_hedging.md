@@ -599,7 +599,3 @@ How to use prometheus can refer to [Official Documentation](https://prometheus.i
 # User Cases
 https://mk.woa.com/note/6739?ADTAG=rb_tag_8205
 
-# OWNER
-If you have plans to use retry/hedging, please contact us (cooperyan/jessemjchen), we need business effects and feedback
-for further optimization.
-## cooperyan
