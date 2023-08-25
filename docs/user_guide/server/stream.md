@@ -98,7 +98,7 @@ func (s *greeterServerImpl) SayHello(gs pb.Greeter_SayHelloServer) error {
         // The server uses a for loop to recv and receive data from the client
         in, err := gs.Recv()
         if err == nil {
-            log.Infof("recive hi, %s\n", in.Name)
+            log.Infof("receive hi, %s\n", in.Name)
         }
         // If EOF is returned, it means that the client stream has ended and the client has sent all the data
         if err == io.EOF {
@@ -256,7 +256,7 @@ func (s *greeterServerImpl) SayHello(gs pb.Greeter_SayHelloServer) error {
         // Call Recv in a loop
         in, err := gs.Recv()
         if err == nil {
-            log.Infof("recive hi, %s\n", in.Name)
+            log.Infof("receive hi, %s\n", in.Name)
         }
       
         if err == io.EOF {

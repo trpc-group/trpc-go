@@ -122,5 +122,5 @@ type Error struct {
 
 Error handling process:
 1. If a user explicitly returns a business error or framework failure through `errs.New`. Based on its type, the err will be filled into `ret` which indicates a framework error, or `func_ret` which indicates business logic errors
-2. When composing and returning the response, the framework checks for errors. If errors are found, the response body will be discarded. Thus, `if the return fails, do not try to return the data through reponse body again`.
+2. When composing and returning the response, the framework checks for errors. If errors are found, the response body will be discarded. Thus, `if the return fails, do not try to return the data through response body again`.
 3. If the upstream caller encounters an error during a call, the` framework error` will be directly created and returned to the user. If the call is successful, the framework or business error in the trpc protocol will be resolved, and any `callee framework errors or business errors` will be created and returned to the user.

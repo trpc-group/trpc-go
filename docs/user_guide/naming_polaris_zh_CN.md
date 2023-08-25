@@ -82,7 +82,7 @@ or
         + canaryRouter
 ```
 service router 并没有一个统一的含义。在上一段中搜索 `service router`，以了解它在各种场景下的效果。  
-`client.WithDisableServiceRouter`、`yaml.client.serivce[i].disable_servicerouter` 或
+`client.WithDisableServiceRouter`、`yaml.client.service[i].disable_servicerouter` 或
 `yaml.plugins.selector.polaris.enable_servicerouter` 都可以设置 service router，但只有前两个可以将 EnvTransfer 置空，打断其传播。
 
 ## tRPC-Go 是如何调用到 naming-polaris 的
@@ -165,7 +165,7 @@ servicerouter 可以通过
 [`yaml.client.service[i].disable_servicerouter`](https://git.woa.com/trpc-go/trpc-go/blob/v0.14.0/client/config.go#L35)
 或 [`yaml.plugins.selector.polaris.enable_servicerouter`](https://git.woa.com/trpc-go/trpc-naming-polaris/blob/v0.5.1/naming.go#L35) 
 设置，它默认开启。  
-开启 servcierouter 后，naming-polaris 会填充源 metadata，它可以由 
+开启 Servicerouter 后，naming-polaris 会填充源 metadata，它可以由 
 [`client.WithCallerEnvName`](https://git.woa.com/trpc-go/trpc-go/blob/v0.14.0/client/options.go#L163) 或 
 [`client.WithCallerMetadata`](https://git.woa.com/trpc-go/trpc-go/blob/v0.14.0/client/options.go#L199) 设置，
 会用于规则路由的主调规则中。
@@ -310,6 +310,6 @@ SVR3 到 SVR4 也是类似的原理。
 的规则就会阻止我们。为了绕过它，我们可以给被调服务添加一个总是成功的被调规则：
 ![special_caller_rule_for_dst_meta_router](/.resources/user_guide/naming_polaris/special_caller_rule_for_dst_meta_router.png)  
 其中，`metadata_key` 是我们要匹配的目标元数据。
-在存在被调规则的情况下，`ruleBasedRouter` 会跳过主调规则。这并不会影响 123 servcie name 的能力，因为 servicerouter 调用的
+在存在被调规则的情况下，`ruleBasedRouter` 会跳过主调规则。这并不会影响 123 Service name 的能力，因为 servicerouter 调用的
 [`GetFilterInstances`]() 并不会去获取被调规则。  
 注意，你需要用 `client.WithCallerMetadata` 来传递需要匹配的 callee 元数据，这是 `PARAMETER` 工作的原理。

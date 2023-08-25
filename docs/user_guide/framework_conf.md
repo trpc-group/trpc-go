@@ -179,7 +179,7 @@ client:
   # Required, list of called services
   service:
     - # Callee service name
-      # If pb is used, the callee must be be consistent with the service name deifned in pb
+      # If pb is used, the callee must be be consistent with the service name defined in pb
       # Fill in at least one name and callee, if it is empty, use the name field
       callee: String
       # callee service name, Commonly used for service discovery
@@ -257,7 +257,7 @@ Let's take the PCG 123 platform as an example to introduce how the usual operati
 The default configuration provided by the 123 platform can be found in [here](https://git.woa.com/wod_csc_paas/123_process_script/blob/master/trpc_go/trpc_go.yaml).
 
 
-### Use Environment Variables to Substitue the Configurations
+### Use Environment Variables to Substitute the Configurations
 
 tRPC-Go also provides the golang template to generate framework configuration: it supports automatic replacement of framework configuration placeholders by reading environment variables. The environment variable method can be used in combination with chapter 5.1 or 5.2. Create a configuration file template through tools or operating platforms, and then replace the environment variable placeholders in the configuration file with environment variables.
 

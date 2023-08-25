@@ -248,7 +248,7 @@ tRPC-Go recommends using errors.New() encapsulated by tRPC-Go to return business
 
 tRPC-Go has planned the data type and meaning of error codes, and has also explained the problem of common error codes. Please refer to the [tRPC-Go error code manual](https://git.woa.com/trpc-go/trpc-wiki/blob/main/user_guide/error_codes.md) for details.
 
-# Framework Configration
+# Framework Configuration
 
 For the server, it is necessary to configure the "global" and "server" parts of the framework configuration. For the specific meanings, value ranges, and other information of configuration parameters, please refer to the [Framework Configuration document](https://git.woa.com/trpc-go/trpc-wiki/blob/main/user_guide/framework_conf.md). The configuration of the "plugins" part depends on the selected plugin, please refer to the "7 Plugin Selection" section below.
 

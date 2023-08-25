@@ -64,7 +64,7 @@ Server 启动过程，大致包括以下流程：
     2. 各插件完成初始化，任意一个失败，则进程 panic 退出；
     3. 监听信号 SIGUSR2，收到则执行热重启逻辑；
     4. 监听 SIGINT 等信号，收到进程正常退出；
-4. `server.Register(pb.ServiceDesc, serviceImpl)`注册 sevice，这里其实是注册 rpc 方法名及处理函数的映射关系；
+4. `server.Register(pb.ServiceDesc, serviceImpl)`注册 service，这里其实是注册 rpc 方法名及处理函数的映射关系；
 5. 服务此时就已经正常启动了，后续等待 client 建立连接请求。
 
 ### 请求处理

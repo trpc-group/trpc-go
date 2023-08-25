@@ -37,7 +37,7 @@ How to implement a custom naming plugin? Here's an example:
 
 ```go
 
-// Store the correspoding service and nodes information
+// Store the corresponding service and nodes information
 var store = map[string][]*registry.Node{} {
   "service1": []*registry.Node{
     	&registry.Node{

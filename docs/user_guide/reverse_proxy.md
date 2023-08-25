@@ -44,7 +44,7 @@ func AccessServer_Forward_Handler(svr interface{}, ctx context.Context, f server
 var AccessServer_ServiceDesc = server.ServiceDesc{
 	ServiceName: "trpc.kandian.oidb_trpc_proxy.Access",
 	HandlerType: ((*AccessServer)(nil)), 
-	Methods: []server.Mehod{
+	Methods: []server.Method{
 		server.Method{
 			Name: "*", 
 			Func: AccessServer_Forward_Handler,
@@ -121,7 +121,7 @@ oidb_trpc_proxy is a proxy service supported by Tencent Watchpoint for stock com
 
 ### Q1: SerializationType and CurrentSerializationType what do these two options mean and what is the difference
 
-tRPC-Go provids `SerializationType` and `CurrentSerializationType` to support proxy forwarding.
+tRPC-Go provides `SerializationType` and `CurrentSerializationType` to support proxy forwarding.
 
 SerializationType is mainly used for context passing of network calls, and CurrentSerializationType is mainly used for current framework data parsing.
 `SerializationType` refers to the original serialization method of the body, which is normally specified inside the protocol field. 

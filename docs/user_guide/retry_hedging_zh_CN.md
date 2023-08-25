@@ -304,7 +304,7 @@ plugins:
 
 ## 作为 [Entity](https://en.wikipedia.org/wiki/Domain-driven_design#Building_blocks) 的重试/对冲策略
 
-在上面的配置中，我们定义了四个重试/对冲策略，并在 `client` 中引用了它们。每种策略，除了必要的参数外，都有一个新的字段 `name`，用作实体的**唯一**标识。在上一章中，我们提到一些 option，如 `WithDynamicHedgingDelay`，它们无法在文件中配置，需要在代码中使用，这里的 `name` 就是在代码中使用这些 optioin 的关键。在 slime 中，我们提供了下面几种函数，来设置额外的 options。
+在上面的配置中，我们定义了四个重试/对冲策略，并在 `client` 中引用了它们。每种策略，除了必要的参数外，都有一个新的字段 `name`，用作实体的**唯一**标识。在上一章中，我们提到一些 option，如 `WithDynamicHedgingDelay`，它们无法在文件中配置，需要在代码中使用，这里的 `name` 就是在代码中使用这些 option 的关键。在 slime 中，我们提供了下面几种函数，来设置额外的 options。
 ```Go
 func SetHedgingDynamicDelay(name string, dynamicDelay func() time.Duration) error
 func SetHedgingNonFatalError(name string, nonFatalErr func(error) bool)

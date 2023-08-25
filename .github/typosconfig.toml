@@ -1,0 +1,14 @@
+[default]
+extend-ignore-identifiers-re = [
+    "AttributeID.*Supress.*",
+]
+
+[default.extend-identifiers]
+AttributeIDSupressMenu = "AttributeIDSupressMenu"
+
+[default.extend-words]
+WRONLY = "WRONLY"
+guage = "guage"
+
+[files]
+extend-exclude = ["install/submodules/*"]

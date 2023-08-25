@@ -59,7 +59,7 @@ func callGreeterSayHello() {
 	if err != nil {
 		log.Fatalf("err: %v", err)
 	}
-	// Replace "Message" wtih the name of the field
+	// Replace "Message" with the name of the field
 	// log.Debugf("simple  rpc   receive: %q", reply.Message())
 	log.Debugf("simple  rpc   receive: %v", reply)
 }

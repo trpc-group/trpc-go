@@ -97,7 +97,7 @@ func (s *greeterServerImpl) SayHello(gs pb.Greeter_SayHelloServer) error {
         // 服务端使用 for 循环进行 Recv，接收来自客户的数据
         in, err := gs.Recv()
         if err == nil {
-            log.Infof("recive hi, %s\n", in.Name)
+            log.Infof("receive hi, %s\n", in.Name)
         }
         // 如果返回 EOF，说明客户端流已经结束，客户端已经发送完所有数据
         if err == io.EOF {
@@ -256,7 +256,7 @@ func (s *greeterServerImpl) SayHello(gs pb.Greeter_SayHelloServer) error {
         // 循环调用 Recv
         in, err := gs.Recv()
         if err == nil {
-            log.Infof("recive hi, %s\n", in.Name)
+            log.Infof("receive hi, %s\n", in.Name)
         }
         if err == io.EOF {
             log.Infof("recveive error io eof %v\n", err)

@@ -489,7 +489,7 @@ Note that this feature requires the cooperation of a load balancer. If the load 
 it will correspond to the third case.
 
 ## Disable Retry/Hedging for a Single Request
-After v0.2.0, we support a new feature: users can diable retry/hedge for a single request by creating a new context.  
+After v0.2.0, we support a new feature: users can disable retry/hedge for a single request by creating a new context.  
 This function usually cooperates with trpc-database to make the retry/hedging configuration take effect only for read
 requests (or idempotent requests), while skipping write requests. For example, for trpc-database/redis:
 ```go

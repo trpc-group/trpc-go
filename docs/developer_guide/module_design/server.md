@@ -69,7 +69,7 @@ type ServiceDesc struct {
 Method defines a specific processing method of a Service.
 
 ``` go
-// Method contains infomation of rpc method
+// Method contains information of rpc method
 type Method struct {
     Name string
     Func func(svr interface{}, ctx context.Context, f FilterFunc) (rspbody interface{}, err error)

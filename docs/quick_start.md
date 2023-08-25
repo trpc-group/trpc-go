@@ -49,7 +49,7 @@ syntax = "proto3";
 // package The recommended content format is trpc.{app}.{server}, with trpc as the fixed prefix to identify it as a tRPC service protocol, app as your application name, and server as your service process name.
 package trpc.test.helloworld;
 
-// Waring：The go_package specified here refers to the address of the protocol generated file pb.go on Git, not the same as the Git repository address of the service above.
+// Warning：The go_package specified here refers to the address of the protocol generated file pb.go on Git, not the same as the Git repository address of the service above.
 option go_package="git.woa.com/trpcprotocol/test/helloworld";
 
 // Define the service interface

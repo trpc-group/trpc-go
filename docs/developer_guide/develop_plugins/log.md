@@ -10,7 +10,7 @@ For more details, please refer to https://git.woa.com/trpc-go/trpc-log-atta.
 
 The framework `log` is implemented based on `zap` and supports registering custom `writers`.
 
-The plug-in is used to adapt the `framework log interface` and the `log platform inerface`.
+The plug-in is used to adapt the `framework log interface` and the `log platform interface`.
 
 # Implementation
 
@@ -36,7 +36,7 @@ The plug-in is used to adapt the `framework log interface` and the `log platform
 
 If you have set `pluginName` in configuration file, the framework will call the `Setup` function of the `writer` when initializing.
 
-The specific implementation depends on the initilization prrocess of log platform. For example, `log-atta` reuses the channel of atta, we only need to initialize atta.
+The specific implementation depends on the initialization prrocess of log platform. For example, `log-atta` reuses the channel of atta, we only need to initialize atta.
 
 To improve the efficiency, atta-log write channels in real time, asynchronously reporting(supports batch), and starts consumers during initialization.
 

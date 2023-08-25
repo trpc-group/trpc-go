@@ -86,10 +86,10 @@ func (m *M007Sink) Report(rec metrics.Record, opts ...metrics.Option) error {
       return nil
    }
    // 多维度上报
-   var dimesions []string
+   var dimensions []string
    var statValues []*nmnt.StatValue
    ...
-   pcgmonitor.ReportCustom(rec.Name, dimesions, statValues)
+   pcgmonitor.ReportCustom(rec.Name, dimensions, statValues)
    return nil
 }
 ```
