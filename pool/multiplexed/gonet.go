@@ -169,7 +169,7 @@ func (tc *tcpConn) reading(n Notifier) {
 		vid, buf, err := tc.frameParser.Parse(tc.reader)
 		if err != nil {
 			// If there is an error in tcp unpacking, it may cause problems with
-			// all subsequent parsing, so it is necessary to close the reconnection.
+			// all subsequent parsing, so it is necessary to close the connection.
 			errToClose = err
 			report.MultiplexedTCPReadingErr.Incr()
 			log.Trace("close connection when read err: ", err)
