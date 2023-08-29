@@ -504,7 +504,7 @@ type dialOption struct {
 	tlsServerName string
 }
 
-var errNoAvailableConn = errors.New("there is no avilable connection")
+var errNoAvailableConn = errors.New("there is no available connection")
 
 func newVirtualConn(
 	ctx context.Context,

@@ -147,7 +147,7 @@ func TestMultiplexedBasic(t *testing.T) {
 				opts.WithVID(id)
 				return id, opts
 			}
-			t.Run("Mutiple Conns Concurrent Read Write", func(t *testing.T) {
+			t.Run("Multiple Conns Concurrent Read Write", func(t *testing.T) {
 				pool := NewPool(
 					tt.dialFunc,
 					WithEnableMetrics(),
@@ -210,7 +210,7 @@ func TestTLS(t *testing.T) {
 		)
 		return id, opts
 	}
-	t.Run("Mutiple Conns Concurrent Read Write", func(t *testing.T) {
+	t.Run("Multiple Conns Concurrent Read Write", func(t *testing.T) {
 		pool := NewPool(
 			NewDialFunc(WithDropFull(), WithSendingQueueSize(100)),
 			WithEnableMetrics(),
