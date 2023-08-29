@@ -1,3 +1,8 @@
+// Tencent is pleased to support the open source community by making tRPC available.
+// Copyright (C) 2023 THL A29 Limited, a Tencent company. All rights reserved.
+// If you have downloaded a copy of the tRPC source code from Tencent,
+// please note that tRPC source code is licensed under the Apache 2.0 License that can be found in the LICENSE file.
+
 // Package server 服务端，包括网络通信 名字服务 监控统计 链路跟踪等各个组件基础接口，具体实现由第三方 middleware 注册进来
 package server
 
