@@ -1,14 +1,12 @@
 # tRPC-Go framework
 
+English | [中文](README_CN.md)
+
 The tRPC-Go framework is the Golang version of the company's unified microservices framework, mainly designed as an RPC framework with high performance, pluggability, and easy testing in mind.
-
-## Documentation: [iwiki](https://trpc.group/trpc-go/trpc-wiki)
-
-## TRY IT
 
 ## Overall Architecture
 
-![Architecture Diagram](TODO: After open sourcing, upload the image to GitHub and make sure to adjust the image link)
+![Architecture](.resources/overall.png)
 
 - A server process supports starting multiple service instances and listening to multiple addresses.
 - All components are pluggable, with built-in default implementations for basic functions like transport, which can be replaced. Other components need to be implemented by third-party businesses and registered with the framework.
@@ -25,52 +23,7 @@ The tRPC-Go framework is the Golang version of the company's unified microservic
 
 ## Generation Tool
 
-- Installation
-
-```
-# For the first-time installation, make sure the environment variable PATH is configured with $GOBIN or $GOPATH/bin
-go get -u trpc.tech/trpc-go/trpc-go-cmdline/v2/trpc
-
-# Configure dependent tools, such as protoc, protoc-gen-go, mockgen, etc.
-trpc setup
-
-# Subsequent updates, rollback versions
-trpc version                            # Check version
-trpc upgrade -l                         # Check for version updates
-trpc upgrade [--version <version>]      # Update to the specified version
-```
-
-- Usage
-
-```bash
-trpc help create
-```
-
-```bash
-Specify the pb file to quickly create a project or rpcstub,
-
-'trpc create' has two modes:
-- Generate a complete service project
-- Generate an rpcstub for the called service, specify the '-rpconly' option.
-
-Usage:
-  trpc create [flags]
-
-Flags:
-      --alias                  enable alias mode of rpc name
-      --assetdir string        path of project template
-  -f, --force                  enable overwritten existed code forcibly
-  -h, --help                   help for create
-      --lang string            programming language, including go, java, python (default "go")
-  -m, --mod string             go module, default: ${pb.package}
-  -o, --output string          output directory
-      --protocol string        protocol to use, trpc, http, etc (default "trpc")
-      --protodir stringArray   include path of the target protofile (default [.])
-  -p, --protofile string       protofile used as IDL of target service
-      --rpconly                generate rpc stub only
-      --swagger                enable swagger to gen swagger api document.
-  -v, --verbose                show verbose logging info
-```
+Refer to [trpc-group/trpc-go-cmdline](https://github.com/trpc-group/trpc-go-cmdline) for installation and usage.
 
 ## Service Protocol
 

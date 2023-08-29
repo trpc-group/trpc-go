@@ -31,6 +31,7 @@ jobs:
         with:
           version: latest 
           only-new-issues: true
+          skip-cache: true # To prevent occasional failure of this action.
   typos:
     name: typos
     runs-on: self-hosted
