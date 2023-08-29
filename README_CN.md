@@ -1,14 +1,12 @@
 # tRPC-Go framework
 
+[English](README.md) | 中文
+
 tRPC-Go 框架是公司统一微服务框架的 golang 版本，主要是以高性能，可插拔，易测试为出发点而设计的 rpc 框架。
-
-## 文档地址：[iwiki](https://trpc.group/trpc-go/trpc-wiki)
-
-## TRY IT
 
 ## 整体架构
 
-![架构图](TODO: 开源后，图片上传到 github，务必调整图片链接)
+![架构图](.resources/overall_zh_CN.png)
 
 - 一个 server 进程内支持启动多个 service 服务，监听多个地址。
 - 所有部件全都可插拔，内置 transport 等基本功能默认实现，可替换，其他组件需由第三方业务自己实现并注册到框架中。
@@ -25,52 +23,7 @@ tRPC-Go 框架是公司统一微服务框架的 golang 版本，主要是以高�
 
 ## 生成工具
 
-- 安装
-
-```
-# 初次安装，请确保环境变量 PATH 已配置$GOBIN 或者$GOPATH/bin
-go get -u trpc.tech/trpc-go/trpc-go-cmdline/v2/trpc
-
-# 配置依赖工具，如 protoc、protoc-gen-go、mockgen 等等
-trpc setup
-
-# 后续更新、回退版本
-trpc version                            # 检查版本
-trpc upgrade -l                         # 检查版本更新
-trpc upgrade [--version <version>]      # 更新到指定版本
-```
-
-- 使用
-
-```bash
-trpc help create
-```
-
-```bash
-指定 pb 文件快速创建工程或 rpcstub，
-
-'trpc create' 有两种模式：
-- 生成一个完整的服务工程
-- 生成被调服务的 rpcstub，需指定'-rpconly'选项。
-
-Usage:
-  trpc create [flags]
-
-Flags:
-      --alias                  enable alias mode of rpc name
-      --assetdir string        path of project template
-  -f, --force                  enable overwritten existed code forcibly
-  -h, --help                   help for create
-      --lang string            programming language, including go, java, python (default "go")
-  -m, --mod string             go module, default: ${pb.package}
-  -o, --output string          output directory
-      --protocol string        protocol to use, trpc, http, etc (default "trpc")
-      --protodir stringArray   include path of the target protofile (default [.])
-  -p, --protofile string       protofile used as IDL of target service
-      --rpconly                generate rpc stub only
-      --swagger                enable swagger to gen swagger api document.
-  -v, --verbose                show verbose logging info
-```
+参考 [trpc-group/trpc-go-cmdline](https://github.com/trpc-group/trpc-go-cmdline) 进行安装及使用。
 
 ## 服务协议
 
