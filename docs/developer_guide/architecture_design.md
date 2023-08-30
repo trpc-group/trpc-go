@@ -1,24 +1,15 @@
 # Introduction
 
-First of all, welcome everyone to read the tRPC-Go architecture design document. This is a great opportunity to share some of the thoughts behind the tRPC-Go design with everyone. A lot of people may wonder what innovations tRPC-Go has, what advantages it has over external open-source frameworks, and why they should spend a lot of effort to learn a new framework, etc.
-
-This article mainly discusses the architecture design of the unique features of tRPC-Go. The tRPC framework as a whole follows a consistent design across all languages, and the same parts can be viewed in the architecture overview.
-
-Perhaps tRPC-Go is not a star product in the industry, but it should be a good choice for solving problems. The tRPC family provides framework versions in multiple languages, and follows a consistent architecture design at the top level. The framework features and peripheral ecosystem construction also strive to advance synchronously, providing a decent guarantee for meeting the needs of different technology stacks in the company team, supporting peripheral components, and technical support.
-
-"As an arrow piercing through the clouds, meeting thousands of troops and horses", I am fortunate to feel the power of open source collaboration in framework governance. tRPC-Go was born in everyone's discussion, and I hope it will continue to grow in larger discussions within the company.
+This article mainly discusses the architecture design of the unique features of tRPC-Go. 
 
 # Background
-
-In order to help everyone better understand the architecture design of tRPC-Go, this article will cover necessary content as much as possible. This document is based on the tRPC-Go framework v0.3.6. Due to the limited energy of the author, subsequent documents may also become outdated, so we hope everyone can participate together.
 
 The following sections of this article will be organized as follows:
 
 - First, introduce the overall architecture design of tRPC-Go, so that everyone can have a general understanding;
 - Then, introduce the server workflow of tRPC-Go, so that everyone can grasp the working principle of the server from a global perspective;
 - Then, introduce the client workflow of tRPC-Go, so that everyone can grasp the working principle of the client from a global perspective;
-- Then, introduce the performance optimization of tRPC-Go, and inform everyone of some optimization options that can be adjusted;
-- Then, I would like to share with everyone the design and optimization points of certain parts, for continuous optimization and iteration in the future.
+- Last, introduce the performance optimization of tRPC-Go, and inform everyone of some optimization options that can be adjusted;
 
 This is the first article on the architecture design of tRPC-Go, focusing on the framework. Subsequent documents on module design will introduce the collaboration between modules and between modules and the framework in more detail.
 
