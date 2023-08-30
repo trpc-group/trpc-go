@@ -1,6 +1,6 @@
 # 1. 前言
 
-本篇文档指的是开发远程配置中心的业务配置插件，不是框架配置，框架配置文档见[这里](https://git.woa.com/trpc-go/trpc-wiki/blob/main/user_guide/framework_conf_zh_cn.md)。
+本篇文档指的是开发远程配置中心的业务配置插件，不是框架配置，框架配置文档见[这里](/docs/user_guide/framework_conf_zh_CN.md)。
 
 框架通过定义组件化的配置接口抽象：`trpc-go/config`，集成基本的配置中心拉取能力，提供了一种简单方式读取多种内容源、多种文件类型的配置，具体配置实现通过插件注册进来，本文介绍的是如何开发配置插件。
 
@@ -12,7 +12,7 @@
 
     ```go
     // DataProvider 通用内容源接口
-    // 通过实现 Name、Read、Watch 等方法，就能从任意的内容源（file、TConf、ETCD、configmap）中读取配置
+    // 通过实现 Name、Read、Watch 等方法，就能从任意的内容源（file、ETCD、configmap）中读取配置
     // 并通过编解码器解析为可处理的标准格式（JSON、TOML、YAML）等
     type DataProvider interface {
         Name() string                    // 获取 trpc_go.yaml 注册时的 provide name
@@ -92,8 +92,6 @@
 开发配置插件主要是实现相关接口，注册`config`库中，用户根据需要在配置加载的时候按需使用。
 
 通过以上接口我们可以实现：
-
-Through the above interfaces, we can implement:
 
 1. 协议配置解析插件
 2. 内容源拉取插件
@@ -185,7 +183,7 @@ func (p *filePlugin) Setup(name string, decoder plugin.Decoder) error {
 }
 ```
 
-# 4. 示例（以七彩石插件为例）
+# 4. 示例
 
 ## 如何实现 kvconfig 接口
 
@@ -253,6 +251,4 @@ RegisterCodec(&JSONCodec{})
 
 ## 实例代码
 
-[tconf](https://git.woa.com/trpc-go/trpc-config-tconf)
-[rainbow](https://git.woa.com/trpc-go/trpc-config-rainbow)
-
+[config-etcd](https://github.com/trpc-ecosystem/go-config-etcd)

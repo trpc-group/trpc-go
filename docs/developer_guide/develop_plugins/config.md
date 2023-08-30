@@ -1,6 +1,6 @@
 # 1. Introduction
 
-This document refers to the business configuration plugin for developing remote configuration centers, not framework configurations. Check [here](https://git.woa.com/trpc-go/trpc-wiki/blob/main/user_guide/framework_conf.md) for the framework configuration document.
+This document refers to the business configuration plugin for developing remote configuration centers, not framework configurations. Check [here](/docs/user_guide/framework_conf.md) for the framework configuration document.
 
 The framework abstracts component-based configuration interfaces: `trpc-go/config`, integrates basic configuration center pull capabilities, and provides a simple way to read various content sources and file types of configurations.
 
@@ -17,7 +17,7 @@ Please take the following steps to implement a custom configuration plugin.
     ```go
 
     // DataProvider universal content source interface
-    // By implementing methods such as Name, Read, and Watch, you can read configurations from any content source (file, TConf, ETCD, configmap)
+    // By implementing methods such as Name, Read, and Watch, you can read configurations from any content source (file, ETCD, configmap)
     // And parse it into a standard format that can be processed by encoders and decoders (JSON, TOML, YAML), etc.
     type DataProvider interface {
         Name() string // Get the provide name registered in trpc_go.yaml
@@ -278,6 +278,4 @@ RegisterCodec(&JSONCodec{})
 
 ## Code Samples
 
-[tconf](https://git.woa.com/trpc-go/trpc-config-tconf)
-[rainbow](https://git.woa.com/trpc-go/trpc-config-rainbow)
-
+[config-etcd](https://github.com/trpc-ecosystem/go-config-etcd)
