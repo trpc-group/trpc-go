@@ -1,18 +1,16 @@
 # Getting Started with tRPC-Go
 
-
-
 ## Introduction
 
 Hello tRPC-Go !
 
-Now that you know [something](https://git.woa.com/trpc-go/trpc-wiki/blob/main/overview.md) about tRPC-Go, the easiest way to understand how it works is to look at a simple example.Hello World will walk you through creating a simple backend service, showing you:
+Now that you know [something](/docs/overview.md) about tRPC-Go, the easiest way to understand how it works is to look at a simple example.Hello World will walk you through creating a simple backend service, showing you:
 
 - Define an RPC service with a simple SayHello method by writing protobuf.
 - Generate server-side code using the tRPC tool.
 - Invoke the service using the RPC method.
 
-The complete code for this example can be found in the [examples/helloworld](https://git.woa.com/trpc-go/trpc-go/tree/master/examples/helloworld) directory of our source code repository.
+The complete code for this example can be found in the [examples/helloworld](/examples/helloworld) directory of our source code repository.
 
 ## Environment Setup
 
@@ -20,7 +18,7 @@ Before getting started, it is necessary to ensure that the Go environment is ava
 
 ## Server Development
 
-Warning: This document aims to help users quickly understand the process of server-side development. The development steps mentioned here are meant to be executed locally. In actual business development, efficiency is typically improved by using better platform management tools, such as [publishing services with 123](todo) and managing PB interfaces with Rick(For more details, please refer to [tRPC-Go API management](todo) and [the introduction of Rick platform](todo)).
+Warning: This document aims to help users quickly understand the process of server-side development. The development steps mentioned here are meant to be executed locally. In actual business development, efficiency is typically improved by using better platform management tools.
 
 ### Create a service repository
 
@@ -248,37 +246,3 @@ go build
 ```
 
 Under normal circumstances, the client code is not so simple. Typically, downstream services are called within the service. For more detailed client code, please refer to the [Client Development](https://git.woa.com/trpc-go/trpc-wiki/blob/main/user_guide/client/overview.md) section in the user guide, or directly refer to the code in the [example/helloworld](example/helloworld) directory.
-
-## Deployment online
-
-First of all, it is important to understand that the framework is completely independent and not bound to any platform, which means that it can be deployed on any platform.
-
-### Deployment on 123 platform
-
-The 123 platform is a PCG container release platform, and all new services for PCG employees will be [released](todo) on this platform.
-
-Note that using the 123 platform for deployment requires introducing the Polaris plugin. For more information, please refer to the plugin documentation: [Polaris Service Registration and Discovery](https://git.woa.com/trpc-go/trpc-naming-polaris).
-
-### Deployment on zhiyun platform
-
-Zhiyun is a relatively old binary release platform. First, the binary needs to be compiled and then dragged to the platform for release.
-
-- Build: Run "go build -v" to generate a binary file
-- Zhiyun release: Choose the `backend server package` and start the command: `./app -conf ../conf/trpc_go.yaml &`.
-
-Then login to the [Zhiyun](http://yun.isd.com/index.php/package/create/) platform for packaging and release, which can be referred to as the [Zhiyun Deployment](http://tapd.oa.com/zhiyun/markdown_wikis/view/#1010125021009540855).
-
-### Deployment on stke
-
-Some teams [use STKE for deployment](todo) on a large scale, while others can customize pipelines as needed for deployment on STKE. It is important to pay attention to the level of support for certain capabilities, such as whether Polaris can complete registration.
-
-### Deployment on GDP/ODP
-
-[GDP/ODP](https://gdp.woa.com/) is the IEG Cloud Native Developer Platform, which provides online deployment and continuous operation functions for trpc.
-
-To create a business project, services can be built using the trpc template and released for access. Specific usage information can be consulted with the GDP&ODP assistant.
-
-## FAQ
-
-For more questions, please refer to [tRPC-Go FAQ](todo).
-

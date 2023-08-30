@@ -1,19 +1,17 @@
 # tRPC-Go 快速上手
 
-
-
 # 前言
 
 Hello tRPC-Go !
 
-现在，你已经对 tRPC-Go 有所 [了解](https://git.woa.com/trpc-go/trpc-wiki/blob/main/quick_start_zh-CN.md)，了解其工作机制最简单的方法就是看一个简单的例子。
+现在，你已经对 tRPC-Go 有所 [了解](/docs/overview_zh_CN.md)，了解其工作机制最简单的方法就是看一个简单的例子。
 Hello World 将带领你创建一个简单的后台服务，向你展示：
 
 - 通过编写 protobuf，定义一个简单的带有 SayHello 方法的 RPC 服务。
 - 通过 trpc 工具，生成服务端代码。
 - 通过 rpc 方式，调用服务。
 
-这个例子完整的代码在我们源码库的 [examples/helloworld](https://git.woa.com/trpc-go/trpc-go/tree/master/examples/helloworld) 目录下。
+这个例子完整的代码在我们源码库的 [examples/helloworld](/examples/helloworld) 目录下。
 
 # 环境搭建
 
@@ -21,7 +19,7 @@ Hello World 将带领你创建一个简单的后台服务，向你展示：
 
 # 服务端开发
 
-**注意：本文档旨在让用户简单快速熟悉服务开发流程，这里的开发步骤都是在本地执行的，实际业务开发时，一般都是通过更好的平台管理工具来提高效率，如用 [123 发布服务](todo)，用 rick 管理 pb 接口（详情见 [tRPC-Go 接口管理](todo) 以及 [Rick 平台简介](todo))。**
+**注意：本文档旨在让用户简单快速熟悉服务开发流程，这里的开发步骤都是在本地执行的，实际业务开发时，一般都是通过更好的平台管理工具来提高效率**
 
 ## 创建服务仓库
 
@@ -245,41 +243,3 @@ go build
 ```
 
 正常情况，客户端代码不会如此简单，一般都是在服务内部调用下游服务，更加详细的客户端代码请看用户指南里面的 [客户端开发](https://git.woa.com/trpc-go/trpc-wiki/blob/main/user_guide/client/overview_zh_CN.md)，或者可以直接看 [example/helloworld](https://git.woa.com/trpc-go/trpc-go/blob/master/examples/helloworld/greeter.go#L31) 的代码。
-
-# 部署上线
-
-```
-首先大家需要了解，框架是完全独立的，跟任何平台都没有绑定关系，可以支持在任何平台部署。
-```
-
-## 123 平台部署
-
-123 平台是 PCG 容器发布平台，PCG 员工后续新服务都会统一到这个平台 [发布服务](todo)。
-注意：使用 123 平台部署需要引入北极星插件，具体参考插件文档：[北极星服务注册与发现](https://git.woa.com/trpc-go/trpc-naming-polaris)。
-
-## 织云部署
-
-织云是一个比较古老的二进制发布平台。首先需要编译好二进制再拖到平台上 [发布](http://tapd.oa.com/zhiyun/markdown_wikis/view/#1010125021009540855)。
-
-- build
-  执行 go build -v 会生成一个二进制文件
-- 织云发布
-  选择： `后台 server 包`
-  启动命令： `./app -conf ../conf/trpc_go.yaml &`
-
-登录 [织云](http://yun.isd.com/index.php/package/create/) 平台进行打包发布，可参考：[织云部署](http://tapd.oa.com/zhiyun/markdown_wikis/view/#1010125021009540855)。
-
-## stke 部署
-
-有些团队在大范围 [使用 stke 进行部署](todo)，也可以按需定制流水线在 stke 进行部署。要注意某些能力的支持程度，如北极星能否完成注册。
-
-## GDP/ODP 部署
-
-GDP/ODP 是 IEG 云原生开发者平台，提供了 trpc 的线上部署、持续运营功能
-[腾讯游戏微服务平台](https://gdp.woa.com/)
-创建业务的项目，通过 trpc 模板创建好服务，即可发布访问，具体使用方式可以咨询 GDP&ODP 助手
-
-# FAQ
-
-**更多问题请查找：** [tRPC-Go 常见问题](todo)
-
