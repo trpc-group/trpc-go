@@ -1,7 +1,7 @@
 # Introduction
 
-This article introduces how to develop monitoring plugins, for details, please refer to [m007](https://git.woa.com/trpc-go/trpc-metrics-m007/tree/master) code
-Modular monitoring uses the filters of the framework, and it is necessary to understand the framework's [filter](https://git.woa.com/trpc-go/trpc-go/tree/master/filter) and [metrics](https://git.woa.com/trpc-go/trpc-go/tree/master/metrics).
+This article introduces how to develop monitoring plugins, for details, please refer to [prometheus](https://github.com/trpc-ecosystem/go-metrics-prometheus) code
+Modular monitoring uses the filters of the framework, and it is necessary to understand the framework's [filter](/filter) and [metrics](/metrics).
 
 Before reading this article, you need to read [developing filters plugins](./interceptor.md).
 
@@ -18,14 +18,14 @@ The specific details depend on the support of the monitoring platform, because t
 
 ## Caller&Callee
 
-Register the plugin, pluginName custom, m007Plugin must meet the interface definition.
+Register the plugin, pluginName custom, Plugin must meet the interface definition.
 
 ``` go
 const (
-   pluginName = "m007"
+   pluginName = "prometheus"
 )
 func init() {
-   plugin.Register(pluginName, &m007Plugin{})
+   plugin.Register(pluginName, &Plugin{})
 }
 ```
 

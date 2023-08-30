@@ -1,6 +1,6 @@
 # 前言
 
-本文介绍如何开发监控插件，具体细节可参考 [m007](https://git.woa.com/trpc-go/trpc-metrics-m007/tree/master)代码，模调监控使用的是框架的拦截器能力，需要先了解框架的[filter](https://git.woa.com/trpc-go/trpc-go/tree/master/filter)和[metrics](https://git.woa.com/trpc-go/trpc-go/tree/master/metrics) 。
+本文介绍如何开发监控插件，具体细节可参考 [prometheus](https://github.com/trpc-ecosystem/go-metrics-prometheus)代码，模调监控使用的是框架的拦截器能力，需要先了解框架的[filter](/filter)和[metrics](/metrics) 。
 
 阅读本篇文章之前，需要先阅读[开发拦截器插件](./interceptor.md)。
 
@@ -17,14 +17,14 @@
 
 ## 主调与被调
 
-注册插件，pluginName 自定义，m007Plugin 要满足接口的定义。
+注册插件，pluginName 自定义，Plugin 要满足接口的定义。
 
-``` go
+```go
 const (
-   pluginName = "m007"
+   pluginName = "prometheus"
 )
 func init() {
-   plugin.Register(pluginName, &m007Plugin{})
+   plugin.Register(pluginName, &Plugin{})
 }
 ```
 
