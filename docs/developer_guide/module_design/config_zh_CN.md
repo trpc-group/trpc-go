@@ -69,6 +69,6 @@ config, err := config.DefaultConfigLoader.Load("../testdata/trpc_go.yaml", confi
 如：获取配置文件中 plugins.tracing.jaeger.disabled 这个配置的值
 
 ```go
-out := config.GetBool("plugins.tracing.jaeger.disabled", true
+out := config.GetBool("plugins.tracing.jaeger.disabled", true)
 ```
 
