@@ -1,3 +1,5 @@
+English | [中文](./README_zh_CN.md)
+
 # Introduction
 
 Configuration management plays an extremely important role in the microservices governance system. The tRPC framework provides a set of standard interfaces for business program development, supporting the retrieval of configuration from multiple data sources, parsing configuration, and perceiving configuration changes. The framework shields the details of data source docking, simplifying development. This article aims to provide users with the following information:
