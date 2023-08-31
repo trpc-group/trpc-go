@@ -1,3 +1,5 @@
+English | [中文](./README_zh_CN.md)
+
 ## Introduction
 
 When a process starts, the code service may not have finished initializing, such as services that require hot loading during startup.  
