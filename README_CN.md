@@ -25,6 +25,10 @@ tRPC-Go 框架是公司统一微服务框架的 golang 版本，主要是以高�
 
 参考 [trpc-group/trpc-go-cmdline](https://github.com/trpc-group/trpc-go-cmdline) 进行安装及使用。
 
+## 快速上手
+
+在安装好 [trpc-go-cmdline](https://github.com/trpc-group/trpc-go-cmdline) 工具后，阅读并执行[快速上手](https://github.com/trpc-group/trpc-go-cmdline#quick-start)，对应的实现可参考 [examples/helloworld](/examples/helloworld)
+
 ## 服务协议
 
 - trpc 框架支持任意的第三方协议，同时默认支持了 trpc 和 http 协议
