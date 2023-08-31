@@ -60,9 +60,9 @@ type DataProvider interface {
 Finally, let's see how to retrieve a business configuration by specifying the data source and decoder:
 
 ```go
-// Load etcd configuration file: config.WithProvider("etcd")
+// Load etcd configuration file: config.WithProvider("etcd").
 c, _ := config.Load("test.yaml", config.WithCodec("yaml"), config.WithProvider("etcd"))
-// Read String type configuration
+// Read String type configuration.
 c.GetString("auth.user", "admin")
 ```
 
@@ -96,22 +96,22 @@ Step 3: Loading Configuration
 Load configuration file from data source and return config data structure. The data source type and Codec format can be specified, with the framework defaulting to "file" data source and "YAML" Codec. The interface is defined as follows:
 
 ```go
-// Load configuration file: path is the path of the configuration file
+// Load configuration file: path is the path of the configuration file.
 func Load(path string, opts ...LoadOption) (Config, error)
-// Change Codec type, default is "YAML" format
+// Change Codec type, default is "YAML" format.
 func WithCodec(name string) LoadOption
-// Change data source, default is "file"
+// Change data source, default is "file".
 func WithProvider(name string) LoadOption
 ```
 
 The sample code is as follows:
 
 ```go
-// Load etcd configuration file: config.WithProvider("etcd")
+// Load etcd configuration file: config.WithProvider("etcd").
 c, _ := config.Load("test1.yaml", config.WithCodec("yaml"), config.WithProvider("etcd"))
-// Load local configuration file, codec is json, data source is file
+// Load local configuration file, codec is json, data source is file.
 c, _ := config.Load("../testdata/auth.yaml", config.WithCodec("json"), config.WithProvider("file"))
-// Load local configuration file, default Codec is yaml, data source is file
+// Load local configuration file, default Codec is yaml, data source is file.
 c, _ := config.Load("../testdata/auth.yaml")
 ```
 
@@ -119,7 +119,7 @@ Step 4: Retrieving Configuration Items
 Get the value of a specific configuration item from the config data structure. Default values can be set, and the framework provides the following standard interfaces:
 
 ```go
-// Config general interface
+// Config general interface.
 type Config interface {
     Load() error
     Reload()
@@ -143,9 +143,9 @@ type Config interface {
 The sample code is as follows:
 
 ```go
-// Read bool type configuration
+// Read bool type configuration.
 c.GetBool("server.debug", false)
-// Read String type configuration
+// Read String type configuration.
 c.GetString("server.app", "default")
 ```
 
@@ -154,41 +154,41 @@ c.GetString("server.app", "default")
 The framework provides a Watch mechanism for business programs to define and execute their own logic based on received configuration item change events in KV-type configuration centers. The monitoring interface is designed as follows:
 
 ```go
-// Get retrieves kvconfig by name
+// Get retrieves kvconfig by name.
 func Get(name string) KVConfig
 
-// KVConfig is the interface for KV configurations
+// KVConfig is the interface for KV configurations.
 type KVConfig interface {
     KV
     Watcher
     Name() string
 }
 
-// Watcher is the interface for monitoring
+// Watcher is the interface for monitoring.
 type Watcher interface {
-    // Watch monitors the changes of the configuration item key
+    // Watch monitors the changes of the configuration item key.
     Watch(ctx context.Context, key string, opts ...Option) (<-chan Response, error)
 }
 
-// Response represents the response from the configuration center
+// Response represents the response from the configuration center.
 type Response interface {
-    // Value gets the value corresponding to the configuration item
+    // Value gets the value corresponding to the configuration item.
     Value() string
-    // MetaData provides additional metadata information
+    // MetaData provides additional metadata information.
     // Configuration Option options can be used to carry extra functionality implementation of different configuration centers, such as namespace, group, lease, etc.
     MetaData() map[string]string
-    // Event gets the type of the Watch event
+    // Event gets the type of the Watch event.
     Event() EventType
 }
 
-// EventType represents the types of events monitored for configuration changes
+// EventType represents the types of events monitored for configuration changes.
 type EventType uint8
 const (
-    // EventTypeNull represents an empty event
+    // EventTypeNull represents an empty event.
     EventTypeNull EventType = 0
-    // EventTypePut represents a set or update configuration event
+    // EventTypePut represents a set or update configuration event.
     EventTypePut EventType = 1
-    // EventTypeDel represents a delete configuration item event
+    // EventTypeDel represents a delete configuration item event.
     EventTypeDel EventType = 2
 )
 ```
@@ -206,8 +206,8 @@ type yamlFile struct {
         App string
     }
 }
-var cfg atomic.Value // Concurrent-safe Value
-// Listen to remote configuration changes on etcd using the Watch interface in trpc-go/config
+var cfg atomic.Value // Concurrent-safe Value.
+// Listen to remote configuration changes on etcd using the Watch interface in trpc-go/config.
 c, _ := config.Get("etcd").Watch(context.TODO(), "test.yaml")
 go func() {
     for r := range c {
