@@ -210,7 +210,7 @@ func (nl *nodeList) UnmarshalYAML(node *yaml.Node) error {
 				"but the valid number of elements can only be 1", n, size)
 		}
 		for nodeKind, value := range n {
-			if valueEmpty(&value) {
+			if valueEmpty(value) {
 				return fmt.Errorf("decoding %s node: value is empty", nodeKind)
 			}
 			node, err := generate(nodeKind)
@@ -226,7 +226,7 @@ func (nl *nodeList) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
-func valueEmpty(node *yaml.Node) bool {
+func valueEmpty(node yaml.Node) bool {
 	return len(node.Content) == 0 && len(node.Value) == 0
 }
 
