@@ -1,3 +1,5 @@
+English | [中文](./README_zh_CN.md)
+
 # tRPC-Go Framework Configuration
 
 ## Foreword

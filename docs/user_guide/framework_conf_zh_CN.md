@@ -1,3 +1,5 @@
+[English](./README.md) | 中文
+
 # tRPC-Go 框架配置
 
 ## 前言
