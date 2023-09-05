@@ -105,9 +105,9 @@ func main() {
 import "trpc.group/trpc-go/trpc-go/transport/tnet"
 
 func main() {
-	proxy := pb.NewGreeterClientProxy()
-	trans := tnet.NewClientTransport()
-	rsp, err := proxy.SayHello(trpc.BackgroundContext(), &pb.HelloRequest{Msg: "Hello"}, client.WithTransport(trans))
+  proxy := pb.NewGreeterClientProxy()
+  trans := tnet.NewClientTransport()
+  rsp, err := proxy.SayHello(trpc.BackgroundContext(), &pb.HelloRequest{Msg: "Hello"}, client.WithTransport(trans))
 }
 ```
 
