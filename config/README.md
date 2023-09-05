@@ -199,7 +199,7 @@ prints configuration item change events, and updates the configuration:
 ```go
 import (
     "sync/atomic"
-    ...
+    // ...
 )
 type yamlFile struct {
     Server struct {

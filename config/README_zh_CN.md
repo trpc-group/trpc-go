@@ -41,9 +41,9 @@
 Codec 和 DataProvider 这两个模块都提供了标准接口和注册函数以支持编解码和数据源的插件化。以实现多数据源为例，DataProvider 提供了以下三个标准接口，其中 Read 函数提供了如何读取配置的原始数据（未解码），而 Watch 函数提供了 callback 函数，当数据源的数据发生变化时，框架会执行此 callback 函数。
 ```go
 type DataProvider interface {
-	Name() string
-	Read(string) ([]byte, error)
-	Watch(ProviderCallback)
+    Name() string
+    Read(string) ([]byte, error)
+    Watch(ProviderCallback)
 }
 ```
 
@@ -103,22 +103,22 @@ c, _ := config.Load("../testdata/auth.yaml")
 ```go
 // Config 配置通用接口
 type Config interface {
-	Load() error
-	Reload()
-	Get(string, interface{}) interface{}
-	Unmarshal(interface{}) error
-	IsSet(string) bool
-	GetInt(string, int) int
-	GetInt32(string, int32) int32
-	GetInt64(string, int64) int64
-	GetUint(string, uint) uint
-	GetUint32(string, uint32) uint32
-	GetUint64(string, uint64) uint64
-	GetFloat32(string, float32) float32
-	GetFloat64(string, float64) float64
-	GetString(string, string) string
-	GetBool(string, bool) bool
-	Bytes() []byte
+    Load() error
+    Reload()
+    Get(string, interface{}) interface{}
+    Unmarshal(interface{}) error
+    IsSet(string) bool
+    GetInt(string, int) int
+    GetInt32(string, int32) int32
+    GetInt64(string, int64) int64
+    GetUint(string, uint) uint
+    GetUint32(string, uint32) uint32
+    GetUint64(string, uint64) uint64
+    GetFloat32(string, float32) float32
+    GetFloat64(string, float64) float64
+    GetString(string, string) string
+    GetBool(string, bool) bool
+    Bytes() []byte
 }
 ```
 
@@ -140,45 +140,45 @@ func Get(name string) KVConfig
 
 // KVConfig kv 配置
 type KVConfig interface {
-	KV
-	Watcher
-	Name() string
+    KV
+    Watcher
+    Name() string
 }
 
 // 监控接口定义
 type Watcher interface {
-	// Watch 监听配置项 key 的变更事件
-	Watch(ctx context.Context, key string, opts ...Option) (<-chan Response, error)
+    // Watch 监听配置项 key 的变更事件
+    Watch(ctx context.Context, key string, opts ...Option) (<-chan Response, error)
 }
 
 // Response 配置中心响应
 type Response interface {
-	// Value 获取配置项对应的值
-	Value() string
-	// MetaData 额外元数据信息
-	// 配置 Option 选项，可用于承载不同配置中心的额外功能实现，例如 namespace,group, 租约等概念
-	MetaData() map[string]string
-	// Event 获取 Watch 事件类型
-	Event() EventType
+    // Value 获取配置项对应的值
+    Value() string
+    // MetaData 额外元数据信息
+    // 配置 Option 选项，可用于承载不同配置中心的额外功能实现，例如 namespace,group, 租约等概念
+    MetaData() map[string]string
+    // Event 获取 Watch 事件类型
+    Event() EventType
 }
 
 // EventType 监听配置变更的事件类型
 type EventType uint8
 const (
-	// EventTypeNull 空事件
-	EventTypeNull EventType = 0
-	// EventTypePut 设置或更新配置事件
-	EventTypePut EventType = 1
-	// EventTypeDel 删除配置项事件
-	EventTypeDel EventType = 2
+    // EventTypeNull 空事件
+    EventTypeNull EventType = 0
+    // EventTypePut 设置或更新配置事件
+    EventTypePut EventType = 1
+    // EventTypeDel 删除配置项事件
+    EventTypeDel EventType = 2
 )
 ```
 
 下面示例展示了业务程序监控 etcd 上的“test.yaml”文件，打印配置项变更事件并更新配置。
 ```go
 import (
-	"sync/atomic"
-    ...
+    "sync/atomic"
+    // ...
 )
 
 type yamlFile struct {
