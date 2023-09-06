@@ -224,7 +224,7 @@ func StreamServerFilter(ss server.Stream, si *server.StreamServerInfo, handler s
 	// Note that here you must call handler to execute the next filter unless there is a specific purpose for returning directly.
 	err := handler(ws)
 
-	cost := time.Since(begin) // Calculate elapsed time after the bussiness process.
+	cost := time.Since(begin) // Calculate elapsed time after the business process.
 
 	// Report the elapsed time to a specific monitoring platform
 
