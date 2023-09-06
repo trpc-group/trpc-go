@@ -32,29 +32,29 @@ func ClientFilter(ctx context.Context, req, rsp interface{}, next filter.HandleF
 
 ```golang
 func ServerFilter(ctx context.Context, req interface{}, next filter.ServerHandleFunc) (interface{}, error) {
-	begin := time.Now()        // Timestamp before processing business logic
+    begin := time.Now()        // Timestamp before processing business logic
 
-	rsp, err := next(ctx, req) // Note that here you must call the next filter unless there is a specific purpose for returning directly.
+    rsp, err := next(ctx, req) // Note that here you must call the next filter unless there is a specific purpose for returning directly.
 
-	// Calculate elapsed time after processing business logic
-	cost := time.Since(begin)
+    // Calculate elapsed time after processing business logic
+    cost := time.Since(begin)
 
-	// Report the elapsed time to a specific monitoring platform
+    // Report the elapsed time to a specific monitoring platform
 
-	return rsp, err // You must return the rsp and err from the next function, be careful not to override them with your own logic.
+    return rsp, err // You must return the rsp and err from the next function, be careful not to override them with your own logic.
 }
 
 func ClientFilter(ctx context.Context, req, rsp interface{}, next filter.HandleFunc) error {
-	begin := time.Now() // Timestamp before sending the request
+    begin := time.Now() // Timestamp before sending the request
 
-	err := next(ctx, req, rsp)
+    err := next(ctx, req, rsp)
 
-	// Calculate elapsed time after receiving the response
-	cost := time.Since(begin)
+    // Calculate elapsed time after receiving the response
+    cost := time.Since(begin)
 
-	// Report the elapsed time to a specific monitoring platform
+    // Report the elapsed time to a specific monitoring platform
 
-	return err
+    return err
 }
 ```
 
@@ -100,15 +100,15 @@ Here's an example of a stream filter for monitoring the duration of streaming in
 
 ```golang
 func StreamClientFilter(ctx context.Context, desc *client.ClientStreamDesc, streamer client.Streamer) (client.ClientStream, error) {
-	begin := time.Now() // Timestamp before creating the stream
+    begin := time.Now() // Timestamp before creating the stream
 
-	s, err := streamer(ctx, desc) // Note that here you must call streamer to execute the next filter unless there is a specific purpose for returning directly.
+    s, err := streamer(ctx, desc) // Note that here you must call streamer to execute the next filter unless there is a specific purpose for returning directly.
 
-	cost := time.Since(begin) // Calculate elapsed time after creating the stream
+    cost := time.Since(begin) // Calculate elapsed time after creating the stream
 
-	// Report the elapsed time to a specific monitoring platform
+    // Report the elapsed time to a specific monitoring platform
 
-	return &wrappedStream{s}, err // The wrappedStream encapsulates client.ClientStream for intercepting methods like SendMsg, RecvMsg, etc. You must return the err from streamer.
+    return &wrappedStream{s}, err // The wrappedStream encapsulates client.ClientStream for intercepting methods like SendMsg, RecvMsg, etc. You must return the err from streamer.
 }
 ```
 
@@ -123,46 +123,46 @@ Here's an example:
 ```golang
 // wrappedStream encapsulates the original stream. Override the methods you want to intercept.
 type wrappedStream struct {
-	client.ClientStream // You must embed client.ClientStream
+    client.ClientStream // You must embed client.ClientStream
 }
 
 // Override RecvMsg to intercept all RecvMsg calls on the stream.
 func (w *wrappedStream) RecvMsg(m interface{}) error {
-	begin := time.Now() // Timestamp before receiving data
+    begin := time.Now() // Timestamp before receiving data
 
-	err := w.ClientStream.RecvMsg(m) // Note that here you must call RecvMsg to let the underlying stream receive data unless there is a specific purpose for returning directly.
+    err := w.ClientStream.RecvMsg(m) // Note that here you must call RecvMsg to let the underlying stream receive data unless there is a specific purpose for returning directly.
 
-	cost := time.Since(begin) // Calculate elapsed time after receiving data
+    cost := time.Since(begin) // Calculate elapsed time after receiving data
 
-	// Report the elapsed time to a specific monitoring platform
+    // Report the elapsed time to a specific monitoring platform
 
-	return err // You must return the err generated earlier.
+    return err // You must return the err generated earlier.
 }
 
 // Override SendMsg to intercept all SendMsg calls on the stream.
 func (w *wrappedStream) SendMsg(m interface{}) error {
-	begin := time.Now() // Timestamp before sending data
+    begin := time.Now() // Timestamp before sending data
 
-	err := w.ClientStream.SendMsg(m) // Note that here you must call SendMsg to let the underlying stream send data unless there is a specific purpose for returning directly.
+    err := w.ClientStream.SendMsg(m) // Note that here you must call SendMsg to let the underlying stream send data unless there is a specific purpose for returning directly.
 
-	cost := time.Since(begin) // Calculate elapsed time after sending data
+    cost := time.Since(begin) // Calculate elapsed time after sending data
 
-	// Report the elapsed time to a specific monitoring platform
+    // Report the elapsed time to a specific monitoring platform
 
-	return err // You must return the err generated earlier.
+    return err // You must return the err generated earlier.
 }
 
 // Override CloseSend to intercept all CloseSend calls on the stream.
 func (w *wrappedStream) CloseSend() error {
-	begin := time.Now() // Timestamp before closing the local end
+    begin := time.Now() // Timestamp before closing the local end
 
-	err := w.ClientStream.CloseSend() // Note that here you must call CloseSend to let the underlying stream close the local end unless there is a specific purpose for returning directly.
+    err := w.ClientStream.CloseSend() // Note that here you must call CloseSend to let the underlying stream close the local end unless there is a specific purpose for returning directly.
 
-	cost := time.Since(begin) // Calculate elapsed time after closing the local end
+    cost := time.Since(begin) // Calculate elapsed time after closing the local end
 
-	// Report the elapsed time to a specific monitoring platform
+    // Report the elapsed time to a specific monitoring platform
 
-	return err // You must return the err generated earlier.
+    return err // You must return the err generated earlier.
 }
 ```
 
@@ -216,50 +216,50 @@ Here's an example of a server-side stream filter for monitoring the duration of 
 
 ```golang
 func StreamServerFilter(ss server.Stream, si *server.StreamServerInfo, handler server.StreamHandler) error {
-	begin := time.Now() // Timestamp before entering streaming processing
+    begin := time.Now() // Timestamp before entering streaming processing
 
-	// wrappedStream encapsulates server.Stream. Override SendMsg, RecvMsg, and other methods for interception.
-	ws := &wrappedStream(ss)
+    // wrappedStream encapsulates server.Stream. Override SendMsg, RecvMsg, and other methods for interception.
+    ws := &wrappedStream(ss)
 
-	// Note that here you must call handler to execute the next filter unless there is a specific purpose for returning directly.
-	err := handler(ws)
+    // Note that here you must call handler to execute the next filter unless there is a specific purpose for returning directly.
+    err := handler(ws)
 
-	cost := time.Since(begin) // Calculate elapsed time after the business process.
+    cost := time.Since(begin) // Calculate elapsed time after the business process.
 
-	// Report the elapsed time to a specific monitoring platform
+    // Report the elapsed time to a specific monitoring platform
 
-	return err // You must return the err generated earlier from the handler.
+    return err // You must return the err generated earlier from the handler.
 }
 
 // Override the methods you want to intercept in the wrappedStream struct.
 type wrappedStream struct {
-	server.Stream // You must embed server.Stream
+    server.Stream // You must embed server.Stream
 }
 
 // Override RecvMsg to intercept all RecvMsg calls on the stream.
 func (w *wrappedStream) RecvMsg(m interface{}) error {
-	begin := time.Now() // Timestamp before receiving data
+    begin := time.Now() // Timestamp before receiving data
 
-	err := w.Stream.RecvMsg(m) // Note that here you must call RecvMsg to let the underlying stream receive data unless there is a specific purpose for returning directly.
+    err := w.Stream.RecvMsg(m) // Note that here you must call RecvMsg to let the underlying stream receive data unless there is a specific purpose for returning directly.
 
-	cost := time.Since(begin) // Calculate elapsed time after receiving data
+    cost := time.Since(begin) // Calculate elapsed time after receiving data
 
-	// Report the elapsed time to a specific monitoring platform
+    // Report the elapsed time to a specific monitoring platform
 
-	return err // You must return the err generated earlier.
+    return err // You must return the err generated earlier.
 }
 
 // Override SendMsg to intercept all SendMsg calls on the stream.
 func (w *wrappedStream) SendMsg(m interface{}) error {
-	begin := time.Now() // Timestamp before sending data
+    begin := time.Now() // Timestamp before sending data
 
-	err := w.Stream.SendMsg(m) // Note that here you must call SendMsg to let the underlying stream send data unless there is a specific purpose for returning directly.
+    err := w.Stream.SendMsg(m) // Note that here you must call SendMsg to let the underlying stream send data unless there is a specific purpose for returning directly.
 
-	cost := time.Since(begin) // Calculate elapsed time after sending data
+    cost := time.Since(begin) // Calculate elapsed time after sending data
 
-	// Report the elapsed time to a specific monitoring platform
+    // Report the elapsed time to a specific monitoring platform
 
-	return err // You must return the err generated earlier.
+    return err // You must return the err generated earlier.
 }
 ```
 
@@ -293,7 +293,7 @@ s := trpc.NewServer(server.WithStreamFilters(StreamServerFilter))
 
 pb.RegisterGreeterService(s, &greeterServiceImpl{})
 if err := s.Serve(); err != nil {
-	log.Fatal(err)
+    log.Fatal(err)
 }
 ```
 

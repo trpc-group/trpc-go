@@ -34,27 +34,27 @@ func ClientFilter(ctx context.Context, req, rsp interface{}, next filter.HandleF
 
 ```golang
 func ServerFilter(ctx context.Context, req interface{}, next filter.ServerHandleFunc) (interface{}, error) {
-	begin := time.Now()        // 业务逻辑处理前打点记录时间戳
+    begin := time.Now()        // 业务逻辑处理前打点记录时间戳
 
-	rsp, err := next(ctx, req) // 注意这里必须用户自己调用下一个拦截器，除非有特定目的需要直接返回
+    rsp, err := next(ctx, req) // 注意这里必须用户自己调用下一个拦截器，除非有特定目的需要直接返回
 
-	cost := time.Since(begin)  // 业务逻辑处理后计算耗时
+    cost := time.Since(begin)  // 业务逻辑处理后计算耗时
 
-	// 上报耗时到具体监控平台
+    // 上报耗时到具体监控平台
 
-	return rsp, err // 必须返回 next 的 rsp 和 err，要格外注意不要被自己的逻辑的 rsp 和 err 覆盖
+    return rsp, err // 必须返回 next 的 rsp 和 err，要格外注意不要被自己的逻辑的 rsp 和 err 覆盖
 }
 
 func ClientFilter(ctx context.Context, req, rsp interface{}, next filter.HandleFunc) error {
-	begin := time.Now() // 发起请求前打点记录时间戳
+    begin := time.Now() // 发起请求前打点记录时间戳
 
-	err := next(ctx, req, rsp)
+    err := next(ctx, req, rsp)
 
-	cost := time.Since(begin) // 接受响应后计算耗时
+    cost := time.Since(begin) // 接受响应后计算耗时
 
-	// 上报耗时到具体监控平台
+    // 上报耗时到具体监控平台
 
-	return err
+    return err
 }
 ```
 
@@ -100,15 +100,15 @@ type StreamFilter func(context.Context, *client.ClientStreamDesc, client.Streame
 
 ```golang
 func StreamClientFilter(ctx context.Context, desc *client.ClientStreamDesc, streamer client.Streamer) (client.ClientStream, error) {
-	begin := time.Now() // 创建流之前，打点记录时间戳
+    begin := time.Now() // 创建流之前，打点记录时间戳
 
-	s, err := streamer(ctx, desc) // 注意这里必须用户自己调用 streamer 执行下一个拦截器，除非有特定目的需要直接返回
+    s, err := streamer(ctx, desc) // 注意这里必须用户自己调用 streamer 执行下一个拦截器，除非有特定目的需要直接返回
 
-	cost := time.Since(begin) // 流创建完成后，计算耗时
+    cost := time.Since(begin) // 流创建完成后，计算耗时
 
-	// 上报耗时到具体监控平台
+    // 上报耗时到具体监控平台
 
-	return &wrappedStream{s}, err // wrappedStream 封装了 client.ClientStream，用于后续拦截 SendMsg、RecvMsg 等方法。注意这里必须返回 streamer 的 err
+    return &wrappedStream{s}, err // wrappedStream 封装了 client.ClientStream，用于后续拦截 SendMsg、RecvMsg 等方法。注意这里必须返回 streamer 的 err
 }
 ```
 
@@ -123,46 +123,46 @@ func StreamClientFilter(ctx context.Context, desc *client.ClientStreamDesc, stre
 ```golang
 // wrappedStream 封装原始流，需要拦截哪些方法，就重写哪些方法
 type wrappedStream struct {
-	client.ClientStream // 必须内嵌 client.ClientStream
+    client.ClientStream // 必须内嵌 client.ClientStream
 }
 
 // 重写 RecvMsg，用来拦截流的所有 RecvMsg 调用
 func (w *wrappedStream) RecvMsg(m interface{}) error {
-	begin := time.Now() // 接收数据之前，打点记录时间戳
+    begin := time.Now() // 接收数据之前，打点记录时间戳
 
-	err := w.ClientStream.RecvMsg(m) // 注意这里必须用户自己调用 RecvMsg 让底层流接收数据，除非有特定目的需要直接返回
+    err := w.ClientStream.RecvMsg(m) // 注意这里必须用户自己调用 RecvMsg 让底层流接收数据，除非有特定目的需要直接返回
 
-	cost := time.Since(begin) // 接收到数据后，计算耗时
+    cost := time.Since(begin) // 接收到数据后，计算耗时
 
-	// 上报耗时到具体监控平台
+    // 上报耗时到具体监控平台
 
-	return err // 注意这里必须返回前面产生的 err
+    return err // 注意这里必须返回前面产生的 err
 }
 
 // 重写 SendMsg，用来拦截流的所有 SendMsg 调用
 func (w *wrappedStream) SendMsg(m interface{}) error {
-	begin := time.Now() // 发送数据之前，打点记录时间戳
+    begin := time.Now() // 发送数据之前，打点记录时间戳
 
-	err := w.ClientStream.SendMsg(m) // 注意这里必须用户自己调用 SendMsg 让底层流接收数据，除非有特定目的需要直接返回
+    err := w.ClientStream.SendMsg(m) // 注意这里必须用户自己调用 SendMsg 让底层流接收数据，除非有特定目的需要直接返回
 
-	cost := time.Since(begin) // 发送数据后，计算耗时
+    cost := time.Since(begin) // 发送数据后，计算耗时
 
-	// 上报耗时到具体监控平台
+    // 上报耗时到具体监控平台
 
-	return err // 注意这里必须返回前面产生的 err
+    return err // 注意这里必须返回前面产生的 err
 }
 
 // 重写 CloseSend，用来拦截流的所有 CloseSend 调用
 func (w *wrappedStream) CloseSend() error {
-	begin := time.Now() // 关闭本端之前，打点记录时间戳
+    begin := time.Now() // 关闭本端之前，打点记录时间戳
 
-	err := w.ClientStream.CloseSend() // 注意这里必须用户自己调用 CloseSend 让底层流关闭本端，除非有特定目的需要直接返回
+    err := w.ClientStream.CloseSend() // 注意这里必须用户自己调用 CloseSend 让底层流关闭本端，除非有特定目的需要直接返回
 
-	cost := time.Since(begin) // 关闭本端后，计算耗时
+    cost := time.Since(begin) // 关闭本端后，计算耗时
 
-	// 上报耗时到具体监控平台
+    // 上报耗时到具体监控平台
 
-	return err // 注意这里必须返回前面产生的 err
+    return err // 注意这里必须返回前面产生的 err
 }
 
 ```
@@ -174,7 +174,7 @@ func (w *wrappedStream) CloseSend() error {
 先将拦截器注册到框架中
 
 ```golang
-client.RegisterStreamFilter("name1", StreamClientFilter)	// 拦截器名字自己随便定义，供后续配置文件使用，必须放在 trpc.NewServer() 之前
+client.RegisterStreamFilter("name1", StreamClientFilter)    // 拦截器名字自己随便定义，供后续配置文件使用，必须放在 trpc.NewServer() 之前
 ```
 
 再在配置文件中配置
@@ -217,19 +217,19 @@ type StreamFilter func(Stream, *StreamServerInfo, StreamHandler) error
 
 ```golang
 func StreamServerFilter(ss server.Stream, si *server.StreamServerInfo, handler server.StreamHandler) error {
-	begin := time.Now() // 进入流式处理之前，打点记录时间戳
+    begin := time.Now() // 进入流式处理之前，打点记录时间戳
 
-	// wrappedStream 封装了 server.Stream，用于后续拦截 SendMsg、RecvMsg 等方法
-	ws := &wrappedStream(ss)
+    // wrappedStream 封装了 server.Stream，用于后续拦截 SendMsg、RecvMsg 等方法
+    ws := &wrappedStream(ss)
 
-	// 注意这里必须用户自己调用 handler 执行下一个拦截器，除非有特定目的需要直接返回。
-	err := handler(ws)
+    // 注意这里必须用户自己调用 handler 执行下一个拦截器，除非有特定目的需要直接返回。
+    err := handler(ws)
 
-	cost := time.Since(begin) // 处理函数退出后，计算耗时
+    cost := time.Since(begin) // 处理函数退出后，计算耗时
 
-	// 上报耗时到具体监控平台
+    // 上报耗时到具体监控平台
 
-	return err // 注意这里必须返回 handler 的 err
+    return err // 注意这里必须返回 handler 的 err
 }
 ```
 
@@ -244,33 +244,33 @@ func StreamServerFilter(ss server.Stream, si *server.StreamServerInfo, handler s
 ```golang
 // wrappedStream 封装原始流，需要拦截哪些方法，就重写哪些方法
 type wrappedStream struct {
-	server.Stream // 必须内嵌 server.Stream
+    server.Stream // 必须内嵌 server.Stream
 }
 
 // 重写 RecvMsg，用来拦截流的所有 RecvMsg 调用
 func (w *wrappedStream) RecvMsg(m interface{}) error {
-	begin := time.Now() // 接收数据之前，打点记录时间戳
+    begin := time.Now() // 接收数据之前，打点记录时间戳
 
-	err := w.Stream.RecvMsg(m) // 注意这里必须用户自己调用 RecvMsg 让底层流接收数据，除非有特定目的需要直接返回
+    err := w.Stream.RecvMsg(m) // 注意这里必须用户自己调用 RecvMsg 让底层流接收数据，除非有特定目的需要直接返回
 
-	cost := time.Since(begin) // 接收到数据后，计算耗时
+    cost := time.Since(begin) // 接收到数据后，计算耗时
 
-	// 上报耗时到具体监控平台
+    // 上报耗时到具体监控平台
 
-	return err // 注意这里必须返回前面产生的 err
+    return err // 注意这里必须返回前面产生的 err
 }
 
 // 重写 SendMsg，用来拦截流的所有 SendMsg 调用
 func (w *wrappedStream) SendMsg(m interface{}) error {
-	begin := time.Now() // 发送数据之前，打点记录时间戳
+    begin := time.Now() // 发送数据之前，打点记录时间戳
 
-	err := w.Stream.SendMsg(m) // 注意这里必须用户自己调用 SendMsg 让底层流接收数据，除非有特定目的需要直接返回
+    err := w.Stream.SendMsg(m) // 注意这里必须用户自己调用 SendMsg 让底层流接收数据，除非有特定目的需要直接返回
 
-	cost := time.Since(begin) // 发送数据后，计算耗时
+    cost := time.Since(begin) // 发送数据后，计算耗时
 
-	// 上报耗时到具体监控平台
+    // 上报耗时到具体监控平台
 
-	return err // 注意这里必须返回前面产生的 err
+    return err // 注意这里必须返回前面产生的 err
 }
 
 ```
@@ -282,7 +282,7 @@ func (w *wrappedStream) SendMsg(m interface{}) error {
 先将拦截器注册到框架中
 
 ```golang
-server.RegisterStreamFilter("name1", StreamServerFilter)	// 拦截器名字自己随便定义，供后续配置文件使用，必须放在 trpc.NewServer() 之前
+server.RegisterStreamFilter("name1", StreamServerFilter)    // 拦截器名字自己随便定义，供后续配置文件使用，必须放在 trpc.NewServer() 之前
 ```
 
 再在配置文件中配置
@@ -305,7 +305,7 @@ s := trpc.NewServer(server.WithStreamFilters(StreamServerFilter))
 
 pb.RegisterGreeterService(s, &greeterServiceImpl{})
 if err := s.Serve(); err != nil {
-	log.Fatal(err)
+    log.Fatal(err)
 }
 ```
 
