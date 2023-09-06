@@ -10,7 +10,7 @@ To support the capability of handling millions of connections, it is essential t
 
 ## Principle
 
-We use two diagrams to illustrate the basic principles of the `Goroutine-per-Connection` model and the `Reactor` model in Golang. 
+We use two diagrams to illustrate the basic principles of the `Goroutine-per-Connection` model and the `Reactor` model in Golang.
 
 ### Goroutine-per-Connection
 
@@ -22,7 +22,7 @@ The scenario of millions of connections usually refers to long connection scenar
 
 For example, as shown in the above diagram, the server accepts 5 connections and creates 5 goroutines. At this moment, the first 3 connections are active connections, and data can be read from them smoothly. After processing the data, the server sends data back to the connections to complete a data exchange, and then starts the second round of data reading. The last 2 connections are idle connections, and when reading data from them, the process will be blocked. Therefore, the subsequent process is not triggered. As we can see, although only 3 connections can successfully read data at this moment, 5 goroutines are allocated, resulting in a 40% waste of resources. The larger the proportion of idle connections, the more resources will be wasted.
 
-### Reactor 
+### Reactor
 
 ![reactor](/.resources/user_guide/tnet/reactor.png)
 
@@ -48,13 +48,13 @@ Add tnet to the transport field in the tRPC-Go configuration file. Since the plu
 
 **Server**:
 
-``` yaml
-server:   
-  transport: tnet       # Applies to all services
-  service:                                         
-    - name: trpc.app.server.service             
+```yaml
+server:
+  transport: tnet # Applies to all services
+  service:
+    - name: trpc.app.server.service
       network: tcp
-      transport: tnet   # Applies only to the current service 
+      transport: tnet # Applies only to the current service
 ```
 
 After the server is started, the log indicates the successful activation of tnet:
@@ -63,13 +63,13 @@ After the server is started, the log indicates the successful activation of tnet
 
 **Client**:
 
-``` yaml
-client:   
-  transport: tnet       # Applies to all services
-  service:                                         
-    - name: trpc.app.server.service             
+```yaml
+client:
+  transport: tnet # Applies to all services
+  service:
+    - name: trpc.app.server.service
       network: tcp
-      transport: tnet   # Applies only to the current service 
+      transport: tnet # Applies only to the current service
       conn_type: multiplexed # Using multiplexed connection mode
       multiplexed:
         enable_metrics: true # Enable metrics for multiplexed pool
@@ -85,30 +85,30 @@ After the client is started, the log indicates the successful activation of tnet
 
 **Server**:
 
-Notics: This method will enable tnet for all services of the server. 
+Notics: This method will enable tnet for all services of the server.
 
-``` go
+```go
 import "trpc.group/trpc-go/trpc-go/transport/tnet"
 
 func main() {
-  // Create a ServerTransport
-  trans := tnet.NewServerTransport()
-  // Create a trpc server
-  s := trpc.NewServer(server.WithTransport(trans))
-  pb.RegisterGreeterService(s, &greeterServiceImpl{})
-  s.Serve()
+	// Create a ServerTransport
+	trans := tnet.NewServerTransport()
+	// Create a trpc server
+	s := trpc.NewServer(server.WithTransport(trans))
+	pb.RegisterGreeterService(s, &greeterServiceImpl{})
+	s.Serve()
 }
 ```
 
 **Client**:
 
-``` go
+```go
 import "trpc.group/trpc-go/trpc-go/transport/tnet"
 
 func main() {
-  proxy := pb.NewGreeterClientProxy()
-  trans := tnet.NewClientTransport()
-  rsp, err := proxy.SayHello(trpc.BackgroundContext(), &pb.HelloRequest{Msg: "Hello"}, client.WithTransport(trans))
+	proxy := pb.NewGreeterClientProxy()
+	trans := tnet.NewClientTransport()
+	rsp, err := proxy.SayHello(trpc.BackgroundContext(), &pb.HelloRequest{Msg: "Hello"}, client.WithTransport(trans))
 }
 ```
 
@@ -134,7 +134,7 @@ According to the benchmark result, tnet transport outperforms gonet transport in
 
 #### Q：Does tnet support HTTP？
 
-Tnet doesn't support HTTP. When tnet is used in HTTP server/client, it automatically falls  back to using the golang net package.
+Tnet doesn't support HTTP. When tnet is used in HTTP server/client, it automatically falls back to using the golang net package.
 
 #### Q：Why doesn't performance improve after enabling tnet?
 
@@ -145,7 +145,6 @@ Enable the client-side multiplexed connection mode with tnet and make full use o
 Enable tnet and multiplexed connection mode for the entire service chain. If the upstream server utilizes multiplexed, the current server can also take advantage of Writev for batch packet transmission;
 
 If you have enabled the multiplexed connection mode, you can enable metrics to inspect the number of virtual connections on each connection. If there is substantial concurrency, causing an excessive number of virtual connections on a single connection, it can also impact performance. Configure and enable multiplexed metrics accordingly.
-
 
 ```yaml
 client:
@@ -176,7 +175,7 @@ client:
       transport: tnet
       conn_type: multiplexed
       multiplexed:
-        enable_metrics: true 
+        enable_metrics: true
         max_vir_conns_per_conn: 25 # maximum number of concurrent virtual connections per connection
 ```
 

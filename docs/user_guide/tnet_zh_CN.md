@@ -6,7 +6,6 @@
 
 Golang 的 Net 库提供了简单的非阻塞调用接口，网络模型采用`一个连接一个协程`。在多数的场景下，这个模型简单易用，但是当连接数量成千上万之后，在百万连接的级别，为每个连接分配一个协程将消耗极大的内存，并且调度大量协程也变的非常困难。为了支持百万连接的功能，必须打破一个连接一个协程模型，高性能网络库 [tnet](https://github.com/trpc-group/tnet) 基于`事件驱动`的网络模型，能够提供百万连接的能力。tRPC-Go 框架集成了 tnet 网络库，从而支持百万连接功能。除此之外，tnet 还支持批量收发包功能，零拷贝缓存，精细化内存管理等优化，因此拥有比 Golang 原生 net 库更优秀的性能。
 
-
 ## 原理
 
 我们通过两张图展示 Golang 中一个连接一个协程模型和基于事件驱动模型的基本原理。
@@ -47,13 +46,13 @@ Golang 的 Net 库提供了简单的非阻塞调用接口，网络模型采用`�
 
 **服务端**：
 
-``` yaml
-server:   
-  transport: tnet       # 对所有 service 全部生效
-  service:                                         
-    - name: trpc.app.server.service             
+```yaml
+server:
+  transport: tnet # 对所有 service 全部生效
+  service:
+    - name: trpc.app.server.service
       network: tcp
-      transport: tnet   # 只对当前 service 生效  
+      transport: tnet # 只对当前 service 生效
 ```
 
 服务端启动后，日志提示启用 tnet 成功：
@@ -62,14 +61,14 @@ server:
 
 **客户端**：
 
-``` yaml
-client:   
-  transport: tnet       # 对所有 service 全部生效
-  service:                                         
-    - name: trpc.app.server.service             
+```yaml
+client:
+  transport: tnet # 对所有 service 全部生效
+  service:
+    - name: trpc.app.server.service
       network: tcp
-      transport: tnet   # 只对当前 service 生效 
-      conn_type: multiplexed # 使用多路复用连接模式 
+      transport: tnet # 只对当前 service 生效
+      conn_type: multiplexed # 使用多路复用连接模式
       multiplexed:
         enable_metrics: true # 开启多路复用运行状态的监控
 ```
@@ -86,28 +85,28 @@ client:
 
 注意：这种方式会对 server 的所有 service 都启动 tnet。
 
-``` go
+```go
 import "trpc.group/trpc-go/trpc-go/transport/tnet"
 
 func main() {
-  // 创建一个 ServerTransport
-  trans := tnet.NewServerTransport()
-  // 创建一个 trpc 服务
-  s := trpc.NewServer(server.WithTransport(trans))
-  pb.RegisterGreeterService(s, &greeterServiceImpl{})
-  s.Serve()
+	// 创建一个 ServerTransport
+	trans := tnet.NewServerTransport()
+	// 创建一个 trpc 服务
+	s := trpc.NewServer(server.WithTransport(trans))
+	pb.RegisterGreeterService(s, &greeterServiceImpl{})
+	s.Serve()
 }
 ```
 
 **客户端**：
 
-``` go
+```go
 import "trpc.group/trpc-go/trpc-go/transport/tnet"
 
 func main() {
-  proxy := pb.NewGreeterClientProxy()
-  trans := tnet.NewClientTransport()
-  rsp, err := proxy.SayHello(trpc.BackgroundContext(), &pb.HelloRequest{Msg: "Hello"}, client.WithTransport(trans))
+	proxy := pb.NewGreeterClientProxy()
+	trans := tnet.NewClientTransport()
+	rsp, err := proxy.SayHello(trpc.BackgroundContext(), &pb.HelloRequest{Msg: "Hello"}, client.WithTransport(trans))
 }
 ```
 
@@ -145,7 +144,6 @@ tnet 并不是万金油，在特定的场景下可以充分利用 Writev 批量�
 
 如果使用了多路复用功能，可以开启多路复用监控，查看每个连接上有多少虚拟连接，如果并发量较大，导致单连接上的虚拟连接数过多，也会影响性能，添加配置开启多路复用监控上报。
 
-
 ```yaml
 client:
   service:
@@ -156,7 +154,7 @@ client:
         enable_metrics: true # 开启多路复用运行状态的监控
 ```
 
-每隔3s，就会打印多路复用状态的日志。在日志中可以看到当前的连接数是1个，虚拟连接总数是98个。
+每隔 3s，就会打印多路复用状态的日志。在日志中可以看到当前的连接数是 1 个，虚拟连接总数是 98 个。
 
 `DEBUG tnet multiplex status: network: tcp, address: 127.0.0.1:7002, connections number: 1, concurrent virtual connection number: 98`
 
@@ -166,7 +164,7 @@ client:
 
 虚拟连接总数：`trpc.MuxConcurrentVirConns.$network.$address`
 
-假设希望设置每个连接上的最大并发虚拟连接数量为25，可以添加如下配置：
+假设希望设置每个连接上的最大并发虚拟连接数量为 25，可以添加如下配置：
 
 ```yaml
 client:
@@ -182,4 +180,3 @@ client:
 #### Q：开启 tnet 后提示 `switch to gonet default transport, tnet server transport doesn't support network type [udp]`？
 
 这个报错的意思是，tnet transport 暂时不支持 UDP，自动降级使用 golang net 库，不影响服务正常启动。
-
