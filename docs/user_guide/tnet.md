@@ -91,12 +91,12 @@ Notics: This method will enable tnet for all services of the server.
 import "trpc.group/trpc-go/trpc-go/transport/tnet"
 
 func main() {
-	// Create a ServerTransport
-	trans := tnet.NewServerTransport()
-	// Create a trpc server
-	s := trpc.NewServer(server.WithTransport(trans))
-	pb.RegisterGreeterService(s, &greeterServiceImpl{})
-	s.Serve()
+    // Create a ServerTransport
+    trans := tnet.NewServerTransport()
+    // Create a trpc server
+    s := trpc.NewServer(server.WithTransport(trans))
+    pb.RegisterGreeterService(s, &greeterServiceImpl{})
+    s.Serve()
 }
 ```
 
@@ -106,9 +106,9 @@ func main() {
 import "trpc.group/trpc-go/trpc-go/transport/tnet"
 
 func main() {
-	proxy := pb.NewGreeterClientProxy()
-	trans := tnet.NewClientTransport()
-	rsp, err := proxy.SayHello(trpc.BackgroundContext(), &pb.HelloRequest{Msg: "Hello"}, client.WithTransport(trans))
+    proxy := pb.NewGreeterClientProxy()
+    trans := tnet.NewClientTransport()
+    rsp, err := proxy.SayHello(trpc.BackgroundContext(), &pb.HelloRequest{Msg: "Hello"}, client.WithTransport(trans))
 }
 ```
 

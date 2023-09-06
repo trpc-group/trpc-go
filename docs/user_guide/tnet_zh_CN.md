@@ -89,12 +89,12 @@ client:
 import "trpc.group/trpc-go/trpc-go/transport/tnet"
 
 func main() {
-	// 创建一个 ServerTransport
-	trans := tnet.NewServerTransport()
-	// 创建一个 trpc 服务
-	s := trpc.NewServer(server.WithTransport(trans))
-	pb.RegisterGreeterService(s, &greeterServiceImpl{})
-	s.Serve()
+    // 创建一个 ServerTransport
+    trans := tnet.NewServerTransport()
+    // 创建一个 trpc 服务
+    s := trpc.NewServer(server.WithTransport(trans))
+    pb.RegisterGreeterService(s, &greeterServiceImpl{})
+    s.Serve()
 }
 ```
 
@@ -104,9 +104,9 @@ func main() {
 import "trpc.group/trpc-go/trpc-go/transport/tnet"
 
 func main() {
-	proxy := pb.NewGreeterClientProxy()
-	trans := tnet.NewClientTransport()
-	rsp, err := proxy.SayHello(trpc.BackgroundContext(), &pb.HelloRequest{Msg: "Hello"}, client.WithTransport(trans))
+    proxy := pb.NewGreeterClientProxy()
+    trans := tnet.NewClientTransport()
+    rsp, err := proxy.SayHello(trpc.BackgroundContext(), &pb.HelloRequest{Msg: "Hello"}, client.WithTransport(trans))
 }
 ```
 
