@@ -1,3 +1,5 @@
+[中文](./README_CN.md)
+
 # Metrics
 
 Metrics are can be simply understood as a series of numerical measurements.
