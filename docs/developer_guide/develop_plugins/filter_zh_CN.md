@@ -27,7 +27,7 @@ func ServerFilter(ctx context.Context, req interface{}, next filter.ServerHandle
 
 ```golang
 // ClientFilter client 耗时统计，从发起请求到接收响应的调用时间
-func ClientFilter(ctx context.Context, req, rsp interface{}, next filter.HandleFunc) (err error)
+func ClientFilter(ctx context.Context, req, rsp interface{}, next filter.ClientHandleFunc) (err error)
 ```
 
 第二步：实现
@@ -45,7 +45,7 @@ func ServerFilter(ctx context.Context, req interface{}, next filter.ServerHandle
     return rsp, err // 必须返回 next 的 rsp 和 err，要格外注意不要被自己的逻辑的 rsp 和 err 覆盖
 }
 
-func ClientFilter(ctx context.Context, req, rsp interface{}, next filter.HandleFunc) error {
+func ClientFilter(ctx context.Context, req, rsp interface{}, next filter.ClientHandleFunc) error {
     begin := time.Now() // 发起请求前打点记录时间戳
 
     err := next(ctx, req, rsp)
@@ -164,7 +164,6 @@ func (w *wrappedStream) CloseSend() error {
 
     return err // 注意这里必须返回前面产生的 err
 }
-
 ```
 
 **第三步**：将拦截器配置到 client，可以通过配置文件配置或者在代码中配置
@@ -220,7 +219,7 @@ func StreamServerFilter(ss server.Stream, si *server.StreamServerInfo, handler s
     begin := time.Now() // 进入流式处理之前，打点记录时间戳
 
     // wrappedStream 封装了 server.Stream，用于后续拦截 SendMsg、RecvMsg 等方法
-    ws := &wrappedStream(ss)
+    ws := &wrappedStream{ss}
 
     // 注意这里必须用户自己调用 handler 执行下一个拦截器，除非有特定目的需要直接返回。
     err := handler(ws)
@@ -272,7 +271,6 @@ func (w *wrappedStream) SendMsg(m interface{}) error {
 
     return err // 注意这里必须返回前面产生的 err
 }
-
 ```
 
 **第三步**：将拦截器配置到 server，可以通过配置文件配置或者在代码中配置

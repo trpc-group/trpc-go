@@ -25,7 +25,7 @@ Below is an example of how to develop a filter for reporting RPC call duration.
 func ServerFilter(ctx context.Context, req interface{}, next filter.ServerHandleFunc) (rsp interface{}, err error)
 
 // ClientFilter: Client-side duration statistics from initiating the request to receiving the response.
-func ClientFilter(ctx context.Context, req, rsp interface{}, next filter.HandleFunc) (err error)
+func ClientFilter(ctx context.Context, req, rsp interface{}, next filter.ClientHandleFunc) (err error)
 ```
 
 **Step 2**: Implementation:
@@ -44,7 +44,7 @@ func ServerFilter(ctx context.Context, req interface{}, next filter.ServerHandle
     return rsp, err // You must return the rsp and err from the next function, be careful not to override them with your own logic.
 }
 
-func ClientFilter(ctx context.Context, req, rsp interface{}, next filter.HandleFunc) error {
+func ClientFilter(ctx context.Context, req, rsp interface{}, next filter.ClientHandleFunc) error {
     begin := time.Now() // Timestamp before sending the request
 
     err := next(ctx, req, rsp)
@@ -219,7 +219,7 @@ func StreamServerFilter(ss server.Stream, si *server.StreamServerInfo, handler s
     begin := time.Now() // Timestamp before entering streaming processing
 
     // wrappedStream encapsulates server.Stream. Override SendMsg, RecvMsg, and other methods for interception.
-    ws := &wrappedStream(ss)
+    ws := &wrappedStream{ss}
 
     // Note that here you must call handler to execute the next filter unless there is a specific purpose for returning directly.
     err := handler(ws)
