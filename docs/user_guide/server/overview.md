@@ -259,7 +259,7 @@ The table below lists the default plugins provided by the framework as a server 
 
 tRPC-Go provides an interceptor (filter) mechanism, which sets up event tracking in the context of RPC requests and responses, allowing businesses to insert custom processing logic at these points. Functions such as call chain tracking and authentication and authorization are usually implemented using interceptors. Please refer to the [trpc-ecosystem/go-filter](https://github.com/trpc-ecosystem/go-filter) for commonly used interceptors.
 
-The business can customize filter. Filter are usually combined with plugins to implement functions. Plugins provide configuration, while interceptors are used to insert processing logic into the RPC call context. For the principle, triggering timing, execution order, and example code of custom interceptors, please refer to [Developing Filter Plugins in tRPC-Go](/docs/developer_guide/develop_plugins/interceptor.md).
+The business can customize filter. Filter are usually combined with plugins to implement functions. Plugins provide configuration, while interceptors are used to insert processing logic into the RPC call context. For the principle, triggering timing, execution order, and example code of custom interceptors, please refer to [trpc-go/filter](/filter).
 
 # Testing Related
 

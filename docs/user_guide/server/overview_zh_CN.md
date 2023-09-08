@@ -259,7 +259,7 @@ tRPC 插件生态提供了丰富的插件，程序如何选择合适的插件呢
 
 tRPC-Go 提供了拦截器（filter）机制，拦截器在 RPC 请求和响应的上下文设置埋点，允许业务在埋点处插入自定义处理逻辑。像调用链跟踪和认证鉴权等功能通常是采用拦截器来实现的。常用拦截器请在 [trpc-ecosystem/go-filter](https://github.com/trpc-ecosystem/go-filter) 中查找。
 
-业务可以自定义拦截器。拦截器通常和插件组合来实现功能的，插件提供配置，而拦截器用于在 RPC 调用上下文插入处理逻辑。关于拦截器的原理，触发时机，执行顺序和自定义拦截器的示例代码，请参考 [tRPC-Go 开发拦截器插件](/docs/developer_guide/develop_plugins/interceptor_zh_CN.md)。
+业务可以自定义拦截器。拦截器通常和插件组合来实现功能的，插件提供配置，而拦截器用于在 RPC 调用上下文插入处理逻辑。关于拦截器的原理，触发时机，执行顺序和自定义拦截器的示例代码，请参考 [trpc-go/filter](/filter)。
 
 # 测试相关
 
