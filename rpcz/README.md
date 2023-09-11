@@ -1,4 +1,4 @@
-# RPCZ [中文](README_CN.md)
+# RPCZ [中文](README_zh_CN.md)
 
 RPCZ is a tool for monitoring RPC, logging various events that occur in a single rpc, such as serialization/deserialization, compression/decompression and execution of interceptors.
 It allows users to configure the events that need to be logged, and users can view the logged events through the admin tool, which can help them locate problems quickly and accurately.
@@ -129,9 +129,9 @@ So "RPCZ" refers to various types of RPCs, and this does hold true from a distri
 
 The term "RPCZ" first came from Google's internal RPC framework Stubby, based on which Google implemented a similar function in the open source grpc channelz [8], which not only includes information about various channels, but also covers trace information.
 After that, Baidu's open source brpc implemented a non-distributed trace tool based on the distributed trace system Dapper paper [9] published by google, imitating channelz named brpc-rpcz [10].
-The next step is that users need a tool similar to brpc-rpcz for debugging and optimization in tRPC, so tRPC-Cpp first supports similar functionality [11, 12], still keeping the name RPCZ.
+The next step is that users need a tool similar to brpc-rpcz for debugging and optimization in tRPC, so tRPC-Cpp first supports similar functionality, still keeping the name RPCZ.
 
-The last thing is to support similar functionality to "RPCZ" in tRPC-Go. During the implementation process, it was found that with the development of distributed tracing systems, open source systems of opentracing [13] and opentelemetry [14] emerged in the community, and the company also made tianji pavilion [15] internally.
+The last thing is to support similar functionality to "RPCZ" in tRPC-Go. During the implementation process, it was found that with the development of distributed tracing systems, open source systems of opentracing [11] and opentelemetry [12] emerged in the community.
 tRPC-Go-RPCZ partially borrows the go language implementation of opentelemetry-trace for span and event design, and can be considered as a trace system inside the tRPC-Go framework.
 Strictly speaking, tRPC-Go-RPCZ is non-distributed, because there is no communication between the different services at the protocol level.
 Now it seems that brpc, tRPC-Cpp and the tRPC-Go implementation of rpcz, named spanz, might be more in line with the original meaning of the suffix "-z".
@@ -188,7 +188,7 @@ Only Spans that are sampled before both creation and commit will eventually be c
 ##### Sampling before Span creation
 
 Span is created only when it is sampled, otherwise it is not created, which avoids a series of subsequent operations on Span and thus reduces the performance overhead to a large extent.
-The sampling policy with fixed sampling rate [16, 17] has only one configurable floating-point parameter `rpcz.fraction`, for example, `rpcz.fraction` is 0.0001, which means one request is sampled for every 10000 (1/0.0001) requests.
+The sampling policy with fixed sampling rate [13] has only one configurable floating-point parameter `rpcz.fraction`, for example, `rpcz.fraction` is 0.0001, which means one request is sampled for every 10000 (1/0.0001) requests.
 When `rpcz.fraction` is less than 0, it is fetched up by 0. When `rpcz.fraction` is greater than 1, it is fetched down by 1.
 
 ##### Sampling before Span commit
@@ -637,10 +637,6 @@ end.End()
 - [8] https://github.com/grpc/proposal/blob/master/A14-channelz.md
 - [9] Dapper, a Large-Scale Distributed Systems Tracing Infrastructure: http://static.googleusercontent.com/media/research.google.com/en// pubs/archive/36356.pdf
 - [10] brpc-rpcz: https://github.com/apache/incubator-brpc/blob/master/docs/cn/rpcz.md
-- [11] tRPC-Cpp rpcz wiki. todo
-- [12] tRPC-Cpp rpcz proposal. https://git.woa.com/trpc/trpc-proposal/blob/master/L17-cpp-rpcz.md
-- [13] opentracing: https://opentracing.io/
-- [14] opentelemetry: https://opentelemetry.io/
-- [15] https://tpstelemetry.pages.woa.com/
-- [16] open-telemetry 2.0-sdk-go: https://git.woa.com/opentelemetry/opentelemetry-go-ecosystem/blob/master/sdk/trace/dyeing_sampler.go
-- [17] open-telemetry-sdk-go- traceIDRatioSampler: https://github.com/open-telemetry/opentelemetry-go/blob/main/sdk/trace/sampling.go
+- [11] opentracing: https://opentracing.io/
+- [12] opentelemetry: https://opentelemetry.io/
+- [13] open-telemetry-sdk-go-traceIDRatioSampler: https://github.com/open-telemetry/opentelemetry-go/blob/main/sdk/trace/sampling.go

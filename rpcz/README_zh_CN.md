@@ -128,9 +128,9 @@ admin 模块调用 `rpcz.Query` 和 `rpcz.BatchQuery` 从 GlobalRPCZ 中读取 S
 
 "RPCZ" 这一术语最早来源于 google 内部的 RPC 框架 Stubby，在此基础上 google 在开源的 grpc 实现了类似功能的 channelz[8]，channelz 中除了包括各种 channel 的信息，也涵盖 trace 信息。
 之后，百度开源的 brpc 在 google 发表的分布式追踪系统 Dapper 论文 [9] 的基础上，实现了一个非分布式的 trace 工具，模仿 channelz 取名为 brpc-rpcz[10]。
-接着就是用户在使用 tRPC 中需要类似于 brpc-rpcz 的工具来进行调试和优化，所以 tRPC-Cpp 首先支持类似功能 [11, 12]，仍然保留了 RPCZ 这个名字。
+接着就是用户在使用 tRPC 中需要类似于 brpc-rpcz 的工具来进行调试和优化，所以 tRPC-Cpp 首先支持类似功能，仍然保留了 RPCZ 这个名字。
 
-最后就是在 tRPC-Go 支持类似 "RPCZ" 的功能，在实现过程中发现随着分布式追踪系统的发展，社区中出现了 opentracing[13] 和 opentelemetry[14] 的开源系统，公司内部也做起了天机阁 [15]。
+最后就是在 tRPC-Go 支持类似 "RPCZ" 的功能，在实现过程中发现随着分布式追踪系统的发展，社区中出现了 opentracing[11] 和 opentelemetry[12] 的开源系统。
 tRPC-Go-RPCZ 在 span 和 event 设计上部分借鉴了 opentelemetry-trace 的 go 语言实现，可以认为是 tRPC-Go 框架内部的 trace 系统。
 严格来说，tRPC-Go-RPCZ 是非分布式，因为不同服务之间没有在协议层面实现通信。
 现在看来，brpc, tRPC-Cpp 和 tRPC-Go 实现的 rpcz，取名叫 spanz 或许更符合后缀 "-z" 本来的含义。
@@ -186,7 +186,7 @@ rpcz 使用采样机制来控制性能开销和过滤你不感兴趣的 Span。
 ##### 在 Span 创建之前采样
 
 只有当 Span 被采样到才会去创建 Span，否则就不需要创建 Span，也就避免了后续对 Span 的一系列操作，从而可以较大程度上减少性能开销。
-采用固定采样率 [16, 17] 的采样策略，该策略只有一个可配置浮点参数 `rpcz.fraction`, 例如`rpcz.fraction` 为 0.0001，则表示每 10000（1/0.0001）个请求会采样一条请求。
+采用固定采样率 [13] 的采样策略，该策略只有一个可配置浮点参数 `rpcz.fraction`, 例如`rpcz.fraction` 为 0.0001，则表示每 10000（1/0.0001）个请求会采样一条请求。
 当 `rpcz.fraction` 小于 0 时，会向上取 0；当 `rpcz.fraction` 大于 1 时，会向下取 1。
 
 ##### 在 Span 提交之前采样
@@ -651,10 +651,6 @@ end.End()
 - [8] https://github.com/grpc/proposal/blob/master/A14-channelz.md
 - [9] Dapper, a Large-Scale Distributed Systems Tracing Infrastructure: http://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36356.pdf
 - [10] brpc-rpcz: https://github.com/apache/incubator-brpc/blob/master/docs/cn/rpcz.md
-- [11] tRPC-Cpp rpcz wiki. todo
-- [12] tRPC-Cpp rpcz proposal. https://git.woa.com/trpc/trpc-proposal/blob/master/L17-cpp-rpcz.md
-- [13] opentracing: https://opentracing.io/
-- [14] opentelemetry: https://opentelemetry.io/
-- [15] https://tpstelemetry.pages.woa.com/
-- [16] 天机阁 2.0-sdk-go：https://git.woa.com/opentelemetry/opentelemetry-go-ecosystem/blob/master/sdk/trace/dyeing_sampler.go
-- [17] open-telemetry-sdk-go- traceIDRatioSampler: https://github.com/open-telemetry/opentelemetry-go/blob/main/sdk/trace/sampling.go
+- [11] opentracing: https://opentracing.io/
+- [12] opentelemetry: https://opentelemetry.io/
+- [13] open-telemetry-sdk-go-traceIDRatioSampler: https://github.com/open-telemetry/opentelemetry-go/blob/main/sdk/trace/sampling.go
