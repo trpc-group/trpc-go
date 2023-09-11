@@ -14,7 +14,7 @@
 
 顺序性：如下图所示，拦截器是有明确的顺序性，根据拦截器的注册顺序依次执行前置部分逻辑，并逆序执行拦截器的后置部分。
 
-![The Order of Filters](/.resources/developer_guide/develop_plugins/filter/filter.png)
+![The Order of Filters](/.resources/filter/filter.png)
 
 ## 示例
 
