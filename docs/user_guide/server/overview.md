@@ -1,4 +1,4 @@
-English | [中文](./README_zh_CN.md)
+English | [中文](./overview_zh_CN.md)
 
 tRPC-Go Server Development Guide
 
