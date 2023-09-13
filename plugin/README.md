@@ -17,22 +17,17 @@ The first level is the plugin type, such as log type, conf type, selector type, 
 The second level is the plugin name, such as local file configuration, remote file configuration, local database configuration, etc. for conf plugins.
 
 ```ascii
-                          +-----------------+
-                      +---+  Plugin Factory +-------+
-                      |   +--------+--------+       |
-                      |            |                |
-                      |            |                |
-                      |            |                |
-                   +--v--+      +--v--+        +----v----+
-     +-------------+conf |      | log |        | selector|
-     |             +--+--+      +-----+        +----+----+
-     |                |                             |
-     |                |                             |
-     |                |                             |
-     |                |                             |
-+----v-----+    +-----v-------+                +----v----+
-|local-file|    | remote-file |    ......      | polaris |
-+----------+    +-------------+                +---------+
+                       +-----------------+
+                   +---+  Plugin Factory +----+
+                   |   +--------+--------+    |
+                   |            |             |
+               +---v--+      +--v--+     +----v-----+
+     +---------+ conf |      | log |     | selector |
+     |         +---+--+      +-----+     +----+-----+
+     |             |                          |
++----v-----+ +-----v-------+             +----v----+
+|local-file| | remote-file |    ......   | polaris |
++----------+ +-------------+             +---------+
 ```
 
 For the plugin type, the `plugin` package does not impose any restrictions, and you can add your own plugin types.
