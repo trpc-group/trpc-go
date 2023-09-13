@@ -69,28 +69,28 @@ As shown in the diagram, this example contains three Loggers: "Default Logger", 
 `Logger` and `Writer` are both designed as customizable plug-ins, and you can refer to [here](https://github.com/trpc-group/trpc-go/blob/main/docs/developer_guide/develop_plugins/log.md) for information on how to develop them.
 
 ```ascii
-                                           ┌──────────────────┐
-                                           │ ┌──────────────┐ │
-                                           │ │Console Writer│ │
-                                           │ └──────────────┘ │
-                                           │ ┌────────────┐   │
-                  ┌───────────────┐        │ │ File Writer│   │
-    ┌─────────────► Default Logger├────────► └────────────┘   │
-    │             └───────────────┘        │ ┌─────────────┐  │
-    │                                      │ │Remote Writer│  │
-    │                                      │ └─────────────┘  │
-    │                                      └──────────────────┘
-    │                                       ┌─────────────┐
-    │                                       │ ┌────────┐  │
-    │                                       │ │Writer-A│  │
-┌───┴────┐        ┌───────────────┐         │ └────────┘  │
-│  log   ├────────► Other Logger-1├─────────► ┌────────┐  │
-└───┬────┘        └───────────────┘         │ │Writer-B│  │
-    │                                       │ └────────┘  │
-    │                                       └─────────────┘
-    │             ┌───────────────┐          ┌─────────┐
-    └─────────────► Other Logger-2├──────────► Writer-C│
-                  └───────────────┘          └─────────┘
+                                             +------------------+
+                                             | +--------------+ |
+                                             | |Console Writer| |
+                                             | +--------------+ |
+                                             | +-----------+    |
+                   +----------------+        | | File Witer|    |
+     +-------------> Default Logger +--------> +-----------+    |
+     |             +----------------+        | +-------------+  |
+     |                                       | |Remote Writer|  |
+     |                                       | +-------------+  |
+     |                                       +------------------+
+     |                                        +-------------+
+     |                                        | +--------+  |
+     |                                        | |Writer-A|  |
++----+----+        +----------------+         | +--------+  |
+| Loggers +--------> Other Logger-1 +-------->| +--------+  |
++----+----+        +----------------+         | |Writer-B|  |
+     |                                        | +--------+  |
+     |                                        +-------------+
+     |             +----------------+          +---------+
+     +-------------> Other Logger-2 +----------> Writer-C|
+                   +----------------+          +---------+
 ```
 
 First, we will introduce how to configure `Logger` and `Writer` in the configuration file.
