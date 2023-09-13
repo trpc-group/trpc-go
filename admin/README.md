@@ -1,3 +1,5 @@
+English | [中文](./README_CN.md)
+
 # Introduction
 
 The management command (admin) is the internal management background of the service. It is an additional http service provided by the framework in addition to the normal service port. Through this http interface, instructions can be sent to the service, such as viewing the log level, dynamically setting the log level, etc. The specific command See the list of commands below.
