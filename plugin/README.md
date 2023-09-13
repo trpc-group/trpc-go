@@ -108,16 +108,16 @@ If a plugin depends on other plugins, it can implement the following methods to 
 // If plugin a "Strongly" depends on plugin b, b must exist and
 // a will be initialized after b's initialization.
 type Depender interface {
-// DependsOn returns a list of plugins that are relied upon.
-// The list elements are in the format of "type-name" like [ "selector-polaris" ].
-DependsOn() []string
+    // DependsOn returns a list of plugins that are relied upon.
+    // The list elements are in the format of "type-name" like [ "selector-polaris" ].
+    DependsOn() []string
 }
 
 // FlexDepender is the interface for "Weak Dependence".
 // If plugin a "Weakly" depends on plugin b and b does exist,
 // a will be initialized after b's initialization.
 type FlexDepender interface {
-FlexDependsOn() []string
+    FlexDependsOn() []string
 }
 ```
 
