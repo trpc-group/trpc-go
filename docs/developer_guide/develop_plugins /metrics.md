@@ -4,9 +4,9 @@ This guide will introduce how to develop a metric type plugin that depends on co
 The plugin will report the time it takes for the client to send a request to the server and receive a reply when initiating an RPC, as well as the time it takes for the server to receive a request and reply to the client.
 To develop this plugin, the following three sub-functions need to be implemented:
 
-- Implement the loading of the plugin's dependencies through configuration. For detailed instructions, please refer to [plugin](../../../plugin/README.md).
-- Implement reporting metrics to an external platform. For detailed instructions, please refer to [metrics](../../../metrics/README.md).
-- Implement reporting metrics in the filter. For detailed instructions, please refer to [filter](../../../filter/README.md).
+- Implement the loading of the plugin's dependencies through configuration. For detailed instructions, please refer to [plugin](/plugin/README.md).
+- Implement reporting metrics to an external platform. For detailed instructions, please refer to [metrics](/metrics/README.md).
+- Implement reporting metrics in the filter. For detailed instructions, please refer to [filter](/filter/README.md).
 
 The following will use [trpc-metrics-prometheus](https://github.com/trpc-ecosystem/go-metrics-prometheus) as an example to introduce the relevant development steps.
 
