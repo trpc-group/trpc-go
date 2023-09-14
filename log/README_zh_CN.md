@@ -134,31 +134,31 @@ plugins:
 
 对于 `Writer` 的配置参数，设计如下：
 
-| 配置项                  | 配置项           |  类型  | 默认值 | 是否废弃 | 配置解释                                                                  |
-| ----------------------- | ---------------- | :----: | :----: | :------: |-----------------------------------------------------------------------|
-| writer                  | writer           | string |        |    否    | 必填 日志 Writer 插件的名字，框架默认支持“file，console”                               |
-| writer                  | writer_config    |  对象  |  nil   |    否    | 当日志 Writer 为“file”时才需要设置                                              |
-| writer                  | formatter        | string |   “”   |    否    | 日志打印格式，支持“console”和“json”，为空时默认设置为“console”                           |
-| writer                  | formatter_config |  对象  |  nil   |    否    | 日志输出时 zapcore Encoder 配置，为空时为参考 formatter_config 的默认值                 |
-| writer                  | remote_config    |  对象  |  nil   |    否    | 远程日志格式 配置格式你随便定 由第三方组件自己注册，具体配置参考各日志插件文档                              |
-| writer                  | level            | string |        |    否    | 必填 日志级别大于等于设置级别时，输出到 writer 后端 取值范围：trace，debug，info，warn，error，fatal |
-| writer                  | caller_skip      |  int   |   2    |    否    | 用于控制 log 函数嵌套深度，不填或者输入 0 时，默认为 2                                      |
-| writer.formatter_config | time_fmt         | string |   ""   |    否    | 日志输出时间格式，空默认为"2006-01-02 15:04:05.000"                                |
-| writer.formatter_config | time_key         | string |   ""   |    否    | 日志输出时间在以 Json 输出时的 key 的名称，默认为"T", 用 "none" 来禁用这一字段                   |
-| writer.formatter_config | level_key        | string |   ""   |    否    | 日志级别在以 Json 输出时的 key 的名称，默认为"L", 用 "none" 来禁用这一字段                     |
-| writer.formatter_config | name_key         | string |   ""   |    否    | 日志名称在以 Json 输出时的 key 的名称，默认为"N", 用 "none" 来禁用这一字段                     |
-| writer.formatter_config | caller_key       | string |   ""   |    否    | 日志输出调用者在以 Json 输出时的 key 的名称，默认为"C", 用 "none" 来禁用这一字段                  |
-| writer.formatter_config | message_key      | string |   ""   |    否    | 日志输出消息体在以 Json 输出时的 key 的名称，默认为"M", 用 "none" 来禁用这一字段                  |
-| writer.formatter_config | stacktrace_key   | string |   ""   |    否    | 日志输出堆栈在以 Json 输出时的 key 的名称，默认为"S", 用 "none" 来禁用这一字段                   |
-| writer.writer_config    | log_path         | string |        |    否    | 必填 日志路径名，例如：/usr/local/trpc/log/                                      |
-| writer.writer_config    | filename         | string |        |    否    | 必填 日志文件名，例如：trpc.log                                                  |
-| writer.writer_config    | write_mode       |  int   |   0    |    否    | 日志写入模式，1-同步，2-异步，3-极速 (异步丢弃), 不配置默认极速模式，即异步丢弃                         |
-| writer.writer_config    | roll_type        | string |   ""   |    否    | 文件滚动类型，"size"按大小分割文件，"time"按时间分割文件，为空时默认按大小分割                         |
-| writer.writer_config    | max_age          |  int   |   0    |    否    | 日志最大保留时间，为 0 表示不清理旧文件                                                 |
-| writer.writer_config    | max_backups      |  int   |   0    |    否    | 日志最大文件数，为 0 表示不删除多余文件                                                 |
-| writer.writer_config    | compress         |  bool  | false  |    否    | 日志文件是否压缩，默认不压缩                                                        |
-| writer.writer_config    | max_size         | string |   ""   |    否    | 按大小分割时才有效，日志文件最大大小（单位 MB），为 0 表示不按大小滚动                                |
-| writer.writer_config    | time_unit        | string |   ""   |    否    | 按时间分割时才有效，按时间分割文件的时间单位，支持 year/month/day/hour/minute, 默认值为 day        |
+| 配置项                  | 配置项           |  类型  | 默认值 | 配置解释                                                                  |
+| ----------------------- | ---------------- | :----: | :----: |-----------------------------------------------------------------------|
+| writer                  | writer           | string |        | 必填 日志 Writer 插件的名字，框架默认支持“file，console”                               |
+| writer                  | writer_config    |  对象  |  nil   | 当日志 Writer 为“file”时才需要设置                                              |
+| writer                  | formatter        | string |   “”   | 日志打印格式，支持“console”和“json”，为空时默认设置为“console”                           |
+| writer                  | formatter_config |  对象  |  nil   | 日志输出时 zapcore Encoder 配置，为空时为参考 formatter_config 的默认值                 |
+| writer                  | remote_config    |  对象  |  nil   | 远程日志格式 配置格式你随便定 由第三方组件自己注册，具体配置参考各日志插件文档                              |
+| writer                  | level            | string |        | 必填 日志级别大于等于设置级别时，输出到 writer 后端 取值范围：trace，debug，info，warn，error，fatal |
+| writer                  | caller_skip      |  int   |   2    | 用于控制 log 函数嵌套深度，不填或者输入 0 时，默认为 2                                      |
+| writer.formatter_config | time_fmt         | string |   ""   | 日志输出时间格式，空默认为"2006-01-02 15:04:05.000"                                |
+| writer.formatter_config | time_key         | string |   ""   | 日志输出时间在以 Json 输出时的 key 的名称，默认为"T", 用 "none" 来禁用这一字段                   |
+| writer.formatter_config | level_key        | string |   ""   | 日志级别在以 Json 输出时的 key 的名称，默认为"L", 用 "none" 来禁用这一字段                     |
+| writer.formatter_config | name_key         | string |   ""   | 日志名称在以 Json 输出时的 key 的名称，默认为"N", 用 "none" 来禁用这一字段                     |
+| writer.formatter_config | caller_key       | string |   ""   | 日志输出调用者在以 Json 输出时的 key 的名称，默认为"C", 用 "none" 来禁用这一字段                  |
+| writer.formatter_config | message_key      | string |   ""   | 日志输出消息体在以 Json 输出时的 key 的名称，默认为"M", 用 "none" 来禁用这一字段                  |
+| writer.formatter_config | stacktrace_key   | string |   ""   | 日志输出堆栈在以 Json 输出时的 key 的名称，默认为"S", 用 "none" 来禁用这一字段                   |
+| writer.writer_config    | log_path         | string |        | 必填 日志路径名，例如：/usr/local/trpc/log/                                      |
+| writer.writer_config    | filename         | string |        | 必填 日志文件名，例如：trpc.log                                                  |
+| writer.writer_config    | write_mode       |  int   |   0    | 日志写入模式，1-同步，2-异步，3-极速 (异步丢弃), 不配置默认极速模式，即异步丢弃                         |
+| writer.writer_config    | roll_type        | string |   ""   | 文件滚动类型，"size"按大小分割文件，"time"按时间分割文件，为空时默认按大小分割                         |
+| writer.writer_config    | max_age          |  int   |   0    | 日志最大保留时间，为 0 表示不清理旧文件                                                 |
+| writer.writer_config    | max_backups      |  int   |   0    | 日志最大文件数，为 0 表示不删除多余文件                                                 |
+| writer.writer_config    | compress         |  bool  | false  | 日志文件是否压缩，默认不压缩                                                        |
+| writer.writer_config    | max_size         | string |   ""   | 按大小分割时才有效，日志文件最大大小（单位 MB），为 0 表示不按大小滚动                                |
+| writer.writer_config    | time_unit        | string |   ""   | 按时间分割时才有效，按时间分割文件的时间单位，支持 year/month/day/hour/minute, 默认值为 day        |
 
 ## 多 Writer
 
@@ -381,6 +381,7 @@ func Info(args ...interface{})
 func Warn(args ...interface{})
 func Error(args ...interface{})
 func Fatal(args ...interface{})
+
 // 对默认 Logger 提供“fmt.Printf()”风格的函数接口
 // 格式化打印遵循 fmt.Printf() 标准
 func Tracef(format string, args ...interface{})
@@ -389,7 +390,6 @@ func Infof(format string, args ...interface{})
 func Warnf(format string, args ...interface{})
 func Errorf(format string, args ...interface{})
 func Fatalf(format string, args ...interface{})
-
 ```
 
 同时系统也提供了默认 Logger 的管理函数，包括获取，设置默认 Logger，设置 Logger 的打印级别。
@@ -435,6 +435,7 @@ func InfoContext(args ...interface{})
 func WarnContext(args ...interface{})
 func ErrorContext(args ...interface{})
 func FatalContext(args ...interface{})
+
 // 对 Context Logger 提供“fmt.Printf()”风格的函数
 // 格式化打印遵循 fmt.Printf() 标准
 func TraceContextf(format string, args ...interface{})
@@ -460,6 +461,7 @@ type Logger interface {
     Warn(args ...interface{})
     Error(args ...interface{})
     Fatal(args ...interface{})
+
     // 接口提供“fmt.Printf()”风格的函数
     Tracef(format string, args ...interface{})
     Debugf(format string, args ...interface{})
@@ -467,10 +469,12 @@ type Logger interface {
     Warnf(format string, args ...interface{})
     Errorf(format string, args ...interface{})
     Fatalf(format string, args ...interface{})
+
     // SetLevel 设置输出端日志级别
     SetLevel(output string, level Level)
     // GetLevel 获取输出端日志级别
     GetLevel(output string) Level
+
     // WithFields 设置一些你自定义数据到每条 log 里：比如 uid，imei 等 fields 必须 kv 成对出现
     WithFields(fields ...string) Logger
 }
@@ -480,7 +484,7 @@ type Logger interface {
 
 ```go
 log.Get("custom").Debug("message")
-log.Get("custom").Debugf("hello %s", "terry")
+log.Get("custom").Debugf("hello %s", "world")
 ```
 
 ## 框架日志

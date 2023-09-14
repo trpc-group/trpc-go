@@ -135,31 +135,31 @@ plugins:
 
 For the configuration parameters of Writer, the design is as follows:
 
-| configuration item      | configuration item |  type  | default value | obsolete | configuration explanation                                                                                                                                               |
-| ----------------------- | ------------------ | :----: | :-----------: | :------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| writer                  | writer             | string |               |    No    | Mandatory Log Writer plug-in name, the framework supports "file, console" by default                                                                                    |
-| writer                  | writer_config      | object |      nil      |    no    | only need to be set when the log Writer is "file"                                                                                                                       |
-| writer                  | formatter          | string |      ""       |    No    | Log printing format, supports "console" and "json", and defaults to "console" when it is empty                                                                          |
-| writer                  | formatter_config   | object |      nil      |    no    | zapcore Encoder configuration when log output, when it is empty, refer to the default value of formatter_config                                                         |
-| writer                  | remote_config      | Object |      nil      |    No    | Remote log format The configuration format can be set at will by the third-party component.                                                                             |
-| writer                  | level              | string |               |    No    | Mandatory When the log level is greater than or equal to the set level, output to the writer backend Value range: trace, debug, info, warn, error, fatal                |
-| writer                  | caller_skip        |  int   |       2       |    No    | Used to control the nesting depth of the log function, if not filled or 0 is entered, the default is 2                                                                  |
-| writer.formatter_config | time_fmt           | string |      ""       |    No    | Log output time format, empty default is "2006-01-02 15:04:05.000"                                                                                                      |
-| writer.formatter_config | time_key           | string |      ""       |    No    | The name of the key when the log output time is output in Json, the default is "T", use "none" to disable this field                                                                                      |
-| writer.formatter_config | level_key          | string |      ""       |    No    | The name of the key when the log level is output in Json, the default is "L", use "none" to disable this field                                                                                            |
-| writer.formatter_config | name_key           | string |      ""       |    No    | The name of the key when the log name is output in Json, the default is "N", use "none" to disable this field                                                                                             |
-| writer.formatter_config | caller_key         | string |      ""       |    No    | The name of the log output caller's key when outputting in Json, default is "C", use "none" to disable this field                                                                                            |
-| writer.formatter_config | message_key        | string |      ""       |    No    | The name of the key when the log output message body is output in Json, the default is "M", use "none" to disable this field                                                                              |
-| writer.formatter_config | stacktrace_key     | string |      ""       |    No    | The name of the key when the log output stack is output in Json, default is "S", use "none" to disable this field                                                                                            |
-| writer.writer_config    | log_path           | string |               |    No    | Mandatory Log path name, for example: /usr/local/trpc/log/                                                                                                              |
-| writer.writer_config    | filename           | string |               |    No    | Mandatory Log file name, for example: trpc.log                                                                                                                          |
-| writer.writer_config    | write_mode         |  int   |       0       |    No    | Log writing mode, 1-synchronous, 2-asynchronous, 3-extreme speed (asynchronous discard), do not configure the default extreme speed mode, that is, asynchronous discard |
-| writer.writer_config    | roll_type          | string |      ""       |    No    | File roll type, "size" splits files by size, "time" splits files by time, and defaults to split by size when it is empty                                                |
-| writer.writer_config    | max_age            |  int   |       0       |    No    | The maximum log retention time, 0 means do not clean up old files                                                                                                       |
-| writer.writer_config    | max_backups        |  int   |       0       |    No    | The maximum number of files in the log, 0 means not to delete redundant files                                                                                           |
-| writer.writer_config    | compress           |  bool  |     false     |    no    | Whether to compress the log file, default is not compressed                                                                                                             |
-| writer.writer_config    | max_size           | string |      ""       |    No    | Only valid when splitting by size, the maximum size of the log file (in MB), 0 means not rolling by size                                                                |
-| writer.writer_config    | time_unit          | string |      ""       |    No    | Only valid when split by time, the time unit of split files by time, support year/month/day/hour/minute, the default value is day                                       |
+| configuration item      | configuration item |  type  | default value | configuration explanation                                                                                                                                               |
+| ----------------------- | ------------------ | :----: | :-----------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| writer                  | writer             | string |               | Mandatory Log Writer plug-in name, the framework supports "file, console" by default                                                                                    |
+| writer                  | writer_config      | object |      nil      | only need to be set when the log Writer is "file"                                                                                                                       |
+| writer                  | formatter          | string |      ""       | Log printing format, supports "console" and "json", and defaults to "console" when it is empty                                                                          |
+| writer                  | formatter_config   | object |      nil      | zapcore Encoder configuration when log output, when it is empty, refer to the default value of formatter_config                                                         |
+| writer                  | remote_config      | Object |      nil      | Remote log format The configuration format can be set at will by the third-party component.                                                                             |
+| writer                  | level              | string |               | Mandatory When the log level is greater than or equal to the set level, output to the writer backend Value range: trace, debug, info, warn, error, fatal                |
+| writer                  | caller_skip        |  int   |       2       | Used to control the nesting depth of the log function, if not filled or 0 is entered, the default is 2                                                                  |
+| writer.formatter_config | time_fmt           | string |      ""       | Log output time format, empty default is "2006-01-02 15:04:05.000"                                                                                                      |
+| writer.formatter_config | time_key           | string |      ""       | The name of the key when the log output time is output in Json, the default is "T", use "none" to disable this field                                                                                      |
+| writer.formatter_config | level_key          | string |      ""       | The name of the key when the log level is output in Json, the default is "L", use "none" to disable this field                                                                                            |
+| writer.formatter_config | name_key           | string |      ""       | The name of the key when the log name is output in Json, the default is "N", use "none" to disable this field                                                                                             |
+| writer.formatter_config | caller_key         | string |      ""       | The name of the log output caller's key when outputting in Json, default is "C", use "none" to disable this field                                                                                            |
+| writer.formatter_config | message_key        | string |      ""       | The name of the key when the log output message body is output in Json, the default is "M", use "none" to disable this field                                                                              |
+| writer.formatter_config | stacktrace_key     | string |      ""       | The name of the key when the log output stack is output in Json, default is "S", use "none" to disable this field                                                                                            |
+| writer.writer_config    | log_path           | string |               | Mandatory Log path name, for example: /usr/local/trpc/log/                                                                                                              |
+| writer.writer_config    | filename           | string |               | Mandatory Log file name, for example: trpc.log                                                                                                                          |
+| writer.writer_config    | write_mode         |  int   |       0       | Log writing mode, 1-synchronous, 2-asynchronous, 3-extreme speed (asynchronous discard), do not configure the default extreme speed mode, that is, asynchronous discard |
+| writer.writer_config    | roll_type          | string |      ""       | File roll type, "size" splits files by size, "time" splits files by time, and defaults to split by size when it is empty                                                |
+| writer.writer_config    | max_age            |  int   |       0       | The maximum log retention time, 0 means do not clean up old files                                                                                                       |
+| writer.writer_config    | time_unit          | string |      ""       | Only valid when split by time, the time unit of split files by time, support year/month/day/hour/minute, the default value is day                                       |
+| writer.writer_config    | max_backups        |  int   |       0       | The maximum number of files in the log, 0 means not to delete redundant files                                                                                           |
+| writer.writer_config    | compress           |  bool  |     false     | Whether to compress the log file, default is not compressed                                                                                                             |
+| writer.writer_config    | max_size           | string |      ""       | Only valid when splitting by size, the maximum size of the log file (in MB), 0 means not rolling by size                                                                |
 
 ## Multiple Writers
 
@@ -332,7 +332,7 @@ The log package provides the following two ways for you to get a Logger:
 ```go
 // use a logger named "custom"
 // Note: log.Get should be executed after trpc.NewServer, as plugin loading happens within trpc.NewServer.
-log. Get("custom"). Debug("message")
+log.Get("custom").Debug("message")
 ```
 
 #### Method 2: Specify a logger for the context and use the context type log interface
@@ -381,6 +381,7 @@ func Info(args...interface{})
 func Warn(args...interface{})
 func Error(args...interface{})
 func Fatal(args ... interface{})
+
 // Provide "fmt.Printf()" style function interface for the default Logger
 // Formatted printing follows the fmt.Printf() standard
 func Tracef(format string, args ... interface{})
@@ -389,7 +390,6 @@ func Infof(format string, args...interface{})
 func Warnf(format string, args...interface{})
 func Errorf(format string, args...interface{})
 func Fatalf(format string, args ... interface{})
-
 ```
 
 At the same time, the system also provides management functions of the default Logger, including obtaining, setting the default logger, and setting the printing level of the logger.
@@ -435,6 +435,7 @@ func InfoContext(args...interface{})
 func WarnContext(args ... interface{})
 func ErrorContext(args ... interface{})
 func FatalContext(args ... interface{})
+
 // Provide "fmt.Printf()" style function to Context Logger
 // Formatted printing follows the fmt.Printf() standard
 func TraceContextf(format string, args ... interface{})
@@ -460,6 +461,7 @@ type Logger interface {
      Warn(args ... interface{})
      Error(args...interface{})
      Fatal(args...interface{})
+
      // The interface provides "fmt.Printf()" style functions
      Tracef(format string, args...interface{})
      Debugf(format string, args...interface{})
@@ -467,10 +469,12 @@ type Logger interface {
      Warnf(format string, args ... interface{})
      Errorf(format string, args...interface{})
      Fatalf(format string, args ... interface{})
+
      // SetLevel sets the output log level
      SetLevel(output string, level Level)
      // GetLevel to get the output log level
      GetLevel(output string) Level
+
      // WithFields set some your custom data into each log: such as uid, imei and other fields must appear in pairs of kv
      WithFields(fields...string) Logger
 }
@@ -479,8 +483,8 @@ type Logger interface {
 Users can directly use the above interface functions to print logs, for example
 
 ```go
-log. Get("custom"). Debug("message")
-log.Get("custom").Debugf("hello %s", "terry")
+log.Get("custom").Debug("message")
+log.Get("custom").Debugf("hello %s", "world")
 ```
 
 ## Framework Logs
@@ -575,7 +579,7 @@ custom:  # Your custom logger configuration, the name can be set at will, each s
 ### Do not use custom logger in context:
 
 ```go
-log. Get("custom"). Debug("message")
+log.Get("custom").Debug("message")
 ```
 
 At this time, you need to set the `caller_skip` value of `custom` logger to 1, because `log.Get("custom")` directly returns `trpc.log.zapLog`, call `trpc.log.zapLog.Debug` Only one layer on top of `zap.Logger.Debug` (`trpc.log.zapLog.Debug -> zap.Logger.Debug`).
