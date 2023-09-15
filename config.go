@@ -6,20 +6,23 @@
 package trpc
 
 import (
+	"errors"
 	"flag"
 	"fmt"
-	"math/rand"
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/rand"
 	"trpc.group/trpc-go/trpc-go/plugin"
 	"trpc.group/trpc-go/trpc-go/rpcz"
+	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	"gopkg.in/yaml.v3"
 )
@@ -106,63 +109,392 @@ func (c *RPCZConfig) generate() *rpcz.Config {
 		c.Capacity = defaultCapacity
 	}
 
-	return &rpcz.Config{
-		Fraction:     c.Fraction,
-		Capacity:     c.Capacity,
-		ShouldRecord: c.RecordWhen.shouldRecord(),
+	config := &rpcz.Config{
+		Fraction: c.Fraction,
+		Capacity: c.Capacity,
 	}
+	if c.RecordWhen != nil {
+		config.ShouldRecord = c.RecordWhen.shouldRecord()
+	}
+	return config
+}
+
+type node interface {
+	yaml.Unmarshaler
+	shouldRecorder
+}
+
+type nodeKind string
+
+const (
+	kindAND              nodeKind = "AND"
+	kindOR               nodeKind = "OR"
+	kindNOT              nodeKind = "NOT"
+	kindMinDuration      nodeKind = "__min_duration"
+	kindMinRequestSize   nodeKind = "__min_request_size"
+	kindMinResponseSize  nodeKind = "__min_response_size"
+	kindRPCName          nodeKind = "__rpc_name"
+	kindErrorCodes       nodeKind = "__error_code"
+	kindErrorMessages    nodeKind = "__error_message"
+	kindSamplingFraction nodeKind = "__sampling_fraction"
+	kindHasAttributes    nodeKind = "__has_attribute"
+)
+
+var kindToNode = map[nodeKind]func() node{
+	kindAND:              func() node { return &andNode{} },
+	kindOR:               func() node { return &orNode{} },
+	kindNOT:              func() node { return &notNode{} },
+	kindMinDuration:      func() node { return &minMinDurationNode{} },
+	kindMinRequestSize:   func() node { return &minRequestSizeNode{} },
+	kindMinResponseSize:  func() node { return &minResponseSizeNode{} },
+	kindRPCName:          func() node { return &rpcNameNode{} },
+	kindErrorCodes:       func() node { return &errorCodeNode{} },
+	kindErrorMessages:    func() node { return &errorMessageNode{} },
+	kindSamplingFraction: func() node { return &samplingFractionNode{} },
+	kindHasAttributes:    func() node { return &hasAttributeNode{} },
+}
+
+var kinds = func() []nodeKind {
+	ks := make([]nodeKind, 0, len(kindToNode))
+	for k := range kindToNode {
+		ks = append(ks, k)
+	}
+	return ks
+}()
+
+func generate(k nodeKind) (node, error) {
+	if fn, ok := kindToNode[k]; ok {
+		return fn(), nil
+	}
+	return nil, fmt.Errorf("unknown node: %s, valid node must be one of %v", k, kinds)
+}
+
+type shouldRecorder interface {
+	shouldRecord() rpcz.ShouldRecord
+}
+
+type recorder struct {
+	rpcz.ShouldRecord
+}
+
+func (n *recorder) shouldRecord() rpcz.ShouldRecord {
+	return n.ShouldRecord
 }
 
 // RecordWhenConfig stores the RecordWhenConfig field of Config.
 type RecordWhenConfig struct {
-	ErrorCodes       []int          `yaml:"error_codes,omitempty"`
-	MinDuration      *time.Duration `yaml:"min_duration"`
-	SamplingFraction float64        `yaml:"sampling_fraction"`
+	andNode
 }
 
-func (c *RecordWhenConfig) shouldRecord() rpcz.ShouldRecord {
-	if c == nil {
-		return rpcz.AlwaysRecord
+// UnmarshalYAML customizes RecordWhenConfig's behavior when being unmarshalled from a YAML document.
+func (c *RecordWhenConfig) UnmarshalYAML(node *yaml.Node) error {
+	if err := node.Decode(&c.andNode); err != nil {
+		return fmt.Errorf("decoding RecordWhenConfig's andNode: %w", err)
 	}
+	return nil
+}
 
-	return func(s rpcz.Span) bool {
-		if c.checkErrorCodes(s) || c.checkoutMinDuration(s) {
-			return c.checkoutSamplingFraction()
+type nodeList struct {
+	shouldRecords []rpcz.ShouldRecord
+}
+
+func (nl *nodeList) UnmarshalYAML(node *yaml.Node) error {
+	var nodes []map[nodeKind]yaml.Node
+	if err := node.Decode(&nodes); err != nil {
+		return fmt.Errorf("decoding []map[nodeKind]yaml.Node: %w", err)
+	}
+	nl.shouldRecords = make([]rpcz.ShouldRecord, 0, len(nodes))
+	for _, n := range nodes {
+		if size := len(n); size != 1 {
+			return fmt.Errorf("%v node has %d element currently, "+
+				"but the valid number of elements can only be 1", n, size)
+		}
+		for nodeKind, value := range n {
+			if valueEmpty(value) {
+				return fmt.Errorf("decoding %s node: value is empty", nodeKind)
+			}
+			node, err := generate(nodeKind)
+			if err != nil {
+				return fmt.Errorf("generating %s node: %w", nodeKind, err)
+			}
+			if err := value.Decode(node); err != nil {
+				return fmt.Errorf("decoding %s node: %w", nodeKind, err)
+			}
+			nl.shouldRecords = append(nl.shouldRecords, node.shouldRecord())
+		}
+	}
+	return nil
+}
+
+func valueEmpty(node yaml.Node) bool {
+	return len(node.Content) == 0 && len(node.Value) == 0
+}
+
+type andNode struct {
+	recorder
+}
+
+func (n *andNode) UnmarshalYAML(node *yaml.Node) error {
+	nl := &nodeList{}
+	if err := node.Decode(nl); err != nil {
+		return fmt.Errorf("decoding andNode: %w", err)
+	}
+	n.ShouldRecord = func(s rpcz.Span) bool {
+		if len(nl.shouldRecords) == 0 {
+			return false
+		}
+		for _, r := range nl.shouldRecords {
+			if !r(s) {
+				return false
+			}
+		}
+		return true
+	}
+	return nil
+}
+
+type orNode struct {
+	recorder
+}
+
+func (n *orNode) UnmarshalYAML(node *yaml.Node) error {
+	nl := &nodeList{}
+	if err := node.Decode(nl); err != nil {
+		return fmt.Errorf("decoding orNode: %w", err)
+	}
+	n.ShouldRecord = func(s rpcz.Span) bool {
+		for _, r := range nl.shouldRecords {
+			if r(s) {
+				return true
+			}
 		}
 		return false
 	}
+	return nil
 }
 
-func (c *RecordWhenConfig) checkErrorCodes(s rpcz.Span) bool {
-	err, ok := s.Attribute(rpcz.TRPCAttributeError)
+type notNode struct {
+	recorder
+}
+
+func (n *notNode) UnmarshalYAML(node *yaml.Node) error {
+	var not map[nodeKind]yaml.Node
+	if err := node.Decode(&not); err != nil {
+		return fmt.Errorf("decoding notNode: %w", err)
+	}
+	const numInvalidChildren = 1
+	if n := len(not); n != numInvalidChildren {
+		return fmt.Errorf("NOT node has %d child node currently, "+
+			"but the valid number of child node can only be %d", n, numInvalidChildren)
+	}
+	for nodeKind, value := range not {
+		node, err := generate(nodeKind)
+		if err != nil {
+			return fmt.Errorf("generating %s node: %w", nodeKind, err)
+		}
+		if err := value.Decode(node); err != nil {
+			return fmt.Errorf("decoding %s node: %w", nodeKind, err)
+		}
+		n.ShouldRecord = func(s rpcz.Span) bool {
+			return !node.shouldRecord()(s)
+		}
+	}
+	return nil
+}
+
+type hasAttributeNode struct {
+	recorder
+}
+
+func (n *hasAttributeNode) UnmarshalYAML(node *yaml.Node) error {
+	var attribute string
+	if err := node.Decode(&attribute); err != nil {
+		return fmt.Errorf("decoding hasAttributeNode: %w", err)
+	}
+
+	key, value, err := parse(attribute)
+	if err != nil {
+		return fmt.Errorf("parsing attribute %s : %w", attribute, err)
+	}
+
+	n.ShouldRecord = func(s rpcz.Span) bool {
+		v, ok := s.Attribute(key)
+		return ok && strings.Contains(fmt.Sprintf("%s", v), value)
+	}
+	return nil
+}
+
+var errInvalidAttribute = errors.New("invalid attribute form [ valid attribute form: (key, value), " +
+	"only one space character after comma character, and key can't contain comma(',') character ]")
+
+func parse(attribute string) (key string, value string, err error) {
+	if len(attribute) == 0 || attribute[0] != '(' {
+		return "", "", errInvalidAttribute
+	}
+	attribute = attribute[1:]
+
+	if n := len(attribute); n == 0 || attribute[n-1] != ')' {
+		return "", "", errInvalidAttribute
+	}
+	attribute = attribute[:len(attribute)-1]
+
+	const delimiter = ", "
+	i := strings.Index(attribute, delimiter)
+	if i == -1 {
+		return "", "", errInvalidAttribute
+	}
+	return attribute[:i], attribute[i+len(delimiter):], nil
+}
+
+type minRequestSizeNode struct {
+	recorder
+}
+
+func (n *minRequestSizeNode) UnmarshalYAML(node *yaml.Node) error {
+	var minRequestSize int
+	if err := node.Decode(&minRequestSize); err != nil {
+		return fmt.Errorf("decoding minRequestSizeNode: %w", err)
+	}
+	n.ShouldRecord = func(s rpcz.Span) bool {
+		size, ok := s.Attribute(rpcz.TRPCAttributeRequestSize)
+		if !ok {
+			return false
+		}
+		if size, ok := size.(int); !ok || size < minRequestSize {
+			return false
+		}
+		return true
+	}
+	return nil
+}
+
+type minResponseSizeNode struct {
+	recorder
+}
+
+func (n *minResponseSizeNode) UnmarshalYAML(node *yaml.Node) error {
+	var minResponseSize int
+	if err := node.Decode(&minResponseSize); err != nil {
+		return fmt.Errorf("decoding minResponseSizeNode: %w", err)
+	}
+	n.ShouldRecord = func(s rpcz.Span) bool {
+		responseSize, ok := s.Attribute(rpcz.TRPCAttributeResponseSize)
+		if !ok {
+			return false
+		}
+		if size, ok := responseSize.(int); !ok || size < minResponseSize {
+			return false
+		}
+		return true
+	}
+	return nil
+}
+
+type minMinDurationNode struct {
+	recorder
+}
+
+func (n *minMinDurationNode) UnmarshalYAML(node *yaml.Node) error {
+	var dur time.Duration
+	if err := node.Decode(&dur); err != nil {
+		return fmt.Errorf("decoding minMinDurationNode: %w", err)
+	}
+	n.ShouldRecord = func(s rpcz.Span) bool {
+		if dur == 0 {
+			return true
+		}
+		et := s.EndTime()
+		return et.IsZero() || et.Sub(s.StartTime()) >= dur
+	}
+	return nil
+}
+
+type rpcNameNode struct {
+	recorder
+}
+
+func (n *rpcNameNode) UnmarshalYAML(node *yaml.Node) error {
+	var rpcName string
+	if err := node.Decode(&rpcName); err != nil {
+		return fmt.Errorf("decoding rpcNameNode: %w", err)
+	}
+	n.ShouldRecord = func(s rpcz.Span) bool {
+		name, ok := s.Attribute(rpcz.TRPCAttributeRPCName)
+		if !ok {
+			return false
+		}
+		if name, ok := name.(string); !ok || !strings.Contains(name, rpcName) {
+			return false
+		}
+		return true
+	}
+	return nil
+}
+
+type samplingFractionNode struct {
+	recorder
+}
+
+var safeRand = rand.NewSafeRand(time.Now().UnixNano())
+
+func (n *samplingFractionNode) UnmarshalYAML(node *yaml.Node) error {
+	var f float64
+	if err := node.Decode(&f); err != nil {
+		return fmt.Errorf("decoding samplingFractionNode: %w", err)
+	}
+	n.ShouldRecord = func(s rpcz.Span) bool {
+		return f > safeRand.Float64()
+	}
+	return nil
+}
+
+type errorCodeNode struct {
+	recorder
+}
+
+func (n *errorCodeNode) UnmarshalYAML(node *yaml.Node) error {
+	var code trpcpb.TrpcRetCode
+	if err := node.Decode(&code); err != nil {
+		return fmt.Errorf("decoding errorCodeNode: %w", err)
+	}
+	n.ShouldRecord = func(s rpcz.Span) bool {
+		err, ok := extractError(s)
+		if !ok {
+			return false
+		}
+		c := errs.Code(err)
+		return c == code
+	}
+	return nil
+}
+
+type errorMessageNode struct {
+	recorder
+}
+
+func (n *errorMessageNode) UnmarshalYAML(node *yaml.Node) error {
+	var message string
+	if err := node.Decode(&message); err != nil {
+		return fmt.Errorf("decoding errorMessageNode: %w", err)
+	}
+	n.ShouldRecord = func(s rpcz.Span) bool {
+		err, ok := extractError(s)
+		if !ok {
+			return false
+		}
+		return strings.Contains(message, errs.Msg(err))
+	}
+	return nil
+}
+
+func extractError(span rpcz.Span) (error, bool) {
+	err, ok := span.Attribute(rpcz.TRPCAttributeError)
 	if !ok {
-		return false
+		return nil, false
 	}
 
 	e, ok := err.(error)
-	if !ok || e == nil {
-		return false
-	}
-
-	code := errs.Code(e)
-	for _, c := range c.ErrorCodes {
-		if c == int(code) {
-			return true
-		}
-	}
-	return false
-}
-
-func (c *RecordWhenConfig) checkoutMinDuration(s rpcz.Span) bool {
-	if c.MinDuration == nil {
-		return false
-	}
-	et := s.EndTime()
-	return et.IsZero() || et.Sub(s.StartTime()) > *c.MinDuration
-}
-
-func (c *RecordWhenConfig) checkoutSamplingFraction() bool {
-	return c.SamplingFraction > rand.Float64()
+	return e, ok
 }
 
 // ServiceConfig is a configuration for a single service. A server process might have multiple services.
