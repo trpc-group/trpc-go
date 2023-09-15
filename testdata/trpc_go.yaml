@@ -15,11 +15,27 @@ server:                                            # server configuration.
     write_timeout: 60000  # ms. the timeout setting for processing.
     enable_tls: false     # whether to enable TLS, currently not supported.
     rpcz:                 # tool that monitors the running state of RPC, recording various things that happen in a rpc.
-      fraction: 0.0       # sample rate, 0.0 <= fraction <= 1.0.
+      fraction: 0.0  # sample rate, 0.0 <= fraction <= 1.0.
       record_when:
-        error_codes: [0, 1]     # only record span that contain any of error_codes.
-        min_duration: 1000ms    # only record span whose duration greater min_duration in milliseconds.
-        sampling_fraction: 1    # sampling fraction when recording span, 0.0 <= sampling_fraction <= 1.0.
+        - AND:
+            - __min_request_size: 30  # record span whose request_size is greater than__min_request_size in bytes.
+            - __min_response_size: 40  # record span whose response_size is greater than __min_response_size in bytes.
+        - OR:
+            - __error_code: 1  # record span whose error codes is 1.
+            - __error_code: 2  # record span whose error codes is  2.
+            - __error_message: "unknown" # record span whose error messages contain  "unknown".
+            - __error_message: "not found" # record span whose error messages contain  "not found".
+        - NOT: { __rpc_name: "/trpc.app.server.service/method1" }  # record span whose RPCName doesn't contain __rpc_name.
+        - NOT: # record span whose RPCName doesn't contain "/trpc.app.server.service/method2, or "/trpc.app.server.service/method3".
+            OR:
+              - __rpc_name: "/trpc.app.server.service/method2"
+              - __rpc_name: "/trpc.app.server.service/method3"
+        - __min_duration: 1000ms  # record span whose duration is greater than __min_duration.
+        # record span that has the attribute: name1, and name1's value contains "value1"
+        # valid attribute form: (key, value) only one space character after comma character, and key can't contain comma(',') character.
+        - __has_attribute: (name1, value1)
+        # record span that has the attribute: name2, and name2's value contains "value2".
+        - __has_attribute: (name2, value2)
   service:                                         # business service configuration，can have multiple.
     - name: trpc.test.helloworld.Greeter1          # the route name of the service.
       ip: 127.0.0.1                                # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
