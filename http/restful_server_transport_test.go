@@ -142,6 +142,7 @@ func TestEnableTLS(t *testing.T) {
 	require.Equal(t, resp.StatusCode, http.StatusOK)
 
 	bodyBytes, err := io.ReadAll(resp.Body)
+	require.Nil(t, err)
 	type responseBody struct {
 		Message string `json:"message"`
 	}
@@ -211,7 +212,7 @@ func TestDefaultRESTFastHTTPHeaderMatcher(t *testing.T) {
 
 	req = fasthttp.RequestCtx{}
 	req.Request.Header.Set(thttp.TrpcTransInfo, "xyz")
-	ctx, err = thttp.DefaultRESTFastHTTPHeaderMatcher(bgctx, &req, "UTService", "UTMethod")
+	_, err = thttp.DefaultRESTFastHTTPHeaderMatcher(bgctx, &req, "UTService", "UTMethod")
 	require.NotNil(t, err)
 }
 
@@ -271,6 +272,7 @@ func TestPassListenerUseTLS(t *testing.T) {
 	require.Equal(t, resp.StatusCode, http.StatusOK)
 
 	bodyBytes, err := io.ReadAll(resp.Body)
+	require.Nil(t, err)
 	type responseBody struct {
 		Message string `json:"message"`
 	}

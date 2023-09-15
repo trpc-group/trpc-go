@@ -72,6 +72,7 @@ func Test_span_Attribute(t *testing.T) {
 		*a1 = append(*a1, 2)
 
 		aRaw2, ok := s.Attribute("Decode")
+		require.True(t, ok)
 		a2 := aRaw2.(*[]int)
 		require.Same(t, a1, a2)
 	})
@@ -211,6 +212,7 @@ func Test_span_End(t *testing.T) {
 		end.End()
 		require.Equal(t, uint32(1), rpcz.store.spans.length)
 		readOnlySpan2, ok := rpcz.Query(id)
+		require.True(t, ok)
 		require.Equal(t, readOnlySpan1, readOnlySpan2)
 	})
 	t.Run("record span to root span", func(t *testing.T) {
@@ -333,9 +335,11 @@ func Test_span_Child(t *testing.T) {
 
 		csEnder.End()
 		_, ok = s.Child("alpha")
+		require.True(t, ok)
 
 		ender.End()
 		_, ok = s.Child("alpha")
+		require.True(t, ok)
 	})
 	t.Run("modify *span.Child return result", func(t *testing.T) {
 		rpcz := NewRPCZ(&Config{Capacity: 1, Fraction: 1.0})

@@ -299,7 +299,7 @@ func TestTimeout(t *testing.T) {
 
 type greeterAlwaysTimeout struct{}
 
-func (*greeterAlwaysTimeout) SayHello(ctx context.Context, req *helloworld.HelloRequest, rsp *helloworld.HelloReply) error {
+func (*greeterAlwaysTimeout) SayHello(ctx context.Context, req *helloworld.HelloRequest) (*helloworld.HelloReply, error) {
 	<-ctx.Done()
-	return errs.NewFrameError(errs.RetServerTimeout, "ctx timeout")
+	return nil, errs.NewFrameError(errs.RetServerTimeout, "ctx timeout")
 }
