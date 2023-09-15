@@ -57,7 +57,7 @@ c.GetString("auth.user", "admin")
 在这个示例中，数据源为 etcd 配置中心，数据源中的业务配置文件为“test.yaml”。当 ConfigLoader 获取到"test.yaml"业务配置时，指定使用 yaml 格式对数据内容进行解码。最后通过`c.GetString("server.app", "default")`函数来获取 test.yaml 文件中`auth.user`这个配置型的值。
 
 # 接口使用
-本文仅从使用业务配置的角度来介绍相应的接口，如何用户需要开发数据源插件或者 Codec 插件，请参考 [tRPC-Go 开发配置插件](todo)。
+本文仅从使用业务配置的角度来介绍相应的接口，如何用户需要开发数据源插件或者 Codec 插件，请参考 [tRPC-Go 开发配置插件](/docs/developer_guide/develop_plugins/config_zh_CN.md)。
 
 tRPC-Go 框架提供了两套接口分别用于 “读取配置项” 和 “监听配置项”
 ## 获取配置项

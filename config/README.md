@@ -70,7 +70,7 @@ In this example, the data source is the etcd configuration center, and the busin
 
 # Interface Usage
 
-This article only introduces the corresponding interfaces from the perspective of using business configurations. If users need to develop data source plugins or Codec plugins, please refer to tRPC-Go Development Configuration Plugin. For specific interface parameters, please refer to the tRPC-Go API manual.
+This article only introduces the corresponding interfaces from the perspective of using business configurations. If users need to develop data source plugins or Codec plugins, please refer to [tRPC-Go Development Configuration Plugin](/docs/developer_guide/develop_plugins/config.md). For specific interface parameters, please refer to the tRPC-Go API manual.
 
 The tRPC-Go framework provides two sets of interfaces for "reading configuration items" and "watching  configuration item changes".
 
