@@ -38,7 +38,7 @@ By default, the signal for graceful restart is SIGUSR2. You can modify the signa
 import "trpc.group/trpc-go/trpc-go/server"
 
 func main() {
-	server.DefaultServerGracefulSIG = syscall.SIGUSR1
+    server.DefaultServerGracefulSIG = syscall.SIGUSR1
 }
 ```
 
@@ -48,14 +48,14 @@ You can register hooks to run on process exit for resource cleanup, for example:
 
 ```go
 import (
-	"trpc.group/trpc-go/trpc-go"
-	"trpc.group/trpc-go/trpc-go/server"
+    "trpc.group/trpc-go/trpc-go"
+    "trpc.group/trpc-go/trpc-go/server"
 )
 
 func main() {
-	s := trpc.NewServer()
-	s.RegisterOnShutdown(func() { /* Your logic. */ })
-	// ...
+    s := trpc.NewServer()
+    s.RegisterOnShutdown(func() { /* Your logic. */ })
+    // ...
 }
 ```
 

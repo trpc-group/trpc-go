@@ -38,7 +38,7 @@ $ kill -SIGUSR2 pid
 import "trpc.group/trpc-go/trpc-go/server"
 
 func main() {
-	server.DefaultServerGracefulSIG = syscall.SIGUSR1
+    server.DefaultServerGracefulSIG = syscall.SIGUSR1
 }
 ```
 
@@ -48,14 +48,14 @@ func main() {
 
 ```go
 import (
-	"trpc.group/trpc-go/trpc-go"
-	"trpc.group/trpc-go/trpc-go/server"
+    "trpc.group/trpc-go/trpc-go"
+    "trpc.group/trpc-go/trpc-go/server"
 )
 
 func main() {
-	s := trpc.NewServer()
-	s.RegisterOnShutdown(func() { /* Your logic. */ })
-	// ...
+    s := trpc.NewServer()
+    s.RegisterOnShutdown(func() { /* Your logic. */ })
+    // ...
 }
 ```
 
