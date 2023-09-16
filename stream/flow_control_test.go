@@ -32,6 +32,7 @@ func TestSendControl(t *testing.T) {
 		sc.UpdateWindow(201)
 	}()
 	err = sc.GetWindow(200)
+	assert.Nil(t, err)
 	t2 := int64(time.Now().Sub(t1))
 	assert.GreaterOrEqual(t, t2, int64(500*time.Millisecond))
 }

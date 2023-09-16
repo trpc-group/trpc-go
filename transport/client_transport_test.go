@@ -204,6 +204,7 @@ func TestTcpRoundTripConnWriteErr(t *testing.T) {
 	Count = 1
 	_, err := st.RoundTrip(context.Background(), []byte("hello"), optNetwork, optPool, optFramerBuilder,
 		optAddress)
+	assert.NotNil(t, err)
 	Count = 2
 	_, err = st.RoundTrip(context.Background(), []byte("hello"), optNetwork, optPool, optFramerBuilder,
 		optAddress)
@@ -407,6 +408,7 @@ func TestClientTransport_RoundTrip(t *testing.T) {
 		transport.WithConnectionMode(transport.NotConnected),
 		transport.WithClientFramerBuilder(fb),
 	)
+	assert.NotNil(t, rsp)
 	assert.Nil(t, err)
 
 	// Test setting RemoteAddr of UDP RoundTrip.
@@ -646,6 +648,7 @@ func TestClientTransport_RoundTrip_PreConnected(t *testing.T) {
 		transport.WithDialAddress("localhost:9999"),
 		transport.WithConnectionMode(transport.Connected))
 	assert.NotNil(t, err)
+	assert.Nil(t, rsp)
 }
 
 func TestOptions(t *testing.T) {

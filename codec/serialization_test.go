@@ -103,7 +103,7 @@ func TestSerialization(t *testing.T) {
 	err = codec.Unmarshal(codec.SerializationTypeUnsupported, []byte{1, 2}, body)
 	assert.Nil(t, err)
 
-	data, err = codec.Marshal(100009, body)
+	_, err = codec.Marshal(100009, body)
 	assert.NotNil(t, err)
 
 	err = codec.Unmarshal(100009, []byte{1, 2}, body)

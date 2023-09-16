@@ -93,7 +93,7 @@ func TestStream(t *testing.T) {
 	require.NotNil(t, opts)
 	err = streamCli.Invoke(ctx)
 	require.Nil(t, err)
-	rsp, err = streamCli.Recv(ctx)
+	_, err = streamCli.Recv(ctx)
 	require.NotNil(t, err)
 
 	// test compress without error

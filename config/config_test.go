@@ -265,10 +265,10 @@ func TestLoadYaml(t *testing.T) {
 	err := config.Reload("../testdata/trpc_go.yaml", config.WithCodec("yaml"))
 	require.NotNil(err)
 
-	c, err := config.Load("../testdata/trpc_go.yaml.1", config.WithCodec("yaml"))
+	_, err = config.Load("../testdata/trpc_go.yaml.1", config.WithCodec("yaml"))
 	require.NotNil(err)
 
-	c, err = config.Load("../testdata/trpc_go.yaml", config.WithCodec("yaml"))
+	c, err := config.Load("../testdata/trpc_go.yaml", config.WithCodec("yaml"))
 	require.Nil(err, "failed to load config")
 	// out := &T{}
 	out := c.GetString("server.app", "")
@@ -293,11 +293,11 @@ func TestLoadToml(t *testing.T) {
 	err := config.Reload(rightPath, config.WithCodec("toml"))
 	require.NotNil(err)
 
-	c, err := config.Load(wrongPath, config.WithCodec("toml"))
+	_, err = config.Load(wrongPath, config.WithCodec("toml"))
 	require.NotNil(err, "path not exist")
 	t.Logf("load with not exist path, err:%v", err)
 
-	c, err = config.Load(rightPath, config.WithCodec("toml"))
+	c, err := config.Load(rightPath, config.WithCodec("toml"))
 	require.Nil(err, "failed to load config")
 	//out := &T{}
 	out := c.GetString("server.app", "")
