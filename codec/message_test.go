@@ -28,7 +28,7 @@ import (
 
 func TestPutBackMessage(t *testing.T) {
 	ctx := context.Background()
-	ctx, msg := codec.WithCloneMessage(ctx)
+	_, msg := codec.WithCloneMessage(ctx)
 	type foo struct {
 		I int
 	}
@@ -77,7 +77,7 @@ func TestPutBackMessage(t *testing.T) {
 	codec.PutBackMessage(msg)
 
 	ctx2 := context.Background()
-	ctx2, msg2 := codec.WithNewMessage(ctx2)
+	_, msg2 := codec.WithNewMessage(ctx2)
 
 	assert.Nil(t, msg2.FrameHead())
 	assert.Equal(t, time.Duration(0), msg2.RequestTimeout())
@@ -275,7 +275,7 @@ func TestMoreRegisterMessage(t *testing.T) {
 	ctx, m3 := codec.WithNewMessage(ctx)
 	assert.Equal(t, m3, msg)
 	assert.Equal(t, m3.CalleeApp(), "")
-	ctx, m4 := codec.WithNewMessage(ctx)
+	_, m4 := codec.WithNewMessage(ctx)
 	assert.NotEqual(t, m4, m1)
 
 	var fakemsg codec.Msg = nil

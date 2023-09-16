@@ -23,10 +23,14 @@ func TestCompress(t *testing.T) {
 
 	compress := codec.GetCompressor(0)
 	out1, err := compress.Compress(in)
+	assert.Nil(t, err)
+	assert.Equal(t, out1, in)
 	out1, err = codec.Compress(0, in)
 	assert.Nil(t, err)
 	assert.Equal(t, out1, in)
 	out2, err := compress.Decompress(in)
+	assert.Nil(t, err)
+	assert.Equal(t, out2, in)
 	out2, err = codec.Decompress(0, in)
 	assert.Nil(t, err)
 	assert.Equal(t, out2, in)
@@ -43,6 +47,8 @@ func TestCompress(t *testing.T) {
 
 	in = nil
 	out4, err := compress.Decompress(in)
+	assert.Nil(t, err)
+	assert.Equal(t, out4, in)
 	out4, err = codec.Decompress(0, in)
 	assert.Nil(t, err)
 	assert.Equal(t, out4, in)

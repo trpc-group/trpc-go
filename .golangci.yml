@@ -26,9 +26,9 @@ linters:
     - revive
     - gocyclo
     - gosec
+    - ineffassign
 
 run:
   skip-files:
     - ".*.pb.go"
     - ".*_mock.go"
-    - ".*test.go"

@@ -71,7 +71,7 @@ func TestValueDetachedCtxGC(t *testing.T) {
 	}
 
 	ctx, valGCed := newValueCtx()
-	ctx = detachCtxValue(ctx)
+	_ = detachCtxValue(ctx)
 
 	// The original ctx is only swept in second GC circle due to go's tri-color GC algorithm.
 	runtime.GC()
@@ -101,7 +101,7 @@ func TestValueDetachedCtxGCCancelableCtx(t *testing.T) {
 	}
 
 	ctx, cancel, valGCed := newValueCtx()
-	ctx = detachCtxValue(ctx)
+	_ = detachCtxValue(ctx)
 
 	// The original ctx is not swept before second GC circle due to go's tri-color GC algorithm.
 	runtime.GC()

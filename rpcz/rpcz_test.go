@@ -6,7 +6,6 @@
 package rpcz
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -22,10 +21,6 @@ func TestRPCZ_NewChildSpan(t *testing.T) {
 		require.Equal(t, rpcz, s)
 	})
 	t.Run("New span", func(t *testing.T) {
-		ctx := context.Background()
-		ctx, canceled := context.WithCancel(ctx)
-		canceled()
-
 		rpcz := NewRPCZ(&Config{Fraction: 1.0, Capacity: 10})
 		s, _ := rpcz.NewChild("server")
 		sp := s.(*span)

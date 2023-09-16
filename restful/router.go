@@ -301,16 +301,16 @@ func (r *Router) handle(
 	tr *transcoder,
 	fieldValues map[string]string,
 ) {
-	// header matching
-	stubCtx, err := r.opts.HeaderMatcher(ctx, w, req, r.opts.ServiceName, tr.name)
+	modifiedCtx, err := r.opts.HeaderMatcher(ctx, w, req, r.opts.ServiceName, tr.name)
 	if err != nil {
 		r.opts.ErrorHandler(ctx, w, req, errs.New(errs.RetServerDecodeFail, err.Error()))
 		return
 	}
-	defer putBackCtxMessage(stubCtx)
+	ctx = modifiedCtx
+	defer putBackCtxMessage(ctx)
 
 	timeout := r.opts.Timeout
-	requestTimeout := codec.Message(stubCtx).RequestTimeout()
+	requestTimeout := codec.Message(ctx).RequestTimeout()
 	if requestTimeout > 0 && (requestTimeout < timeout || timeout == 0) {
 		timeout = requestTimeout
 	}
@@ -338,14 +338,14 @@ func (r *Router) handle(
 	defer putBackParams(params)
 
 	// transcode
-	resp, body, err := tr.transcode(stubCtx, params)
+	resp, body, err := tr.transcode(ctx, params)
 	if err != nil {
-		r.opts.ErrorHandler(stubCtx, w, req, err)
+		r.opts.ErrorHandler(ctx, w, req, err)
 		return
 	}
 
 	// custom response handling
-	if err := r.opts.ResponseHandler(stubCtx, w, req, resp, body); err != nil {
-		r.opts.ErrorHandler(stubCtx, w, req, errs.New(errs.RetServerEncodeFail, err.Error()))
+	if err := r.opts.ResponseHandler(ctx, w, req, resp, body); err != nil {
+		r.opts.ErrorHandler(ctx, w, req, errs.New(errs.RetServerEncodeFail, err.Error()))
 	}
 }

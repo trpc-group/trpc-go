@@ -91,8 +91,6 @@ func TestCodec(t *testing.T) {
 	// + 2 bytes reserved(0) + head + body
 	in := []byte{0x9, 0x30, 0, 2, 0, 0, 0, 23, 0, 6, 0, 0, 0, 0, 0, 0, 0x3a, 0x4, 0x74, 0x65, 0x73, 0x74, 1}
 	reader := bytes.NewReader(in)
-
-	reader = bytes.NewReader(in)
 	frame := frameBuilder.New(reader)
 	data, err = frame.ReadFrame()
 	assert.Nil(t, err)
@@ -101,6 +99,9 @@ func TestCodec(t *testing.T) {
 	// invalid magic num
 	in1 := []byte{0x30, 0x9, 1, 2, 0, 0, 0, 23, 0, 6, 0, 0, 0, 0, 0, 0, 0x3a, 0x4, 0x74, 0x65, 0x73, 0x74, 1}
 	reader = bytes.NewReader(in1)
+	frame = frameBuilder.New(reader)
+	_, err = frame.ReadFrame()
+	assert.Contains(t, err.Error(), "not match")
 
 	msg = codec.Message(ctx)
 	reqBody, err := serverCodec.Decode(msg, in)
@@ -217,7 +218,7 @@ func TestGetAdminService(t *testing.T) {
 	trpc.ServerConfigPath = cfg
 	defer func() { trpc.ServerConfigPath = oldPath }()
 
-	s := trpc.NewServer()
+	_ = trpc.NewServer()
 	admin, err := trpc.GetAdminService(trpc.NewServer())
 	require.Nil(t, err)
 	require.NotNil(t, admin)
@@ -228,7 +229,7 @@ server:
     port: 9528
 `), 0644))
 
-	s = trpc.NewServer()
+	s := trpc.NewServer()
 	adminService, err := trpc.GetAdminService(s)
 	require.Nil(t, err)
 	require.NotNil(t, adminService)

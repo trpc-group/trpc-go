@@ -335,7 +335,6 @@ func TestClientContext(t *testing.T) {
 	cli := stream.NewStreamClient()
 	assert.Equal(t, cli, stream.DefaultStreamClient)
 
-	ctx := context.Background()
 	var ft = &fakeTransport{expectChan: make(chan recvExpect, 1)}
 	transport.DefaultClientTransport = ft
 	// test context cancel situation.

@@ -34,19 +34,19 @@ func TestFramer_ReadFrame(t *testing.T) {
 		totalLen := 0
 		buf := new(bytes.Buffer)
 		// MagicNum 0x930, 2bytes
-		err = binary.Write(buf, binary.BigEndian, uint16(trpcpb.TrpcMagic_TRPC_MAGIC_VALUE+1))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(trpcpb.TrpcMagic_TRPC_MAGIC_VALUE+1)))
 		// frame type, 1byte
-		err = binary.Write(buf, binary.BigEndian, uint8(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint8(0)))
 		// stream frame type, 1byte
-		err = binary.Write(buf, binary.BigEndian, uint8(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint8(0)))
 		// total len
-		err = binary.Write(buf, binary.BigEndian, uint32(totalLen))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint32(totalLen)))
 		// pb header len
-		err = binary.Write(buf, binary.BigEndian, uint16(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(0)))
 		// stream ID
-		err = binary.Write(buf, binary.BigEndian, uint16(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(0)))
 		// reserved
-		err = binary.Write(buf, binary.BigEndian, uint32(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint32(0)))
 		assert.Nil(t, err)
 
 		fb := &trpc.FramerBuilder{}
@@ -62,18 +62,18 @@ func TestFramer_ReadFrame(t *testing.T) {
 		totalLen := trpc.DefaultMaxFrameSize + 1
 		buf := new(bytes.Buffer)
 		// MagicNum 0x930, 2bytes
-		err = binary.Write(buf, binary.BigEndian, uint16(trpcpb.TrpcMagic_TRPC_MAGIC_VALUE))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(trpcpb.TrpcMagic_TRPC_MAGIC_VALUE)))
 		// frame type, 1byte
-		err = binary.Write(buf, binary.BigEndian, uint8(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint8(0)))
 		// stream frame type, 1byte
-		err = binary.Write(buf, binary.BigEndian, uint8(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint8(0)))
 		// total len
-		err = binary.Write(buf, binary.BigEndian, uint32(totalLen))
-		err = binary.Write(buf, binary.BigEndian, uint16(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint32(totalLen)))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(0)))
 		// stream ID
-		err = binary.Write(buf, binary.BigEndian, uint16(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(0)))
 		// reserved
-		err = binary.Write(buf, binary.BigEndian, uint32(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint32(0)))
 		assert.Nil(t, err)
 
 		fb := &trpc.FramerBuilder{}
@@ -251,6 +251,7 @@ func TestServerCodec_CallTypeDecode(t *testing.T) {
 	reqBuf, err := cc.Encode(msg, nil)
 	assert.Nil(t, err)
 	_, err = sc.Decode(msg, reqBuf)
+	assert.Nil(t, err)
 	assert.Equal(t, msg.CallType(), codec.SendOnly)
 }
 

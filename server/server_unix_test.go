@@ -51,9 +51,11 @@ func TestStartNewProcess(t *testing.T) {
 
 	s.AddService("trpc.test.helloworld.Greeter1", service)
 	err := s.Register(nil, nil)
+	assert.NotNil(t, err)
 
 	impl := &GreeterServerImpl{}
 	err = s.Register(&GreeterServerServiceDesc, impl)
+	assert.Nil(t, err)
 	go func() {
 		var netOpError *net.OpError
 		assert.ErrorAs(
