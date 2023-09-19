@@ -1,5 +1,13 @@
 # tRPC-Go framework
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/trpc.group/trpc-go.svg)](https://pkg.go.dev/github.com/trpc.group/trpc-go)
+[![Go Report Card](https://goreportcard.com/badge/github.com/trpc.group/trpc-go/trpc-go)](https://goreportcard.com/report/github.com/trpc.group/trpc-go/trpc-go)
+[![LICENSE](https://img.shields.io/github/license/trpc.group/trpc-go.svg?style=flat-square)](https://github.com/trpc.group/trpc-go/blob/main/LICENSE)
+[![Releases](https://img.shields.io/github/release/trpc.group/trpc-go.svg?style=flat-square)](https://github.com/trpc.group/trpc-go/releases)
+[![Docs](https://img.shields.io/badge/docs-latest-green)](http://test.trpc.group.woa.com/docs/)
+[![Tests](https://github.com/trpc.group/trpc-go/actions/workflows/prc.yaml/badge.svg)](https://github.com/trpc.group/trpc-go/actions/workflows/prc.yaml)
+[![Coverage](https://codecov.io/gh/trpc.group/trpc-go/branch/main/graph/badge.svg)](https://app.codecov.io/gh/trpc.group/trpc-go/tree/main)
+
 [English](README.md) | 中文
 
 tRPC-Go 框架是公司统一微服务框架的 golang 版本，主要是以高性能，可插拔，易测试为出发点而设计的 rpc 框架。
