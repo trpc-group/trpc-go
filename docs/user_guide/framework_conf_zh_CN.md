@@ -40,8 +40,8 @@ func NewServerWithConfig(cfg *Config, opt ...server.Option) *server.Server
 
 ``` go
 import (
-    "git.code.woa.com/trpc-go/trpc-go"
-    server "git.code.woa.com/trpc-go/trpc-go/server"
+    "trpc.group/trpc-go/trpc-go"
+    server "trpc.group/trpc-go/trpc-go/server"
 )
 func main() {
     s := trpc.NewServer(server.WithEnvName("test"), server.WithAddress("127.0.0.1:8001"))
