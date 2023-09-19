@@ -1,7 +1,7 @@
 # tRPC-Go framework
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/trpc.group/trpc-go.svg)](https://pkg.go.dev/github.com/trpc.group/trpc-go)
-[![Go Report Card](https://goreportcard.com/badge/github.com/trpc.group/trpc-go)](https://goreportcard.com/report/github.com/trpc.group/trpc-go)
+[![Go Report Card](https://goreportcard.com/badge/github.com/trpc.group/trpc-go/trpc-go)](https://goreportcard.com/report/github.com/trpc.group/trpc-go/trpc-go)
 [![LICENSE](https://img.shields.io/github/license/trpc.group/trpc-go.svg?style=flat-square)](https://github.com/trpc.group/trpc-go/blob/main/LICENSE)
 [![Releases](https://img.shields.io/github/release/trpc.group/trpc-go.svg?style=flat-square)](https://github.com/trpc.group/trpc-go/releases)
 [![Docs](https://img.shields.io/badge/docs-latest-green)](http://test.trpc.group.woa.com/docs/)
