@@ -65,7 +65,7 @@ l.Info("hello, world")
 `log` 包支持设置多个互相独立的 `Logger`，每个 `Logger` 又支持设置多个互相独立的 `Writer`。
 如图所示，在这个示例图中包含三个 `Logger`， “Default Logger”，“Other Logger-1“ 和  ”Other Logger-2“，其中的 ”Default Logger“ 是 log 包中内置默认的 `Logger`。
 ”Default Logger“ 包含三个不同的 `Writer`， "Console Writer"，“File Writer” 和 “Remote Writer”，其中的 "Console Writer" 是 ”Default Logger“ 默认的 `Writer`。
-`Logger` 和 `Writer` 都被设计为定制化开发的插件，关于如何开发它们，可以参考[这里](https://github.com/trpc-group/trpc-go/blob/main/docs/developer_guide/develop_plugins/log_CN.md) 。
+`Logger` 和 `Writer` 都被设计为定制化开发的插件，关于如何开发它们，可以参考[这里](/docs/developer_guide/develop_plugins/log_zh_CN.md) 。
 
 
 ```ascii
