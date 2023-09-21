@@ -87,7 +87,7 @@ $ tree
 `-- trpc_go.yaml  # Configuration file for trpc-go.
 ```
 
-## Generation of RPC Stub
+## Generate of RPC Stub
 
 * Simply add `--rpconly` flag to generate rpc stub instead of a full project:
 ```go
