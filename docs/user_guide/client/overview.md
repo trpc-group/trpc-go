@@ -1,5 +1,7 @@
 tRPC-Go Client Development Guide
 
+English | [中文](overview_zh_CN.md)
+
 # Introduction
 
 The tRPC-Go framework and plugins provide interface calls for services, allowing users to call downstream services as if they were calling local functions without worrying about the underlying implementation details. This article first introduces the capabilities that the framework can provide for service calls and the means that users can use to control the behavior of each link in the service call by sorting out the entire processing flow of service calls. Next, this article will explain how to develop and configure a client call from key links such as service calls, configuration, addressing, interceptors, and protocol selection. The article will provide development guidance for typical scenarios of service calls, especially for scenarios where the program serves as both a server and a client.
