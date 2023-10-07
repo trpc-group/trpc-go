@@ -36,9 +36,9 @@ tRPC-Go 具有以下特点：
 
 ## 相关生态
 
-- [第三方协议插件][go-codec]
-- [第三方拦截器插件][go-filter]
-- [第三方数据库插件][go-database]
+- [协议插件][go-codec]
+- [拦截器插件][go-filter]
+- [数据库插件][go-database]
 - [更多生态...][ecosystem]
 
 ## 如何贡献
