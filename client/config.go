@@ -91,9 +91,13 @@ func (cfg *BackendConfig) genOptions() (*Options, error) {
 		opts.CompressType = cfg.Compression
 	}
 
+	// Reset the transport to check if the user has specified any transport.
+	opts.Transport = nil
+	WithTransport(transport.GetClientTransport(cfg.Transport))(opts)
+	WithStreamTransport(transport.GetClientStreamTransport(cfg.Transport))(opts)
 	WithProtocol(cfg.Protocol)(opts)
 	WithNetwork(cfg.Network)(opts)
-	WithTransport(transport.GetClientTransport(cfg.Transport))(opts)
+	opts.Transport = attemptSwitchingTransport(opts)
 	WithPassword(cfg.Password)(opts)
 	WithTLS(cfg.TLSCert, cfg.TLSKey, cfg.CACert, cfg.TLSServerName)(opts)
 	if cfg.Protocol != "" && opts.Codec == nil {
