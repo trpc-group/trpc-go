@@ -39,6 +39,7 @@ type Options struct {
 	endpoint string // The same as service name if target is not set.
 
 	Network           string
+	Protocol          string
 	CallType          codec.RequestType           // Type of request, referring to transport.RequestType.
 	CallOptions       []transport.RoundTripOption // Options for client transport to call server.
 	Transport         transport.ClientTransport
@@ -361,6 +362,7 @@ func WithProtocol(s string) Option {
 		if s == "" {
 			return
 		}
+		o.Protocol = s
 		o.Codec = codec.GetClient(s)
 		if b := transport.GetFramerBuilder(s); b != nil {
 			o.CallOptions = append(o.CallOptions,

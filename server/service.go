@@ -107,19 +107,9 @@ type service struct {
 // It will use transport.DefaultServerTransport unless Option WithTransport()
 // is called to replace its transport.ServerTransport plugin.
 var New = func(opts ...Option) Service {
-	const (
-		invalidCompressType      = -1
-		invalidSerializationType = -1
-	)
+	o := defaultOptions()
 	s := &service{
-		opts: &Options{
-			protocol:                 "unknown-protocol",
-			ServiceName:              "empty-name",
-			CurrentSerializationType: invalidSerializationType,
-			CurrentCompressType:      invalidCompressType,
-			Transport:                transport.DefaultServerTransport,
-			StreamTransport:          transport.DefaultServerStreamTransport,
-		},
+		opts:           o,
 		handlers:       make(map[string]Handler),
 		streamHandlers: make(map[string]StreamHandler),
 		streamInfo:     make(map[string]*StreamServerInfo),
@@ -127,6 +117,7 @@ var New = func(opts ...Option) Service {
 	for _, o := range opts {
 		o(s.opts)
 	}
+	o.Transport = attemptSwitchingTransport(o)
 	if !s.opts.handlerSet {
 		// if handler is not set, pass the service (which implements Handler interface)
 		// as handler of transport plugin.
@@ -588,4 +579,17 @@ func checkProcessStatus() (isGracefulRestart, isParentalProcess bool) {
 		return false, false
 	}
 	return true, ppid == os.Getpid()
+}
+
+func defaultOptions() *Options {
+	const (
+		invalidSerializationType = -1
+		invalidCompressType      = -1
+	)
+	return &Options{
+		protocol:                 "unknown-protocol",
+		ServiceName:              "empty-name",
+		CurrentSerializationType: invalidSerializationType,
+		CurrentCompressType:      invalidCompressType,
+	}
 }

@@ -27,6 +27,12 @@ import (
 	"trpc.group/trpc-go/trpc-go/log"
 )
 
+const transportName = "go-net"
+
+func init() {
+	RegisterServerTransport(transportName, DefaultServerTransport)
+}
+
 const (
 	// EnvGraceRestart is the flag of graceful restart.
 	EnvGraceRestart = "TRPC_IS_GRACEFUL"
