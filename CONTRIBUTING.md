@@ -7,11 +7,6 @@ This document aims to provide you with a detailed contribution guide to help you
 Please read this guide carefully before contributing and make sure to follow the rules here.
 We look forward to working with you to make this project better together!
 
-## Becoming a contributor
-
-The first step is registering as a tRPC-Go contributor.
-Before sending your first change to the tRPC-Go project you must have [signed and submitted a CLA (Contributor License Agreement)](to-do).
-
 ## Before contributing code
 
 The project welcomes code patches, but to make sure things are well coordinated you should discuss any significant change before starting the work.
@@ -43,11 +38,13 @@ When opening an issue, make sure to answer these five questions:
 4. What did you expect to see?
 5. What did you see instead?
 
-For change proposals, see Proposing Changes To [tRPC-Go-Proposals](to-do).
+For change proposals, see Proposing Changes To [tRPC-Go-Proposals](https://github.com/trpc-group/proposal).
 
 ## Contributing code
 
 Follow the [GitHub flow](https://docs.github.com/en/get-started/quickstart/github-flow) to [create a GitHub pull request](https://docs.github.com/en/get-started/quickstart/github-flow#create-a-pull-request).
+If this is your first time submitting a PR to the tRPC-Go project, you will be reminded in the "Conversation" tab of the PR to sign and submit the [Contributor License Agreement](https://github.com/trpc-group/cla-database/blob/main/Tencent-Contributor-License-Agreement.md). 
+Only when you have signed the Contributor License Agreement, your submitted PR has the possibility of being accepted.
 
 Some things to keep in mind:
 - Ensure that your code conforms to the project's code specifications.
@@ -106,7 +103,7 @@ When this change is eventually applied, the issue tracker will automatically mar
 ### Copyright headers
 
 Files in the tRPC-Go repository don't list author names, both to avoid clutter and to avoid having to keep the lists up to date.
-Instead, your name will appear in the [change log](todo).
+Instead, your name will appear in the change log.
 
 New files that you contribute should use the standard copyright header:
 
@@ -131,11 +128,6 @@ Do not update the copyright year on files that you change.
 本文档旨在为您提供详细的贡献指南，以帮助您更好地参与项目。
 在贡献之前，请仔细阅读本指南并确保遵循这里的规则。
 我们期待与您共同努力，使这个项目变得更好！
-
-## 成为贡献者
-
-第一步是注册为 tRPC-Go 贡献者。
-向 tRPC-Go 项目发送您的第一个变更之前，您必须签署并提交[贡献者许可协议](to-do)。
 
 ## 在贡献代码之前
 
@@ -168,12 +160,14 @@ issue 会被分类以管理工作流程。
 4. 您期望看到什么？
 5. 您实际看到的是什么？
 
-关于变更提案，请参阅向 [tRPC-Go-Proposals](to-do) 提议变更。
+关于变更提案，请参阅向 [tRPC-Go-Proposals](https://github.com/trpc-group/proposal) 提议变更。
 
 ## 贡献代码
 
 遵循 [GitHub 流程](https://docs.github.com/en/get-started/quickstart/github-flow)来[创建 GitHub PR(Pull Request)](https://docs.github.com/en/get-started/quickstart/github-flow#create-a-pull-request)。
 
+如果你是第一次向 tRPC-Go 项目提交 PR，那么在该 PR 的对话栏中会提醒你签署并提交[贡献者许可协议](https://github.com/trpc-group/cla-database/blob/main/Tencent-Contributor-License-Agreement.md)。
+只有当你签署过贡献者许可协议，你提交的 PR 才有可能被接受。
 请记住以下几点：
 
 - 确保您的代码符合项目的代码规范。
