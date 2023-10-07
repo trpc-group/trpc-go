@@ -19,9 +19,8 @@ func attemptSwitchingTransport(o *Options) transport.ServerTransport {
 			o.network == "tcp6") &&
 			o.protocol == "trpc" {
 			log.Infof("service %s with network %s and protocol %s is empowered with tnet! 🤩 "+
-				"you can always use 'go get -u trpc.group/trpc-go/trpc-go@v0.15.1' "+
-				"(without the '-tnet-enabled' suffix) , or set 'transport: go-net' in your "+
-				"trpc_go.yaml's service configuration to switch to the vanilla version",
+				"you can set 'transport: go-net' in your trpc_go.yaml's service configuration "+
+				"to switch to the golang net framework",
 				o.ServiceName, o.network, o.protocol)
 			return tnet.DefaultServerTransport
 		}
