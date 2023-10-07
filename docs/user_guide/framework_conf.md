@@ -2,7 +2,7 @@ English | [中文](./README_zh_CN.md)
 
 # tRPC-Go Framework Configuration
 
-## Foreword
+## Introduction
 
 The tRPC-Go framework configuration is a configuration file defined by the framework and used for framework initialization. The core of the tRPC framework adopts a plug-in architecture, which components all core functions, and connects all component functions in series through the interface-based programming thinking. Each component is associated with the plug-in SDK through configuration. The tRPC framework provides the `trpc_go.yaml` framework configuration file by default, which gathers the configuration of all basic components into the framework configuration file and passes it to the components when the service starts. In this way, each components don't have to manage their own configuration independently.
 
@@ -40,8 +40,8 @@ Both of these methods provide `Option` parameters to change local parameters. `O
 
 ```go
 import (
-    "git.code.woa.com/trpc-go/trpc-go"
-    server "git.code.woa.com/trpc-go/trpc-go/server"
+    "trpc.group/trpc-go/trpc-go"
+    server "trpc.group/trpc-go/trpc-go/server"
 )
 func main() {
     s := trpc.NewServer(server.WithEnvName("test"), server.WithAddress("127.0.0.1:8001"))
