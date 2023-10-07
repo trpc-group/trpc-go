@@ -1,4 +1,4 @@
-# tRPC-Go framework
+# tRPC-Go Framework
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/trpc.group/trpc-go.svg)](https://pkg.go.dev/github.com/trpc.group/trpc-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/trpc.group/trpc-go/trpc-go)](https://goreportcard.com/report/github.com/trpc.group/trpc-go/trpc-go)
@@ -10,44 +10,52 @@
 
 [English](README.md) | 中文
 
-tRPC-Go 框架是公司统一微服务框架的 golang 版本，主要是以高性能，可插拔，易测试为出发点而设计的 rpc 框架。
+tRPC-Go，作为 [tRPC][] 的 [Go][] 语言版本，是经过大规模线上业务使用验证过的微服务框架，它不仅性能高，而且易于使用和测试。
+
+更多信息见：[快速上手][quick start] 以及 [详细文档][docs] 
 
 ## 整体架构
 
 ![架构图](.resources/overall_zh_CN.png)
 
-- 一个 server 进程内支持启动多个 service 服务，监听多个地址。
-- 所有部件全都可插拔，内置 transport 等基本功能默认实现，可替换，其他组件需由第三方业务自己实现并注册到框架中。
-- 所有接口全都可 mock，使用 gomock&mockgen 生成 mock 代码，方便测试。
-- 支持任意的第三方业务协议，只需实现业务协议打解包接口即可。默认支持 trpc 和 http 协议，随时切换，无差别开发 cgi 与后台 server。
-- 提供生成代码模板的 trpc 命令行工具。
+tRPC-Go 具有以下特点：
 
-## 插件管理
-
-- 框架插件化管理设计只提供标准接口及接口注册能力。
-- 外部组件由第三方业务作为桥梁把系统组件按框架接口包装起来，并注册到框架中。
-- 业务使用时，只需要 import 包装桥梁路径。
-- 具体插件原理可参考 [plugin](plugin) 。
-
-## 生成工具
-
-参考 [trpc-group/trpc-go-cmdline](https://github.com/trpc-group/trpc-go-cmdline) 进行安装及使用。
-
-## 服务协议
-
-- trpc 框架支持任意的第三方协议，同时默认支持了 trpc 和 http 协议
-- 只需在配置文件里面指定 protocol 字段等于 http 即可启动一个 cgi 服务
-- 使用同样的服务描述协议，完全一模一样的代码，可以随时切换 trpc 和 http，达到真正意义上无差别开发 cgi 和后台服务的效果
-- 请求数据使用 http post 方法携带，并解析到 method 里面的 request 结构体，通过 http header content-type(application/json or application/pb) 指定使用 pb 还是 json
-- 第三方自定义业务协议可以参考 [codec](codec)
+- 一个进程内可以同时启动多个服务，并监听多个地址。
+- 所有的组件都是可插拔的，内置了各种基本功能的默认实现，可以进行替换。其他组件可以由第三方实现并注册到框架中。
+- 所有的接口都可以进行模拟测试，使用 gomock&mockgen 生成 mock 代码，方便进行测试。
+- 框架支持任意的第三方协议，只需要实现协议的打包和解包接口即可。默认支持 trpc 和 http 协议，可以随时切换。
+- 提供了 [trpc 命令行工具][trpc-go-cmdline] 用于生成代码模板。
 
 ## 相关文档
 
-- [框架设计文档](https://trpc.group/trpc-go/trpc-wiki)
-- [trpc 工具详细说明](https://trpc.group/trpc-go/trpc-go-cmdline)
-- [helloworld 开发指南](examples/helloworld)
-- [第三方协议实现 demo](https://trpc.group/trpc-go/trpc-codec)
+- [快速上手][quick start] 以及 [详细文档][docs]
+- 各个目录下的 README 文档
+- [trpc 命令行工具][trpc-go-cmdline]
+- [helloworld 开发指南][helloworld]
+- [各种特性的示例文档][features]
+
+## 相关生态
+
+- [第三方协议插件][go-codec]
+- [第三方拦截器插件][go-filter]
+- [第三方数据库插件][go-database]
+- [更多生态...][ecosystem]
 
 ## 如何贡献
 
-有兴趣的同学可以先看一下 [贡献指南](CONTRIBUTING.md)，再看看 Issue 里尚未认领的问题，自己认领任务，一起为 tRPC-Go 做贡献。
+如果您有兴趣进行贡献，请查阅[贡献指南][contributing]并检查 [issues][] 中未分配的问题。认领一个任务，让我们一起为 tRPC-Go 做出贡献。
+
+[Go]: https://golang.org
+[tRPC]: https://github.com/trpc-group/trpc
+[trpc-go-cmdline]: https://github.com/trpc-group/trpc-go-cmdline
+[docs]: /docs/
+[quick start]: /docs/quick_start.md
+[go-releases]: https://golang.org/doc/devel/release.html
+[contributing]: CONTRIBUTING.md
+[issues]: https://github.com/trpc-group/trpc-go/issues
+[go-codec]: https://github.com/trpc-ecosystem/go-codec
+[go-filter]: https://github.com/trpc-ecosystem/go-filter
+[go-database]: https://github.com/trpc-ecosystem/go-database
+[ecosystem]: https://github.com/orgs/trpc-ecosystem/repositories
+[helloworld]: /examples/helloworld/
+[features]: /examples/features/
