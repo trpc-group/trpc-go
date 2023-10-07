@@ -9,7 +9,7 @@
 
 开发该插件需要实现以下两个子功能：
 
-- 实现插件依赖配置进行加载，详细说明请参考 [plugin](/plugin/README_CN.md)
+- 实现插件依赖配置进行加载，详细说明请参考 [plugin](/plugin/README_zh_CN.md)
 - 实现 `config.KVConfig` 接口，并将实现注册到 `config` 包
 
 下面以 [trpc-config-etcd](https://github.com/trpc-ecosystem/go-config-etcd) 为例，来介绍相关开发步骤。

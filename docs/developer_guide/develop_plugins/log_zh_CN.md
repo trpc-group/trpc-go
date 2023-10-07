@@ -1,12 +1,12 @@
-# How to Develop a Writer Plugin for Log plugin
+# 怎么为 log 类型的插件开发一个 Writer 插件 
 
-The log package provides a log plugin named "default", which supports configuring multiple Writers in a pluginized manner. 
-This guide will introduce how to develop a Writer plugin that relies on configuration for loading, based on the "default" log plugin provided by the log package.
-The following steps will use the "console" Writer provided by the log package as an example to illustrate the relevant development steps.
+`log` 包提供了一个名为 “default” 的 log 插件， 该插件支持以插件的形式配置多个 Writer。
+本指南将在 “default” log 插件的基础上，介绍如何开发一个依赖配置进行加载的 Writer 插件。
+下面以 `log` 包提供的名为 “console” 的 Writer 为例，来介绍相关开发步骤。
 
-## 1. Determine the Configuration of the Plugin
+## 1. 确定插件的配置
 
-The following is an example of the configuration for setting the "console" Writer plugin to the "default" log plugin with the name "console" in the "trpc_go.yaml" configuration file:
+下面是在 "trpc_go.yaml" 配置文件中为名字是 “default” 的 log 插件设置名字为 “console” 的 Writer 插件的配置示例：
 
 ```yaml
 plugins:
@@ -17,7 +17,7 @@ plugins:
         formatter: console
 ```
 
-The complete configuration is as follows:
+完整的配置如下：
 
 ```go
 // Config is the log config. Each log may have multiple outputs.
@@ -101,7 +101,7 @@ const (
 )
 ```
 
-## 2. Implement the plugin.Factory Interface
+## 2. 实现 `plugin.Factory` 接口
 
 ```go
 // ConsoleWriterFactory is the console writer instance.
@@ -139,7 +139,7 @@ func newConsoleCore(c *OutputConfig) (zapcore.Core, zap.AtomicLevel) {
 }
 ```
 
-## 3. Call `log.RegisterWriter` to Register the plugin with the log Package
+## 3. 调用 `log.RegisterWriter` 把插件自己注册到 `log` 包
 
 ```go
 DefaultConsoleWriterFactory = &ConsoleWriterFactory{}
