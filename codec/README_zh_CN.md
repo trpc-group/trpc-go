@@ -1,12 +1,13 @@
-English | [中文](README_zh_CN.md)
-The `codec` package can support any third-party business communication protocol by simply implementing the relevant interfaces.
-The following introduces the related interfaces of the `codec` package with the server-side protocol processing flow as an example.
-The client-side protocol processing flow is the reverse of the server-side protocol processing flow, and is not described here.
-For information on how to develop third-party business communication protocol plugins, please refer to [here](/docs/developer_guide/develop_plugins/protocol.md).
+[English](README.md) | 中文
+# codec
 
-## Related Interfaces
+`codec` 包可以支持任意的第三方业务通信协议，只需要实现相关接口即可。
+下面以服务端的协议处理流程为例介绍 `codec` 的相关接口， 客户端的协议处理流程与服务端的协议处理流程相反，这里不再赘述。
+关于怎么开发第三方业务通信协议的插件， 可参考[这里](/docs/developer_guide/develop_plugins/protocol_zh_CN.md)。
 
-The following diagram shows the server-side protocol processing flow, which includes the related interfaces in the `codec` package.
+## 相关接口
+
+下图展示了服务端的协议处理流程，其中包含了`codec`包中的相关接口。
 
 ```ascii
                               package                     req body                                                       req struct
@@ -22,7 +23,7 @@ The following diagram shows the server-side protocol processing flow, which incl
 +-------+                                +---------------+           +---------------------+       +--------------------+
 ```
 
-- `codec.Framer` reads binary data from the network.
+- `codec.Framer` 读取来自网络的的二进制数据。
 
 ```go
 // Framer defines how to read a data frame.
@@ -31,7 +32,7 @@ type Framer interface {
 }
 ```
 
-- `code.Codec`: Provides the `Decode` and `Encode` interfaces, which parse the binary request body from the complete binary network data package and package the binary response body into a complete binary network data package, respectively.
+- `code.Codec`：提供 `Decode` 和 `Encode` 接口， 分别从完整的二进制网络数据包解析出二进制请求包体，和把二进制响应包体打包成一个完整的二进制网络数据。
 
 ```go
 // Codec defines the interface of business communication protocol,
@@ -52,9 +53,7 @@ type Codec interface {
 }
 ```
 
-- `codec.Compressor`: Provides the `Decompress` and `Compress` interfaces. 
-Currently, gzip and snappy type `Compressor` are supported. 
-You can define your own `Compressor` and register it to the `codec` package.
+- `codec.Compressor`：提供 `Decompress` 和 `Compress` 接口，目前支持 gzip 和 snappy 类型的 `Compressor`，你可以定义自己需要的 `Compressor` 注册到 `codec` 包
 
 ```go
 // Compressor is body compress and decompress interface.
@@ -64,9 +63,7 @@ type Compressor interface {
 }
 ```
 
-- `codec.Serializer`: Provides the `Unmarshal` and `Marshal` interfaces. 
-Currently, protobuf, json, fb, and xml types of `Serializer` are supported. 
-You can define your own `Serializer` and register it to the `codec` package.
+- `codec.Serializer`：提供 `Unmarshal` 和 `Marshal` 接口，目前支持 protobuf、json、fb 和 xml 类型的 `Serializer`，你可以定义自己需要的 `Serializer` 注册到 `codec` 包。
 
 ```go
 // Serializer defines body serialization interface.
