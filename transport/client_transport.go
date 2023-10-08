@@ -14,6 +14,11 @@ import (
 	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
 )
 
+func init() {
+	RegisterClientTransport(transportName, DefaultClientTransport)
+	RegisterClientStreamTransport(transportName, DefaultClientStreamTransport)
+}
+
 // DefaultClientTransport is the default client transport.
 var DefaultClientTransport = NewClientTransport()
 

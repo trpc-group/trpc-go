@@ -36,9 +36,9 @@ tRPC-Go has the following features:
 
 ## Ecosystem
 
-- [third-party protocol plugins][go-codec]
-- [third-party filter plugins][go-filter]
-- [third-party database plugins][go-database]
+- [codec plugins][go-codec]
+- [filter plugins][go-filter]
+- [database plugins][go-database]
 - [more...][ecosystem]
 
 ## How to Contribute
