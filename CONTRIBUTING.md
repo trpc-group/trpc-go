@@ -38,7 +38,7 @@ When opening an issue, make sure to answer these five questions:
 4. What did you expect to see?
 5. What did you see instead?
 
-For change proposals, see Proposing Changes To [tRPC-Go-Proposals](https://github.com/trpc-group/proposal).
+For change proposals, see Proposing Changes To [tRPC-Go-Proposals](https://github.com/trpc-group/trpc/tree/main/proposal).
 
 ## Contributing code
 
@@ -160,7 +160,7 @@ issue 会被分类以管理工作流程。
 4. 您期望看到什么？
 5. 您实际看到的是什么？
 
-关于变更提案，请参阅向 [tRPC-Go-Proposals](https://github.com/trpc-group/proposal) 提议变更。
+关于变更提案，请参阅向 [tRPC-Go-Proposals](https://github.com/trpc-group/trpc/tree/main/proposal) 提议变更。
 
 ## 贡献代码
 
