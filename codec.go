@@ -19,6 +19,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/attachment"
+	icodec "trpc.group/trpc-go/trpc-go/internal/codec"
 	"trpc.group/trpc-go/trpc-go/transport"
 
 	"google.golang.org/protobuf/proto"
@@ -305,7 +306,9 @@ func msgWithRequestProtocol(msg codec.Msg, req *trpcpb.RequestProtocol, attm []b
 	msg.WithCallerServiceName(string(req.GetCaller()))
 	msg.WithCalleeServiceName(string(req.GetCallee()))
 	// set server handler method name
-	msg.WithServerRPCName(string(req.GetFunc()))
+	rpcName := string(req.GetFunc())
+	msg.WithServerRPCName(rpcName)
+	msg.WithCalleeMethod(icodec.MethodFromRPCName(rpcName))
 	// set body serialization type
 	msg.WithSerializationType(int(req.GetContentType()))
 	// set body compression type
