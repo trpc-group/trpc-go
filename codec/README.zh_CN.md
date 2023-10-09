@@ -3,7 +3,7 @@
 
 `codec` 包可以支持任意的第三方业务通信协议，只需要实现相关接口即可。
 下面以服务端的协议处理流程为例介绍 `codec` 的相关接口， 客户端的协议处理流程与服务端的协议处理流程相反，这里不再赘述。
-关于怎么开发第三方业务通信协议的插件， 可参考[这里](/docs/developer_guide/develop_plugins/protocol_zh_CN.md)。
+关于怎么开发第三方业务通信协议的插件， 可参考[这里](/docs/developer_guide/develop_plugins/protocol.zh_CN.md)。
 
 ## 相关接口
 

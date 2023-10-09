@@ -230,7 +230,7 @@ tRPC-Go 推荐在写服务端业务逻辑时，使用 tRPC-Go 封装的 `errors.
 
 # 框架配置
 
-对于服务端，必须要配置框架配置中“global”，“server”两部分的配置，配置参数的具体含义，取值范围等信息请参考 [框架配置](/docs/user_guide/framework_conf_zh_cn.md) 文档。“plugins”部分的配置取决于所选的插件，具体参考下面的插件选择章节。
+对于服务端，必须要配置框架配置中“global”，“server”两部分的配置，配置参数的具体含义，取值范围等信息请参考 [框架配置](/docs/user_guide/framework_conf.zh_CN.md) 文档。“plugins”部分的配置取决于所选的插件，具体参考下面的插件选择章节。
 
 # 插件选择
 
@@ -269,19 +269,19 @@ tRPC-Go 从设计之初就考虑了框架的易测性，在通过 pb 生成桩�
 
 ## 超时控制
 
-tRPC-Go 为 RPC 调用提供了 3 种超时机制控制：链路超时，消息超时和调用超时。关于这 3 种超时机制的原理介绍和相关配置，请参考 [tRPC-Go 超时控制](/docs/user_guide/timeout_control_zh_CN.md)。
+tRPC-Go 为 RPC 调用提供了 3 种超时机制控制：链路超时，消息超时和调用超时。关于这 3 种超时机制的原理介绍和相关配置，请参考 [tRPC-Go 超时控制](/docs/user_guide/timeout_control.zh_CN.md)。
 
 此功能需要协议的支持（协议需要携带 timeout 元数据到下游），tRPC 协议，泛 HTTP RPC 协议均支持超时控制功能。其
 
 ## 链路透传
 
-tRPC-Go 框架提供在客户端与服务端之间透传字段，并在整个调用链路透传下去的机制。关于链路透传的机制和使用，请参考 [tRPC-Go 链路透传](/docs/user_guide/metadata_transmission_zh_CN.md)。
+tRPC-Go 框架提供在客户端与服务端之间透传字段，并在整个调用链路透传下去的机制。关于链路透传的机制和使用，请参考 [tRPC-Go 链路透传](/docs/user_guide/metadata_transmission.zh_CN.md)。
 
 此功能需要协议支持元数据下发功能，tRPC 协议，泛 HTTP RPC 协议均支持链路透传功能。
 
 ## 反向代理
 
-tRPC-Go 为类似做反向代理的程序提供了完成透传二进制 body 数据，不进行序列化、反序列化处理的机制，以提升转发效率。关于反向代理的原理和示例程序，请参考 [tRPC-Go 反向代理](/docs/user_guide/reverse_proxy_zh_CN.md)。
+tRPC-Go 为类似做反向代理的程序提供了完成透传二进制 body 数据，不进行序列化、反序列化处理的机制，以提升转发效率。关于反向代理的原理和示例程序，请参考 [tRPC-Go 反向代理](/docs/user_guide/reverse_proxy.zh_CN.md)。
 
 ## 自定义压缩方式
 
@@ -293,4 +293,4 @@ tRPC-Go 自定义 RPC 消息体的序列化、反序列化方式，业务可以�
 
 ## 设置服务最大协程数
 
-tRPC-Go 支持服务级别的同/异步包处理模式，对于异步模式采用协程池来提升协程使用效率和性能。用户可以通过框架配置和 Option 配置两种方式来设置服务的最大协程数，具体请参考 [tPRC-Go 框架配置](/docs/user_guide/framework_conf_zh_CN.md) 章节的 service 配置。
+tRPC-Go 支持服务级别的同/异步包处理模式，对于异步模式采用协程池来提升协程使用效率和性能。用户可以通过框架配置和 Option 配置两种方式来设置服务的最大协程数，具体请参考 [tPRC-Go 框架配置](/docs/user_guide/framework_conf.zh_CN.md) 章节的 service 配置。

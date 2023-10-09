@@ -1,4 +1,4 @@
-English | [中文](protocol_zh_CN.md)
+English | [中文](protocol.zh_CN.md)
 
 # How to develop a protocol type plugin
 
