@@ -4,9 +4,9 @@
 该插件将上报发起 RPC 时，client 端发送请求到 server 端收到回复的耗时， 以及 server 端收到请求到回复 client 的耗时。
 开发该插件需要实现以下三个子功能：
 
-- 实现插件依赖配置进行加载，详细说明请参考 [plugin](/plugin/README_CN.md)
-- 实现让监控指标上报到外部平台，详细说明请参考 [metrics](/metrics/README_CN.md)
-- 实现在拦截器中上报监控指标，详细说明请参考 [filter](/filter/README_CN.md)
+- 实现插件依赖配置进行加载，详细说明请参考 [plugin](/plugin/README.zh_CN.md)
+- 实现让监控指标上报到外部平台，详细说明请参考 [metrics](/metrics/README.zh_CN.md)
+- 实现在拦截器中上报监控指标，详细说明请参考 [filter](/filter/README.zh_CN.md)
 
 下面以 [trpc-metrics-prometheus](https://github.com/trpc-ecosystem/go-metrics-prometheus) 为例，来介绍相关开发步骤。
 

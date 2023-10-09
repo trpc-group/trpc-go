@@ -11,4 +11,4 @@ tRPC 协议支持通过简单 RPC 发送附件。
 
 - 考虑使用 tRPC 流式分割大二进制数据，其中二进制数据被分块并通过多个消息进行流式传输，更多详细信息，可以参考[流式传输数据的例子](../../examples/features/stream)。
 
-- 考虑使用其他协议如[流式 http](https://gist.github.com/CMCDragonkai/6bfade6431e9ffb7fe88),  更多使用上的例子，可参考 [客户端服务端收发 HTTP chunked](../../http/README_CN.md#%E5%AE%A2%E6%88%B7%E7%AB%AF%E6%9C%8D%E5%8A%A1%E7%AB%AF%E6%94%B6%E5%8F%91-http-chunked) 。
+- 考虑使用其他协议如[流式 http](https://gist.github.com/CMCDragonkai/6bfade6431e9ffb7fe88),  更多使用上的例子，可参考 [客户端服务端收发 HTTP chunked](../../http/README.zh_CN.md#%E5%AE%A2%E6%88%B7%E7%AB%AF%E6%9C%8D%E5%8A%A1%E7%AB%AF%E6%94%B6%E5%8F%91-http-chunked) 。

@@ -1,4 +1,4 @@
-English | [中文](config_zh_CN.md)
+English | [中文](config.zh_CN.md)
 
 # How to develop a config type plugin
 

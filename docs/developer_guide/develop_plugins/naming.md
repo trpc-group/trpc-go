@@ -1,8 +1,8 @@
-English | [中文](naming_zh_CN.md)
+English | [中文](naming.zh_CN.md)
 
 ## Background
 
-Like most other modules in tRPC-Go, the name service module also supports plugin. This article assumes that you have read the [README](/naming/README_zh_CN.md) of the naming package.
+Like most other modules in tRPC-Go, the name service module also supports plugin. This article assumes that you have read the [README](/naming/README.zh_CN.md) of the naming package.
 
 ## Pluggable Design
 

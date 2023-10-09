@@ -2,7 +2,7 @@
 
 ## 前言
 
-像 tRPC-Go 大部分其他模块一样，名字服务模块也支持插件化。本文假定你已经阅读了 naming 包的 [README](/naming/README_zh_CN.md)。
+像 tRPC-Go 大部分其他模块一样，名字服务模块也支持插件化。本文假定你已经阅读了 naming 包的 [README](/naming/README.zh_CN.md)。
 
 ## 插件化设计
 

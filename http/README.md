@@ -30,7 +30,7 @@
     - [Client and Server Sending and Receiving HTTP Chunked](#client-and-server-sending-and-receiving-http-chunked)
 
 
-# tRPC-Go HTTP protocol [中文主页](README_CN.md)
+# tRPC-Go HTTP protocol [中文主页](README.zh_CN.md)
 
 The tRPC-Go framework supports building three types of HTTP-related services:
 

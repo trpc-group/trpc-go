@@ -1,4 +1,4 @@
-English | [中文](README_zh_CN.md)
+English | [中文](README.zh_CN.md)
 The `codec` package can support any third-party business communication protocol by simply implementing the relevant interfaces.
 The following introduces the related interfaces of the `codec` package with the server-side protocol processing flow as an example.
 The client-side protocol processing flow is the reverse of the server-side protocol processing flow, and is not described here.

@@ -1,4 +1,4 @@
-# RPCZ [中文](README_zh_CN.md)
+# RPCZ [中文](README.zh_CN.md)
 
 RPCZ is a tool for monitoring RPC, logging various events that occur in a single rpc, such as serialization/deserialization, compression/decompression and execution of interceptors.
 It allows users to configure the events that need to be logged, and users can view the logged events through the admin tool, which can help them locate problems quickly and accurately.

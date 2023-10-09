@@ -1,4 +1,4 @@
-English | [中文](./flatbuffers_zh_CN.md)
+English | [中文](./flatbuffers.zh_CN.md)
 
 # Introduction
 
@@ -6,11 +6,11 @@ This section shows how to call flatbuffers services in tRPC-Go.
 
 # Principles
 
-See [tRPC-Go builds flatbuffers service](/docs/user_guide/server/flatbuffers_zh_CN.md).
+See [tRPC-Go builds flatbuffers service](/docs/user_guide/server/flatbuffers.zh_CN.md).
 
 # 示例
 
-In examples from [tRPC-Go builds flatbuffers service](/docs/user_guide/server/flatbuffers_zh_CN.md), we can generate the client. The project structure is as follows:
+In examples from [tRPC-Go builds flatbuffers service](/docs/user_guide/server/flatbuffers.zh_CN.md), we can generate the client. The project structure is as follows:
 
 ```shell
 ├── cmd/client/main.go # client
