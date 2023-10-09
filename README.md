@@ -8,7 +8,7 @@
 [![Tests](https://github.com/trpc.group/trpc-go/actions/workflows/prc.yaml/badge.svg)](https://github.com/trpc.group/trpc-go/actions/workflows/prc.yaml)
 [![Coverage](https://codecov.io/gh/trpc.group/trpc-go/branch/main/graph/badge.svg)](https://app.codecov.io/gh/trpc.group/trpc-go/tree/main)
 
-English | [中文](README_CN.md)
+English | [中文](README.zh_CN.md)
 
 tRPC-Go, as the [Go][] language implementation of [tRPC][], is a battle-tested microservices framework that has been extensively validated in production environments. It not only delivers high performance but also offers ease of use and testability.
 

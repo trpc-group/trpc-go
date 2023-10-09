@@ -1,4 +1,4 @@
-English | [中文](./reverse_proxy_zh_CN.md.md)
+English | [中文](./reverse_proxy.zh_CN.md.md)
 
 # tRPC-Go Reverse Proxy
 

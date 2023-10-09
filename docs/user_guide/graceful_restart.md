@@ -1,4 +1,4 @@
-English | [中文](./graceful_restart_zh_CN.md)
+English | [中文](./graceful_restart.zh_CN.md)
 
 # Introduction
 

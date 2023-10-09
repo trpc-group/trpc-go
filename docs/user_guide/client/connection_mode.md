@@ -1,6 +1,6 @@
 # tRPC-Go client connection mode
 
-English | [中文](./connection_mode_zh_CN.md)
+English | [中文](./connection_mode.zh_CN.md)
 
 ## Introduction
 

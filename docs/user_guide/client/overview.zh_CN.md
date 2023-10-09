@@ -18,15 +18,15 @@ tRPC-Go 框架提供了多种类型的服务调用，我们把服务调用按协
 
 tRPC-Go 提供了以下内置协议的服务调用：
 
-- [调用 tRPC 服务](/docs/quick_start_zh_CN.md)
+- [调用 tRPC 服务](/docs/quick_start.zh_CN.md)
 
 **第三方协议**：
 
-tRPC-Go 提供了丰富的协议插件，供客户端实现和第三方协议服务进行对接。同时框架也支持用户自定义协议插件。关于协议插件的开发，请参考 [这里](/docs/developer_guide/develop_plugins/protocol_zh_CN.md)，常见的第三方协议可以参考 [trpc-ecosystem/go-codec](https://github.com/trpc-ecosystem/go-codec)
+tRPC-Go 提供了丰富的协议插件，供客户端实现和第三方协议服务进行对接。同时框架也支持用户自定义协议插件。关于协议插件的开发，请参考 [这里](/docs/developer_guide/develop_plugins/protocol.zh_CN.md)，常见的第三方协议可以参考 [trpc-ecosystem/go-codec](https://github.com/trpc-ecosystem/go-codec)
 
 **存储协议**：
 
-tRPC-Go 对常见数据库的访问做了封装，通过以服务访问的方式来进行数据库操作，具体可以参考 [tRPC-Go 调用存储服务](/docs/developer_guide/develop_plugins/storage_CN.md)。
+tRPC-Go 对常见数据库的访问做了封装，通过以服务访问的方式来进行数据库操作，具体可以参考 [tRPC-Go 调用存储服务](/docs/developer_guide/develop_plugins/storage.zh_CN.md)。
 
 **消息队列**：
 
@@ -55,10 +55,10 @@ tRPC-Go 提供了对常见消息队列的生产者操作做了封装，通过以
 tRPC-Go 除了为各种协议提供了接口调用外，还为服务的调用提供了丰富的服务治理能力，实现与服务治理组件的对接，开发人员只需要关注业务自身逻辑即可。框架通过插件可以实现以下服务治理能力：
 
 - 服务寻址
-- [调用超时控制](/docs/user_guide/timeout_control_zh_CN.md)
+- [调用超时控制](/docs/user_guide/timeout_control.zh_CN.md)
 - [拦截器机制](/docs/developer_guide/develop_plugins/interceptor_zh-CN.md)，实现包括，调用链跟踪，监控上报，[重试对冲](https://github.com/trpc-ecosystem/go-filter/tree/main/slime)....
-- [远程日志](/log/README_zh_CN.md)
-- [配置中心](/config/README_zh_CN.md)
+- [远程日志](/log/README.zh_CN.md)
+- [配置中心](/config/README.zh_CN.md)
 - ......
 
 # 客户端开发
@@ -289,11 +289,11 @@ tRPC-Go 采用 GoDoc 来管理 tRPC-Go 框架 API 文档的。通过查阅 [tRPC
 
 ## 错误码
 
-tRPC-Go 对错误码的数据类型和含义都做了规划，对于常见错误码的问题定位也都做了解释。具体请参考 [tRPC-Go 错误码手册](/docs/user_guide/error_codes_zh_cn.md)。
+tRPC-Go 对错误码的数据类型和含义都做了规划，对于常见错误码的问题定位也都做了解释。具体请参考 [tRPC-Go 错误码手册](/docs/user_guide/error_codes.zh_CN.md)。
 
 # 客户端配置
 
-客户端配置可以通过框架配置文件中的“client”部分来配置，配置分为“全局服务配置”和“指定服务配置”。具体配置的含义，取值范围和默认值请参考 [tRPC-Go 框架配置](/docs/user_guide/framework_conf_zh_CN.md)。
+客户端配置可以通过框架配置文件中的“client”部分来配置，配置分为“全局服务配置”和“指定服务配置”。具体配置的含义，取值范围和默认值请参考 [tRPC-Go 框架配置](/docs/user_guide/framework_conf.zh_CN.md)。
 
 以下是 client 配置的一个典型示例：
 
@@ -478,7 +478,7 @@ func main() {
 - 整体接口：名字服务作为整体注册到框架，作为一个 selector 插件。整体接口的优势在于注册到框架比较简单，框架不关心名字服务流程中各个模块的具体实现，插件可以整体控制名字服务寻址的整个流程，方便做性能优化和逻辑控制。
 - 分模块接口：使用框架默认提供的 selector，服务发现、负载均衡、服务路由、熔断器等分别注册到框架，框架组合这些模块。分模块优势在于更加的灵活，用户可以根据自己的需要对不同模块进行选择然后自由组合，但同时会增加插件的实现复杂度。
 
-框架支持用户开发新的名字服务插件。名字服务插件的开发请参考 [tRPC-Go 开发名字服务插件](/docs/developer_guide/develop_plugins/naming_zh_CN.md)。
+框架支持用户开发新的名字服务插件。名字服务插件的开发请参考 [tRPC-Go 开发名字服务插件](/docs/developer_guide/develop_plugins/naming.zh_CN.md)。
 
 # 插件选择
 
@@ -593,11 +593,11 @@ func (s *serverImpl) Call(ctx context.Context, req *pb.Req) (*pb.Rsp, error) {
 
 ## 超时控制
 
-tRPC-Go 框架为服务的调用提供了调用超时机制。关于调用超时机制的介绍和相关配置，请参考 [tRPC-Go 超时控制](/docs/user_guide/timeout_control_zh_CN.md) 。
+tRPC-Go 框架为服务的调用提供了调用超时机制。关于调用超时机制的介绍和相关配置，请参考 [tRPC-Go 超时控制](/docs/user_guide/timeout_control.zh_CN.md) 。
 
 ## 链路透传
 
-tRPC-Go 框架提供在客户端与服务端之间透传字段，并在整个调用链路透传下去的机制。关于链路透传的机制和使用，请参考 [tRPC-Go 链路透传](/docs/user_guide/metadata_transmission_zh_CN.md)。此功能需要协议支持元数据下发功能，tRPC 协议，泛 HTTP RPC 协议，taf 协议均支持链路透传功能。其它协议请联系各自协议负责人。
+tRPC-Go 框架提供在客户端与服务端之间透传字段，并在整个调用链路透传下去的机制。关于链路透传的机制和使用，请参考 [tRPC-Go 链路透传](/docs/user_guide/metadata_transmission.zh_CN.md)。此功能需要协议支持元数据下发功能，tRPC 协议，泛 HTTP RPC 协议，taf 协议均支持链路透传功能。其它协议请联系各自协议负责人。
 
 ## 自定义压缩
 
