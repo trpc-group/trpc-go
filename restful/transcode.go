@@ -16,8 +16,9 @@ import (
 	"sync"
 
 	"google.golang.org/protobuf/proto"
+
 	"trpc.group/trpc-go/trpc-go/errs"
-	"trpc.group/trpc-go/trpc-go/restful/dat"
+	"trpc.group/trpc-go/trpc-go/internal/dat"
 )
 
 const (

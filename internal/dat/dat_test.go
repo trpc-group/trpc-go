@@ -8,7 +8,7 @@ package dat_test
 import (
 	"testing"
 
-	"trpc.group/trpc-go/trpc-go/restful/dat"
+	"trpc.group/trpc-go/trpc-go/internal/dat"
 )
 
 var fps = [][]string{
