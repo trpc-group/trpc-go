@@ -25,7 +25,7 @@ type Attachment struct {
 	Response io.Reader
 }
 
-// NoopAttachment is a empty attachment.
+// NoopAttachment is an empty attachment.
 type NoopAttachment struct{}
 
 // Read implements the io.Reader interface, which always returns (0, io.EOF)
@@ -33,20 +33,20 @@ func (a NoopAttachment) Read(_ []byte) (n int, err error) {
 	return 0, io.EOF
 }
 
-// GetClientRequestAttachment returns client's Request Attachment from msg.
-func GetClientRequestAttachment(msg codec.Msg) io.Reader {
+// ClientRequestAttachment returns client's Request Attachment from msg.
+func ClientRequestAttachment(msg codec.Msg) (io.Reader, bool) {
 	if a, _ := msg.CommonMeta()[ClientAttachmentKey{}].(*Attachment); a != nil {
-		return a.Request
+		return a.Request, true
 	}
-	return NoopAttachment{}
+	return nil, false
 }
 
-// GetServerResponseAttachment returns server's Response Attachment from msg.
-func GetServerResponseAttachment(msg codec.Msg) io.Reader {
+// ServerResponseAttachment returns server's Response Attachment from msg.
+func ServerResponseAttachment(msg codec.Msg) (io.Reader, bool) {
 	if a, _ := msg.CommonMeta()[ServerAttachmentKey{}].(*Attachment); a != nil {
-		return a.Response
+		return a.Response, true
 	}
-	return NoopAttachment{}
+	return nil, false
 }
 
 // SetClientResponseAttachment sets client's Response attachment to msg.
