@@ -1,3 +1,5 @@
+English | [中文](timeout_control.zh_CN.md)
+
 # tRPC-Go Timeout Control
 
 ## Introduction

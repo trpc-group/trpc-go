@@ -1,4 +1,4 @@
-[English](./reverse_proxy.md) | 中文
+[English](reverse_proxy.md) | 中文
 
 # tRPC-Go 反向代理
 
