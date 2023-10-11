@@ -1,6 +1,6 @@
+English | [中文](quick_start.zh_CN.md)
 # Quick Start
 
-English | [中文](quick_start.zh_CN.md)
 
 ## Prerequisites
 

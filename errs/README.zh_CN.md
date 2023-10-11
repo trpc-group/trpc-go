@@ -1,6 +1,6 @@
+[English](./README.md) | 中文
 # tRPC-Go 错误码定义
 
-[English](./README.md) | 中文
 
 ## 前言
 

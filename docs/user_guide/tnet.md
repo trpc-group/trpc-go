@@ -1,6 +1,6 @@
+English | [中文](./tnet.zh_CN.md)
 # Using high-performance networking framework tnet with tRPC-Go
 
-English | [中文](./tnet.zh_CN.md)
 
 ## Introduction
 

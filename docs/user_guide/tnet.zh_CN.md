@@ -1,6 +1,6 @@
+[English](./tnet.md) | 中文
 # tRPC-Go 接入高性能网络库 tnet
 
-[English](./tnet.md) | 中文
 
 ## 前言
 

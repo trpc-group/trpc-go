@@ -1,6 +1,6 @@
+[English](./connection_mode.md) | 中文
 # tRPC-Go 客户端连接模式
 
-[English](./connection_mode.md) | 中文
 
 # 前言
 
