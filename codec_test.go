@@ -308,7 +308,6 @@ func TestServerCodec_EncodeErr(t *testing.T) {
 
 		head := &trpcpb.ResponseProtocol{}
 		err = proto.Unmarshal(rspBuf[16:], head)
-		err = proto.Unmarshal(rspBuf[16:], head)
 		assert.Nil(t, err)
 		assert.Equal(t, int32(errs.RetServerEncodeFail), head.GetRet())
 	})
