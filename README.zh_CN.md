@@ -24,13 +24,13 @@ tRPC-Go 具有以下特点：
 - 所有的组件都是可插拔的，内置了各种基本功能的默认实现，可以进行替换。其他组件可以由第三方实现并注册到框架中。
 - 所有的接口都可以进行模拟测试，使用 gomock&mockgen 生成 mock 代码，方便进行测试。
 - 框架支持任意的第三方协议，只需要实现协议的打包和解包接口即可。默认支持 trpc 和 http 协议，可以随时切换。
-- 提供了 [trpc 命令行工具][trpc-go-cmdline] 用于生成代码模板。
+- 提供了 [trpc 命令行工具][trpc-cmdline] 用于生成代码模板。
 
 ## 相关文档
 
 - [快速上手][quick start] 以及 [详细文档][docs]
 - 各个目录下的 README 文档
-- [trpc 命令行工具][trpc-go-cmdline]
+- [trpc 命令行工具][trpc-cmdline]
 - [helloworld 开发指南][helloworld]
 - [各种特性的示例文档][features]
 
@@ -47,7 +47,7 @@ tRPC-Go 具有以下特点：
 
 [Go]: https://golang.org
 [tRPC]: https://github.com/trpc-group/trpc
-[trpc-go-cmdline]: https://github.com/trpc-group/trpc-go-cmdline
+[trpc-cmdline]: https://github.com/trpc-group/trpc-cmdline
 [docs]: /docs/
 [quick start]: /docs/quick_start.md
 [go-releases]: https://golang.org/doc/devel/release.html

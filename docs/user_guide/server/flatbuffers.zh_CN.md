@@ -25,7 +25,7 @@
 ![flatbuffers](/.resources/user_guide/server/flatbuffers/flatbuffers_zh_CN.png)
 
 # 示例
-首先安装最新版本 [trpc-go-cmdline](https://github.com/trpc-group/trpc-go-cmdline) 工具
+首先安装最新版本 [trpc-cmdline](https://github.com/trpc-group/trpc-cmdline) 工具
 
 然后使用该工具来生成 flatbuffers 对应的桩代码，目前已经支持单发单收、服务端/客户端流式、双向流式等
 
@@ -36,7 +36,7 @@
 namespace trpc.testapp.greeter; // 相当于 protobuf 中的 package
 
 // 相当于 protobuf 的 go_package 声明
-// 注意：attribute 本身是 flatbuffers 的标准语法，里面加 "go_package=xxx" 这种写法则是通过 trpc-go-cmdline 中实现的自定义支持
+// 注意：attribute 本身是 flatbuffers 的标准语法，里面加 "go_package=xxx" 这种写法则是通过 trpc-cmdline 中实现的自定义支持
 attribute "go_package=github.com/trpcprotocol/testapp/greeter";
 
 table HelloReply { // table 相当于 protobuf 中的 message
@@ -223,7 +223,7 @@ req.Message() // 访问 req 中的 message 字段
 # FAQ
 ##  Q1: .fbs 文件中 include 了其他文件，如何生成桩代码？
 
-参考 https://github.com/trpc-group/trpc-go-cmdline/tree/main/testcase/flatbuffers 中的下面几个使用示例：
+参考 https://github.com/trpc-group/trpc-cmdline/tree/main/testcase/flatbuffers 中的下面几个使用示例：
 
 - 2-multi-fb-same-namespace: 在同一目录下有多个 .fbs 文件，每个 .fbs 文件的 namespace 都是一样的（flatbuffers 中的 namespace 等同于 protobuf 中的 package 语句），然后其中一个主文件 include 了其他 .fbs 文件
 - 3-multi-fb-diff-namespace: 在同一个目录下有多个 .fbs 文件，每个 .fbs 文件的 namespace 不一样，比如定义 RPC 的主文件中引用了不同 namespace 中的类型
