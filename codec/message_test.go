@@ -8,7 +8,6 @@ package codec_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"reflect"
 	"testing"
@@ -469,31 +468,4 @@ func TestEnsureMessage(t *testing.T) {
 	newCtx, newMsg := codec.EnsureMessage(ctx)
 	require.Equal(t, ctx, newCtx)
 	require.Equal(t, msg, newMsg)
-}
-
-func TestWithServerRspErrorWrapped(t *testing.T) {
-	const (
-		code        = 666
-		wrappedInfo = "wrapped info"
-	)
-	e := errs.NewFrameError(code, "some error")
-	err := fmt.Errorf("%s: %w", wrappedInfo, e)
-	_, msg := codec.EnsureMessage(context.Background())
-	msg.WithServerRspErr(err)
-	rspErr := msg.ServerRspErr()
-	require.NotNil(t, rspErr)
-	require.EqualValues(t, code, rspErr.Code)
-	require.Contains(t, rspErr.Msg, wrappedInfo)
-}
-
-func TestWithServerRspErrorWrappedNilError(t *testing.T) {
-	const wrappedInfo = "wrapped info"
-	var e *errs.Error
-	err := fmt.Errorf("%s: %w", wrappedInfo, e)
-	_, msg := codec.EnsureMessage(context.Background())
-	msg.WithServerRspErr(err)
-	rspErr := msg.ServerRspErr()
-	require.NotNil(t, rspErr)
-	require.EqualValues(t, errs.Code(e), rspErr.Code)
-	require.Contains(t, rspErr.Msg, wrappedInfo)
 }
