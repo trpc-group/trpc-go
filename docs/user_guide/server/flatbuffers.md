@@ -1,4 +1,4 @@
-English | [中文](./flatbuffers.zh_CN.md)
+English | [中文](flatbuffers.zh_CN.md)
 
 # Background
 

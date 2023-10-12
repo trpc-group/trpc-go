@@ -20,10 +20,10 @@ import (
 func TestAttachment(t *testing.T) {
 	attm := NewAttachment(bytes.NewReader([]byte("attachment")))
 	require.Equal(t, attachment.NoopAttachment{}, attm.Response())
-
 	msg := codec.Message(context.Background())
 	setAttachment(msg, &attm.attachment)
-	attcher := attachment.GetClientRequestAttachment(msg)
+	attcher, ok := attachment.ClientRequestAttachment(msg)
+	require.True(t, ok)
 	bts, err := io.ReadAll(attcher)
 	require.Nil(t, err)
 	require.Equal(t, []byte("attachment"), bts)

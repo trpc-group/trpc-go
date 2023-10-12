@@ -19,6 +19,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/attachment"
+	icodec "trpc.group/trpc-go/trpc-go/internal/codec"
 	"trpc.group/trpc-go/trpc-go/transport"
 
 	"google.golang.org/protobuf/proto"
@@ -305,7 +306,9 @@ func msgWithRequestProtocol(msg codec.Msg, req *trpcpb.RequestProtocol, attm []b
 	msg.WithCallerServiceName(string(req.GetCaller()))
 	msg.WithCalleeServiceName(string(req.GetCallee()))
 	// set server handler method name
-	msg.WithServerRPCName(string(req.GetFunc()))
+	rpcName := string(req.GetFunc())
+	msg.WithServerRPCName(rpcName)
+	msg.WithCalleeMethod(icodec.MethodFromRPCName(rpcName))
 	// set body serialization type
 	msg.WithSerializationType(int(req.GetContentType()))
 	// set body compression type
@@ -326,7 +329,9 @@ func msgWithRequestProtocol(msg codec.Msg, req *trpcpb.RequestProtocol, attm []b
 	}
 	// set call type
 	msg.WithCallType(codec.RequestType(req.GetCallType()))
-	attachment.SetServerRequestAttachment(msg, attm)
+	if len(attm) != 0 {
+		attachment.SetServerRequestAttachment(msg, attm)
+	}
 }
 
 // Encode implements codec.Codec.
@@ -342,9 +347,12 @@ func (s *ServerCodec) Encode(msg codec.Msg, rspBody []byte) ([]byte, error) {
 
 	rspProtocol := getAndInitResponseProtocol(msg)
 
-	attm, err := io.ReadAll(attachment.GetServerResponseAttachment(msg))
-	if err != nil {
-		return nil, fmt.Errorf("encoding attachment : %w", err)
+	var attm []byte
+	if a, ok := attachment.ServerResponseAttachment(msg); ok {
+		var err error
+		if attm, err = io.ReadAll(a); err != nil {
+			return nil, fmt.Errorf("encoding attachment: %w", err)
+		}
 	}
 	rspProtocol.AttachmentSize = uint32(len(attm))
 
@@ -467,9 +475,11 @@ func (c *ClientCodec) Encode(msg codec.Msg, reqBody []byte) (reqBuf []byte, err 
 	frameHead.upgradeProtocol(curProtocolVersion, requestID)
 	msg.WithRequestID(requestID)
 
-	attm, err := io.ReadAll(attachment.GetClientRequestAttachment(msg))
-	if err != nil {
-		return nil, fmt.Errorf("encoding attachment : %w", err)
+	var attm []byte
+	if a, ok := attachment.ClientRequestAttachment(msg); ok {
+		if attm, err = io.ReadAll(a); err != nil {
+			return nil, fmt.Errorf("encoding attachment: %w", err)
+		}
 	}
 	req.AttachmentSize = uint32(len(attm))
 
@@ -700,6 +710,8 @@ func updateMsg(msg codec.Msg, frameHead *FrameHead, rsp *trpcpb.ResponseProtocol
 	frameHead.upgradeProtocol(curProtocolVersion, rsp.RequestId)
 	msg.WithRequestID(rsp.RequestId)
 
-	attachment.SetClientResponseAttachment(msg, attm)
+	if len(attm) != 0 {
+		attachment.SetClientResponseAttachment(msg, attm)
+	}
 	return nil
 }

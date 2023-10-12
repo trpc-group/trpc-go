@@ -1,4 +1,4 @@
-[English](./flatbuffers.md) | 中文
+[English](flatbuffers.md) | 中文
 
 # 前言
 

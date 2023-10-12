@@ -1,3 +1,5 @@
+English | [中文](README.zh_CN.md)
+
 # tRPC-Go Framework
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/trpc.group/trpc-go.svg)](https://pkg.go.dev/github.com/trpc.group/trpc-go)
@@ -8,7 +10,6 @@
 [![Tests](https://github.com/trpc.group/trpc-go/actions/workflows/prc.yaml/badge.svg)](https://github.com/trpc.group/trpc-go/actions/workflows/prc.yaml)
 [![Coverage](https://codecov.io/gh/trpc.group/trpc-go/branch/main/graph/badge.svg)](https://app.codecov.io/gh/trpc.group/trpc-go/tree/main)
 
-English | [中文](README.zh_CN.md)
 
 tRPC-Go, as the [Go][] language implementation of [tRPC][], is a battle-tested microservices framework that has been extensively validated in production environments. It not only delivers high performance but also offers ease of use and testability.
 
@@ -49,7 +50,7 @@ If you're interested in contributing, please take a look at the [contribution gu
 [go-releases]: https://golang.org/doc/devel/release.html
 [tRPC]: https://github.com/trpc-group/trpc
 [trpc-cmdline]: https://github.com/trpc-group/trpc-cmdline
-[docs]: /docs/
+[docs]: /docs/README.md
 [quick start]: /docs/quick_start.md
 [contributing]: CONTRIBUTING.md
 [issues]: https://github.com/trpc-group/trpc-go/issues

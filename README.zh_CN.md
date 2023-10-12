@@ -1,3 +1,5 @@
+[English](README.md) | 中文
+
 # tRPC-Go Framework
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/trpc.group/trpc-go.svg)](https://pkg.go.dev/github.com/trpc.group/trpc-go)
@@ -8,7 +10,6 @@
 [![Tests](https://github.com/trpc.group/trpc-go/actions/workflows/prc.yaml/badge.svg)](https://github.com/trpc.group/trpc-go/actions/workflows/prc.yaml)
 [![Coverage](https://codecov.io/gh/trpc.group/trpc-go/branch/main/graph/badge.svg)](https://app.codecov.io/gh/trpc.group/trpc-go/tree/main)
 
-[English](README.md) | 中文
 
 tRPC-Go，作为 [tRPC][] 的 [Go][] 语言版本，是经过大规模线上业务使用验证过的微服务框架，它不仅性能高，而且易于使用和测试。
 
@@ -48,8 +49,8 @@ tRPC-Go 具有以下特点：
 [Go]: https://golang.org
 [tRPC]: https://github.com/trpc-group/trpc
 [trpc-cmdline]: https://github.com/trpc-group/trpc-cmdline
-[docs]: /docs/
-[quick start]: /docs/quick_start.md
+[docs]: /docs/README.zh_CN.md
+[quick start]: /docs/quick_start.zh_CN.md
 [go-releases]: https://golang.org/doc/devel/release.html
 [contributing]: CONTRIBUTING.md
 [issues]: https://github.com/trpc-group/trpc-go/issues

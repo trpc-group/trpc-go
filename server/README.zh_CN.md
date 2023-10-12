@@ -1,6 +1,7 @@
+[English](README.md)| 中文
+
 # tRPC-Go Server 模块
 
-[English](./README.md)| 中文
 
 ## 背景
 

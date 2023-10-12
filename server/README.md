@@ -1,6 +1,7 @@
+English | [中文](README.zh_CN.md)
+
 # tRPC-Go Server Package
 
-English | [中文](./README.zh_CN.md)
 
 ## Introduction
 
