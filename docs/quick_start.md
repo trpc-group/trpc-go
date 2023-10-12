@@ -1,123 +1,100 @@
-# Quick Start
+---
+title: "Quick Start"
+linkTitle: "Quick Start"
+weight: 10
+date: 2023-08-20
+description: This is a simple working example to get you started with tRPC in Go.
+---
 
-English | [中文](quick_start.zh_CN.md)
+### Prerequisites
 
-## Prerequisites
+- **[Go](https://go.dev/doc/install)**, should be greater or equal than go1.18.
+- **[tRPC cmdline tools](https://github.com/trpc-group/trpc-cmdline)**, to generate stub codes from protobuf.
 
-- **[Go][]**: any one of the **three latest major** [releases][go-releases].
-- **[trpc-go-cmdline][]**: follow the instructions in the [README][trpc-go-cmdline] to install trpc-go-cmdline and its related dependencies correctly.
+### Get Example Code
 
-## Create a Full Project Step by Step
+Example code is part of tRPC-Go repo.
+Clone and change directory to helloworld.
+```bash
+$ git clone --depth 1 git@github.com:trpc-group/trpc-go.git
+$ cd trpc-go/examples/helloworld
+```
 
-* Copy and paste the following to `helloworld.proto`:
+### Run the Example
 
+1. Compile and execute the server code:
+   ```bash
+   $ cd server && go run main.go
+   ```
+2. From a different terminal, compile and execute the client code:
+   ```bash
+   $ cd client && go run main.go
+   ```
+   You will see `Hello world!` displayed as a log.
+
+Congratulations! You’ve just run a client-server application with tRPC-Go.
+
+### Update protobuf
+
+As you can see, service `Greeter` are defined in protobuf `./pb/helloworld.proto` as following:
 ```protobuf
-syntax = "proto3";
-package helloworld;
+service Greeter {
+  rpc Hello (HelloRequest) returns (HelloReply) {}
+}
 
-option go_package = "github.com/some-repo/examples/helloworld";
-
-// HelloRequest is hello request.
 message HelloRequest {
   string msg = 1;
 }
 
-// HelloResponse is hello response.
-message HelloResponse {
+message HelloReply {
+  string msg = 1;
+}
+```
+It has only one method `Hello`, which takes `HelloRequest` as parameter and returns `HelloReply`.
+
+Now, add a new method `HelloAgain`, with the same request and response:
+```protobuf
+service Greeter {
+  rpc Hello (HelloRequest) returns (HelloReply) {}
+  rpc HelloAgain (HelloRequest) returns (HelloReply) {}
+}
+
+
+message HelloRequest {
   string msg = 1;
 }
 
-// HelloWorldService handles hello request and echo message.
-service HelloWorldService {
-  // Hello says hello.
-  rpc Hello(HelloRequest) returns(HelloResponse);
+message HelloReply {
+  string msg = 1;
 }
 ```
 
-* Using [trpc-go-cmdline][] to generate a full project:
-```shell
-$ trpc create -p helloworld.proto -o out
-```
+Regenerate tRPC code by `$ make` in `./pb` directory.
+The Makefile calls `trpc` which should be installed by prerequisites.
 
-Note: `-p` specifies proto file, `-o` specifies the output directory, 
-for more information please run `trpc -h` and `trpc create -h`
+### Update and Run Server and Client
 
-* Enter the output directory and start the server:
-```bash
-$ cd out
-$ go run .
-...
-... trpc service:helloworld.HelloWorldService launch success, tcp:127.0.0.1:8000, serving ...
-...
-```
-
-* Open the output directory in another terminal and start the client:
-```bash
-$ go run cmd/client/main.go 
-... simple  rpc   receive: 
-```
-
-Note: Since the implementation of server service is an empty operation and the client sends empty data, therefore the log shows that the simple rpc receives an empty string.
-
-* Now you may try to modify the service implementation located in `hello_world_service.go` and the client implementation located in `cmd/client/main.go` to create an echo server. You can refer to [helloworld][] for inspiration.
-
-* The generated files are explained below:
-
-```bash
-$ tree
-.
-|-- cmd
-|   `-- client
-|       `-- main.go  # Generated client code.
-|-- go.mod
-|-- go.sum
-|-- hello_world_service.go  # Generated server service implementation.
-|-- hello_world_service_test.go
-|-- main.go  # Server entrypoint.
-|-- stub  # Stub code.
-|   `-- github.com
-|       `-- some-repo
-|           `-- examples
-|               `-- helloworld
-|                   |-- go.mod
-|                   |-- helloworld.pb.go
-|                   |-- helloworld.proto
-|                   |-- helloworld.trpc.go
-|                   `-- helloworld_mock.go
-`-- trpc_go.yaml  # Configuration file for trpc-go.
-```
-
-## Generate of RPC Stub
-
-* Simply add `--rpconly` flag to generate rpc stub instead of a full project:
+At server side `server/main.go`, add codes to implement `HelloAgain`:
 ```go
-$ trpc create -p helloworld.proto -o out --rpconly
-$ tree out
-out
-|-- go.mod
-|-- go.sum
-|-- helloworld.pb.go
-|-- helloworld.trpc.go
-`-- helloworld_mock.go
+func (g Greeter) HelloAgain(ctx context.Context, req *pb.HelloRequest) (*pb.HelloReply, error) {
+	log.Infof("got HelloAgain request: %s", req.Msg)
+	return &pb.HelloReply{Msg: "Hello " + req.Msg + " again!"}, nil
+}
 ```
 
-The following lists some frequently used flags for [trpc-go-cmdline][].
+At client side `client/main.go`, add codes to call `HelloAgain`:
+```go
+	rsp, err = c.HelloAgain(context.Background(), &pb.HelloRequest{Msg: "world"})
+	if err != nil {
+		log.Error(err)
+	}
+	log.Info(rsp.Msg)
+```
 
-* `-f`: Force overwrite the existing code.
-* `-d some-dir`: Search paths for pb files (including dependent pb files), can be specified multiple times.
-* `--mock=false`: Disable generation of mock stub code.
-* `--nogomod=true`: Do not generate go.mod file in the stub code, only effective when --rpconly=true, defaults to false.
+Follow the `Run the Example` section to re-run your example and you will see `Hello world again!` in client log.
 
-For additional flags please run `trpc -h` and `trpc [subcmd] -h`.
+### What's Next
 
-## What's Next
-
-Try [more features][features]. Learn more about [trpc-go-cmdline][]'s [documentation][cmdline-doc].
-
-[Go]: https://golang.org
-[go-releases]: https://golang.org/doc/devel/release.html
-[trpc-go-cmdline]: https://github.com/trpc-group/trpc-go-cmdline
-[cmdline-releases]: https://github.com/trpc-group/trpc-go-cmdline/releases
-[helloworld]: /examples/helloworld/
-[features]: /examples/features/
-[cmdline-doc]: https://github.com/trpc-group/trpc-go-cmdline/tree/main/docs
+- Learn how tRPC works in [What is tRPC](../../../what-is-trpc/).
+- Read [basics tutorial](../basics_tutorial/) to get deeper into tRPC-Go.
+- Explore the [API reference](https://pkg.go.dev/trpc.group/trpc-go).
