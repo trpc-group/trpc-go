@@ -25,13 +25,13 @@ tRPC-Go has the following features:
 - All components are pluggable, with default implementations for various basic functionalities that can be replaced. Other components can be implemented by third parties and registered within the framework.
 - All interfaces can be mock tested using gomock&mockgen to generate mock code, facilitating testing.
 - The framework supports any third-party protocol by implementing the `codec` interfaces for the respective protocol. It defaults to supporting trpc and http protocols and can be switched at any time.
-- It provides the [trpc command-line tool][trpc-go-cmdline] for generating code templates.
+- It provides the [trpc command-line tool][trpc-cmdline] for generating code templates.
 
 ## Related Documentation
 
 - [quick start guide][quick start] and [detailed documentation][docs]
 - readme documents in each directory
-- [trpc command-line tool][trpc-go-cmdline]
+- [trpc command-line tool][trpc-cmdline]
 - [helloworld development guide][helloworld]
 - [example documentation for various features][features]
 
@@ -49,7 +49,7 @@ If you're interested in contributing, please take a look at the [contribution gu
 [Go]: https://golang.org
 [go-releases]: https://golang.org/doc/devel/release.html
 [tRPC]: https://github.com/trpc-group/trpc
-[trpc-go-cmdline]: https://github.com/trpc-group/trpc-go-cmdline
+[trpc-cmdline]: https://github.com/trpc-group/trpc-cmdline
 [docs]: /docs/README.md
 [quick start]: /docs/quick_start.md
 [contributing]: CONTRIBUTING.md
