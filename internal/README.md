@@ -1,3 +1,5 @@
+English | [中文](README.zh_CN.md)
+
 # tRPC-Go framework internal logic
 
 | Type | Description |

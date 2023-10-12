@@ -1,3 +1,5 @@
+English | [中文](log.zh_CN.md)
+
 # How to Develop a Writer Plugin for Log plugin
 
 The log package provides a log plugin named "default", which supports configuring multiple Writers in a pluginized manner. 

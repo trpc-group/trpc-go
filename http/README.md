@@ -1,36 +1,6 @@
-- [tRPC-Go HTTP protocol 中文主页](#trpc-go-http-protocol-中文主页)
-  - [Pan-HTTP standard services](#pan-http-standard-services)
-    - [Server-side](#server-side)
-      - [configuration writing](#configuration-writing)
-      - [code writing](#code-writing)
-        - [single URL registration](#single-url-registration)
-        - [MUX Registration](#mux-registration)
-    - [Client](#client)
-      - [configuration writing](#configuration-writing-1)
-      - [code writing](#code-writing-1)
-  - [Pan HTTP RPC Service](#pan-http-rpc-service)
-    - [Server-side](#server-side-1)
-      - [configuration writing](#configuration-writing-2)
-      - [code writing](#code-writing-2)
-      - [Custom URL path](#custom-url-path)
-      - [Custom error code handling functions](#custom-error-code-handling-functions)
-    - [Client](#client-1)
-      - [configuration writing](#configuration-writing-3)
-      - [code writing](#code-writing-3)
-  - [FAQ](#faq)
-    - [Enable HTTPS for Client and Server](#enable-https-for-client-and-server)
-      - [Mutual Authentication](#mutual-authentication)
-        - [Configuration Only](#configuration-only)
-        - [Code Only](#code-only)
-      - [Client Certificate Not Authenticated](#client-certificate-not-authenticated)
-        - [Configuration Only](#configuration-only-1)
-        - [Code Only](#code-only-1)
-    - [Client uses `io.Reader` for streaming file upload](#client-uses-ioreader-for-streaming-file-upload)
-    - [Reading Response Body Stream Using io.Reader in the Client](#reading-response-body-stream-using-ioreader-in-the-client)
-    - [Client and Server Sending and Receiving HTTP Chunked](#client-and-server-sending-and-receiving-http-chunked)
+English | [中文](README.zh_CN.md)
 
-
-# tRPC-Go HTTP protocol [中文主页](README.zh_CN.md)
+# tRPC-Go HTTP protocol 
 
 The tRPC-Go framework supports building three types of HTTP-related services:
 

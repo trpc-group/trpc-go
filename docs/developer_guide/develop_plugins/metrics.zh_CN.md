@@ -1,3 +1,5 @@
+[English](metrics.md) | 中文
+
 # 怎么开发一个 metric 类型的插件
 
 本指南将介绍如何开发一个依赖配置进行加载的 metric 类型的插件。
