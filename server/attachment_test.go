@@ -24,7 +24,8 @@ func TestAttachment(t *testing.T) {
 	require.Equal(t, attachment.NoopAttachment{}, attm.Request())
 
 	attm.SetResponse(bytes.NewReader([]byte("attachment")))
-	responseAttm := attachment.GetServerResponseAttachment(msg)
+	responseAttm, ok := attachment.ServerResponseAttachment(msg)
+	require.True(t, ok)
 	bts, err := io.ReadAll(responseAttm)
 	require.Nil(t, err)
 	require.Equal(t, []byte("attachment"), bts)
