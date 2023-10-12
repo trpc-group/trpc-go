@@ -1,12 +1,8 @@
----
-title: "Basics Tutorial"
-linkTitle: "Basics Tutorial"
-weight: 20
-date: 2023-08-20
-description: Introduce the development process and features of tRPC-Go.
----
+English | [中文](./basics_tutorial.zh_CN.md)
 
-In [Quick Start](../quick_start/), you have successfully run tRPC-Go helloworld. However, we ignore many details. In this chapter, you will understand the tRPC-Go service development process in more detail. We will introduce in turn:
+## Basics Tutorial
+
+In [Quick Start](./quick_start.md), you have successfully run tRPC-Go helloworld. However, we ignore many details. In this chapter, you will understand the tRPC-Go service development process in more detail. We will introduce in turn:
 - How to define tRPC service by protobuf?
 - How to configure `trpc_go.yaml`?
 - What extension capabilities does tRPC-Go have?
@@ -43,10 +39,10 @@ Note that `Method` has a `{}` at the end, which can also have content. We will s
 
 ### Write Client and Server Code
 
-What protobuf gives is a language-independent service definition, and we need to use [trpc command line tool](https://github.com/trpc-group/trpc-go-cmdline) to translate it into a corresponding language stub code. You can see the various options it supports with `$ tprc create -h`. You can refer to the quick start [helloworld](https://github.com/trpc-group/trpc-go/blob/main/examples/helloworld/pb/Makefile) project to quickly create your own stub code.
+What protobuf gives is a language-independent service definition, and we need to use [trpc command line tool](https://github.com/trpc-group/trpc-go-cmdline) to translate it into a corresponding language stub code. You can see the various options it supports with `$ tprc create -h`. You can refer to the quick start [helloworld](/examples/helloworld/pb/Makefile) project to quickly create your own stub code.
 
 The stub code is mainly divided into two parts: client and server.  
-Below is part of the generated client code. In [Quick Start](../quick_start/), we use `NewGreeterClientProxy` to create a client instance and call its `Hello` method:
+Below is part of the generated client code. In [Quick Start](./quick_start.md), we use `NewGreeterClientProxy` to create a client instance and call its `Hello` method:
 ```go
 type GreeterClientProxy interface {
     Hello(ctx context.Context, req *HelloReq, opts ...client.Option) (rsp *HelloRsp, err error)
@@ -57,7 +53,7 @@ var NewGreeterClientProxy = func(opts ...client.Option) GreeterClientProxy {
 }
 ```
 
-The following is part of the generated server code, `GreeterService` defines the interface you need to implement. `RegisterGreeterService` will register your implementation to the framework. In [Quick Start](../quick_start/), we first create a tRPC-Go instance through `s := trpc.NewServer()`, and then register the `Greeter` structure that implements the business logic to `s`.
+The following is part of the generated server code, `GreeterService` defines the interface you need to implement. `RegisterGreeterService` will register your implementation to the framework. In [Quick Start](./quick_start.md), we first create a tRPC-Go instance through `s := trpc.NewServer()`, and then register the `Greeter` structure that implements the business logic to `s`.
 ```go
 type GreeterService interface {
     Hello(ctx context.Context, req *HelloReq) (*HelloRsp, error)
@@ -70,7 +66,7 @@ func RegisterGreeterService(s server.Service, svr GreeterService) { /* ... */ }
 
 Maybe you have noticed a little difference between client and server. On the client side, we specified the address of the server through `client.WithTarget`, but on the server side, we did not find the corresponding address in the code. In fact, it is configured in `./server/trpc_go.yaml`.  
 This is the yaml configuration capability supported by tRPC-Go. Almost all tRPC-Go framework capabilities can be customized through file configuration. When you execute tRPC-Go, the framework will look for the `trpc_go.yaml` file in the current directory and load the relevant configuration. This allows you to change the behavior of your application without recompiling the service.  
-Below are some necessary configurations required for this tutorial, please refer to [Framework Configuration](https://github.com/trpc-group/trpc-go/blob/main/docs/user_guide/framework_conf.md) for complete configurations.
+Below are some necessary configurations required for this tutorial, please refer to [Framework Configuration](/docs/user_guide/framework_conf.md) for complete configurations.
 ```yaml
 server:
   service:  # you can config multiple services
@@ -86,7 +82,7 @@ tRPC-Go has rich scalability, you can inject various new capabilities into the R
 
 #### Filter
 
-[Filter](https://github.com/trpc-group/trpc-go/tree/main/filter) likes an onion. An RPC goes through each layer of the onion in turn. You can customize this onion model through Filters.
+[Filter](/filter) likes an onion. An RPC goes through each layer of the onion in turn. You can customize this onion model through Filters.
 
 The client filter is defined as follows:
 ```go
@@ -102,14 +98,14 @@ func MyFilter(ctx context.Context, req, rsp interface{}, next ClientHandleFunc) 
 	return err
 }
 ```
-Codes before and after `next` will be executed before and after the actual RPC, that is, pre-RPC processes and post-RPC processes. You can implement many filters, which are used when calling [`client.WithFilters`](https://github.com/trpc-group/trpc-go/blob/bbfd46a69805ce14c3cbb4c439083fc12f8f20d8/client/options.go#L409). Framework Will automatically concat these filter into a chain.
+Codes before and after `next` will be executed before and after the actual RPC, that is, pre-RPC processes and post-RPC processes. You can implement many filters, which are used when calling [`client.WithFilters`](/client/options.go). Framework Will automatically concat these filter into a chain.
 
 The signature of server filter is slightly different from client:
 ```go
 type ServerFilter func(ctx context.Context, req interface{}, next ServerHandleFunc) (rsp interface{}, err error)
 type ServerHandleFunc func(ctx context.Context, req interface{}) (rsp interface{}, err error)
 ```
-`rsp` is in the return value, not the argument. Server filter should be injected into the framework by [`server.WithFilters`](https://github.com/trpc-group/trpc-go/blob/bbfd46a69805ce14c3cbb4c439083fc12f8f20d8/server/options.go#L125). The framework will automatically concat these filters into a chain.
+`rsp` is in the return value, not the argument. Server filter should be injected into the framework by [`server.WithFilters`](/server/options.go). The framework will automatically concat these filters into a chain.
 
 In addition to adding filters directly through code mentioned above, you can also load filters through configuration files.
 ```yaml
@@ -130,14 +126,14 @@ server:
       filter:  # these are special filters for service yyy, they will be appended to global filters.
         - server_filter_name_3
 ```
-These filters need to be registered in the framework in advance via [`filter.Register`](https://github.com/trpc-group/trpc-go/blob/bbfd46a69805ce14c3cbb4c439083fc12f8f20d8/filter/filter.go#L118). They are automatically loaded by the framework when `trpc.NewServer` is executed.  
+These filters need to be registered in the framework in advance via [`filter.Register`](/filter/filter.go). They are automatically loaded by the framework when `trpc.NewServer` is executed.  
 Note that when the code and the configuration file exist at the same time, the interceptor specified by the code will be executed first, and then the interceptor specified by the configuration file.
 
-You can see an example of filter usage [here](https://github.com/trpc-group/trpc-go/tree/main/examples/features/filter).
+You can see an example of filter usage [here](/examples/features/filter).
 
 #### Plugin
 
-[Plugin](https://github.com/trpc-group/trpc-go/tree/main/plugin) is an automatic module loading mechanism designed by tRPC-Go based on yaml configuration file. Its interface is defined as follows:
+[Plugin](/plugin) is an automatic module loading mechanism designed by tRPC-Go based on yaml configuration file. Its interface is defined as follows:
 ```go
 package plugin
 
@@ -165,7 +161,7 @@ Plugins often cooperate with filters, such as calling `filter.Register` in the `
 
 ### Other Supported Protocols
 
-[Quick start](../quick_start/) introduces a common one-request-one-response RPC. tRPC-Go also supports streaming RPC, HTTP, and more.
+[Quick start](./quick_start.md) introduces a common one-request-one-response RPC. tRPC-Go also supports streaming RPC, HTTP, and more.
 
 #### streaming RPC
 
@@ -174,7 +170,7 @@ Client streaming allows the client to send multiple packets in sequence, and the
 Server-side streaming allows the server to generate multiple responses for a client request. It is a one-to-many relationship.  
 Bidirectional streaming allows the client and the server to send requests to each other in parallel, in order, just like two people in a conversation. It is a many-to-many relationship.
 
-The code in this section is based on [`example/stream`](https://github.com/trpc-group/trpc-go/tree/main/examples/features/stream).
+The code in this section is based on [`example/stream`](/examples/features/stream).
 
 Unlike normal RPCs, declaring streaming RPCs in protobuf requires the use of the `stream` keyword.
 ```protobuf
@@ -243,9 +239,9 @@ Note that unlike ordinary RPC, the `protocol` field in yaml needs to be changed 
 
 #### Translate RPC to HTTP Quickly
 
-In tRPC-Go, changing `server.service[i].protocol` in `trpc_go.yaml` from `trpc` to `http` can convert the service of ordinary tRPC to HTTP. When calling, the HTTP url corresponds to the [method name](https://github.com/trpc-group/trpc-go/blob/bbfd46a69805ce14c3cbb4c439083fc12f8f20d8/examples/helloworld/pb/helloworld.trpc.go# L49).
+In tRPC-Go, changing `server.service[i].protocol` in `trpc_go.yaml` from `trpc` to `http` can convert the service of ordinary tRPC to HTTP. When calling, the HTTP url corresponds to the [method name](/examples/helloworld/pb/helloworld.trpc.go).
 
-For example, if you change the RPC in [Quick Start](../quick_start/) to HTTP, you need to use the following curl command to call it:
+For example, if you change the RPC in [Quick Start](./quick_start.md) to HTTP, you need to use the following curl command to call it:
 ```bash
 $ curl -XPOST -H"Content-Type: application/json" -d'{"msg": "world"}' 127.0.0.1:8000/trpc.helloworld.Greeter/Hello
 {"msg":"Hello world!"}
@@ -271,20 +267,20 @@ $ curl -XPOST -H"Content-Type: application/json" -d'{"msg": "world"}' 127.0.0.1:
 
 Although it is convenient to quickly convert RPC to HTTP, it is impossible to customize the mapping relationship between HTTP url/parameter/body and RPC Request. RESTful provides a more flexible RPC to HTTP conversion.
 
-You can refer to [RESTful example](https://github.com/trpc-group/trpc-go/tree/main/examples/features/restful) to get start quickly. For more details, please refer to the [documentation](https://github.com/trpc-group/trpc-go/tree/main/restful) of RESTful.
+You can refer to [RESTful example](/examples/features/restful) to get start quickly. For more details, please refer to the [documentation](/restful) of RESTful.
 
 ### Further Reading
 
 tRPC-Go also supports
-- [log management](https://github.com/trpc-group/trpc-go/blob/main/log/README.md)
+- [log management](/log/README.md)
 - [polaris mesh](https://github.com/trpc-ecosystem/go-naming-polarismesh)
-- [full link timeout control](https://github.com/trpc-group/trpc-go/blob/main/docs/user_guide/timeout_control.md)
-- [metadata transparent transmission](https://github.com/trpc-group/trpc-go/blob/main/docs/user_guide/metadata_transmission.md)
+- [full link timeout control](/docs/user_guide/timeout_control.md)
+- [metadata transparent transmission](/docs/user_guide/metadata_transmission.md)
 - [retry/hedging](https://github.com/trpc-ecosystem/go-filter/blob/main/slime/README.md)
-- [metrics](https://github.com/trpc-group/trpc-go/blob/main/metrics/README.md)
-- [status tracking](https://github.com/trpc-group/trpc-go/tree/main/rpcz/README.md)
-- [graceful restart](https://github.com/trpc-group/trpc-go/blob/main/docs/user_guide/graceful_restart.md)
-- [health check](https://github.com/trpc-group/trpc-go/tree/main/healthcheck/README.md)
+- [metrics](/metrics/README.md)
+- [status tracking](/rpcz/README.md)
+- [graceful restart](/docs/user_guide/graceful_restart.md)
+- [health check](/healthcheck/README.md)
 - [high performance network library](https://github.com/trpc-group/tnet)
 
 and more. You can check their documentation for more details.

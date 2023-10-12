@@ -1,10 +1,6 @@
----
-title: "快速开始"
-linkTitle: "快速开始"
-weight: 10
-date: 2023-08-20
-description: 提供了一个简单的例子帮你快速上手 tRPC-Go。
----
+[English](quick_start.md) | 中文
+
+## 快速开始
 
 ### 准备工作
 
@@ -95,6 +91,6 @@ func (g Greeter) HelloAgain(ctx context.Context, req *pb.HelloRequest) (*pb.Hell
 
 ### 下一步
 
-- 通过 [什么是 tRPC](../../../what-is-trpc/) 学习 tRPC 的工作原理。
-- 阅读 [基础教程](../basics_tutorial/) 来更深入地了解 tRPC-Go。
+- 了解 [tRPC 设计原理](https://github.com/trpc-group/trpc)。
+- 阅读 [基础教程](./basics_tutorial.zh_CN.md) 来更深入地了解 tRPC-Go。
 - 查阅 [API 手册](https://pkg.go.dev/trpc.group/trpc-go)。

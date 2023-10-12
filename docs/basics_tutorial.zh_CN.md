@@ -1,12 +1,8 @@
----
-title: "基础教程"
-linkTitle: "基础教程"
-weight: 20
-date: 2023-08-20
-description: 介绍 tRPC-Go 的开发流程以及功能特性。
----
+[English](./basics_tutorial.md) | 中文
 
-在[快速开始](../quick_start/)中，你已经成功地运行了 tRPC-Go helloworld。但是，我们忽略了很多细节。这章中，你将更加细致地了解 tRPC-Go 服务开发流程。我们将依次介绍：
+## 基础教程
+
+在[快速开始](./quick_start.zh_CN.md)中，你已经成功地运行了 tRPC-Go helloworld。但是，我们忽略了很多细节。这章中，你将更加细致地了解 tRPC-Go 服务开发流程。我们将依次介绍：
 - 如何通过 protobuf 定义 tRPC 服务？
 - `trpc_go.yaml` 要如何配置？
 - tRPC-Go 具有哪些扩展能力？
@@ -43,10 +39,10 @@ message HelloRsp {
 
 ### 编写客户端和服务端代码
 
-protobuf 给出的是一个语言无关的服务定义，我们还要用 [trpc 命令行工具](https://github.com/trpc-group/trpc-go-cmdline)将它翻译成对应语言的桩代码。你可以通过 `$ tprc create -h` 查看它支持的各种选项。你可以参考快速开始的 [helloworld](https://github.com/trpc-group/trpc-go/blob/main/examples/helloworld/pb/Makefile) 项目来快速创建你自己的桩代码。
+protobuf 给出的是一个语言无关的服务定义，我们还要用 [trpc 命令行工具](https://github.com/trpc-group/trpc-go-cmdline)将它翻译成对应语言的桩代码。你可以通过 `$ tprc create -h` 查看它支持的各种选项。你可以参考快速开始的 [helloworld](/examples/helloworld/pb/Makefile) 项目来快速创建你自己的桩代码。
 
 桩代码主要分为 client 和 server 两部分。  
-下面是生成的部分 client 代码。在[快速开始](../quick_start/)中，我们通过 `NewGreeterClientProxy` 来创建一个 client 实例，并调用了它的 `Hello` 方法：
+下面是生成的部分 client 代码。在[快速开始](./quick_start.zh_CN.md)中，我们通过 `NewGreeterClientProxy` 来创建一个 client 实例，并调用了它的 `Hello` 方法：
 ```go
 type GreeterClientProxy interface {
     Hello(ctx context.Context, req *HelloReq, opts ...client.Option) (rsp *HelloRsp, err error)
@@ -57,7 +53,7 @@ var NewGreeterClientProxy = func(opts ...client.Option) GreeterClientProxy {
 }
 ```
 
-下面是生成的部分 server 代码，`GreeterService` 约定了你需要实现的接口。`RegisterGreeterService` 会将你的实现注册到框架中。在[快速开始](../quick_start/)中，我们先通过 `s := trpc.NewServer()` 创建了一个 tRPC-Go 实例，然后把实现了业务逻辑的 `Greeter` 结构体注册到了 `s` 中。
+下面是生成的部分 server 代码，`GreeterService` 约定了你需要实现的接口。`RegisterGreeterService` 会将你的实现注册到框架中。在[快速开始](./quick_start.zh_CN.md)中，我们先通过 `s := trpc.NewServer()` 创建了一个 tRPC-Go 实例，然后把实现了业务逻辑的 `Greeter` 结构体注册到了 `s` 中。
 ```go
 type GreeterService interface {
     Hello(ctx context.Context, req *HelloReq) (*HelloRsp, error)
@@ -70,7 +66,7 @@ func RegisterGreeterService(s server.Service, svr GreeterService) { /* ... */ }
 
 也许你已经注意到了客户端和服务端的些许不同。在客户端，我们通过 `client.WithTarget` 指定了服务端的地址，但是在服务端，我们并没有在代码中找到对应的地址，实际上它配置在 `./server/trpc_go.yaml` 中。  
 这是 tRPC-Go 的支持的 yaml 配置能力。几乎所有 tRPC-Go 框架能力都可以通过文件配置进行定制化。当你执行 tRPC-Go 时，框架会在当前目录下寻找 `trpc_go.yaml` 文件，并加载相关配置。这使得你可以在不重新编译服务的前提下，就更改程序的行为。  
-下面是一些本教程所需的必要配置，完整配置请参考[框架配置](https://github.com/trpc-group/trpc-go/blob/main/docs/user_guide/framework_conf.zh_CN.md)。
+下面是一些本教程所需的必要配置，完整配置请参考[框架配置](/docs/user_guide/framework_conf.zh_CN.md)。
 ```yaml
 server:  # 服务端配置
   service:  # 可以配置多个 service
@@ -86,7 +82,7 @@ tRPC-Go 有着丰富的可扩展性，你可通过拦截器在请求执行流程
 
 #### 拦截器
 
-[拦截器](https://github.com/trpc-group/trpc-go/tree/main/filter)像一颗洋葱，当 tRPC-Go 处理请求时，会依次经过洋葱的每一层。你可以通过拦截器定制这颗洋葱模型。
+[拦截器](/filter)像一颗洋葱，当 tRPC-Go 处理请求时，会依次经过洋葱的每一层。你可以通过拦截器定制这颗洋葱模型。
 
 客户端拦截器定义如下：
 ```go
@@ -102,14 +98,14 @@ func MyFilter(ctx context.Context, req, rsp interface{}, next ClientHandleFunc) 
 	return err
 }
 ```
-`next` 前后的代码代会在实际请求之前和之后分别执行，即前置流程和后置流程。你可以实现很多拦截器，通过 [`client.WithFilters`](https://github.com/trpc-group/trpc-go/blob/bbfd46a69805ce14c3cbb4c439083fc12f8f20d8/client/options.go#L409) 在调用时使用，框架会自动将这些拦截器串成一个链。
+`next` 前后的代码代会在实际请求之前和之后分别执行，即前置流程和后置流程。你可以实现很多拦截器，通过 [`client.WithFilters`](/client/options.go) 在调用时使用，框架会自动将这些拦截器串成一个链。
 
 服务端拦截器的签名与客户端略有不同：
 ```go
 type ServerFilter func(ctx context.Context, req interface{}, next ServerHandleFunc) (rsp interface{}, err error)
 type ServerHandleFunc func(ctx context.Context, req interface{}) (rsp interface{}, err error)
 ```
-`rsp` 在返回值中，而不是参数中。在使用，需要通过 [`server.WithFilters`](https://github.com/trpc-group/trpc-go/blob/bbfd46a69805ce14c3cbb4c439083fc12f8f20d8/server/options.go#L125) 注入到框架中。框架会自动将这些拦截器串成一个链。
+`rsp` 在返回值中，而不是参数中。在使用，需要通过 [`server.WithFilters`](/server/options.go) 注入到框架中。框架会自动将这些拦截器串成一个链。
 
 除了上面提到的通过代码直接添加拦截器，你也可以通过配置文件加载拦截器。
 ```yaml
@@ -130,14 +126,14 @@ server:
       filter:  # 指定 yyy 服务端特有的拦截器，它们会追加在全局拦截器之后
         - server_filter_name_3
 ```
-这些拦截器需要提前通过 [`filter.Register`](https://github.com/trpc-group/trpc-go/blob/bbfd46a69805ce14c3cbb4c439083fc12f8f20d8/filter/filter.go#L118) 注册在框架中。在执行 `trpc.NewServer` 时，框架会自动加载它们。  
+这些拦截器需要提前通过 [`filter.Register`](/filter/filter.go) 注册在框架中。在执行 `trpc.NewServer` 时，框架会自动加载它们。  
 注意，当代码和配置文件同时存在时，代码指定的拦截器会先执行，然后再执行配置文件指定的拦截器。
 
-你可以在[这里](https://github.com/trpc-group/trpc-go/tree/main/examples/features/filter)看到拦截器的使用示例。
+你可以在[这里](/examples/features/filter)看到拦截器的使用示例。
 
 #### 插件
 
-[插件](https://github.com/trpc-group/trpc-go/tree/main/plugin)是 tRPC-Go 基于 yaml 配置文件设计的一套自动化模块加载机制。它的接口定义如下：
+[插件](/plugin)是 tRPC-Go 基于 yaml 配置文件设计的一套自动化模块加载机制。它的接口定义如下：
 ```go
 package plugin
 
@@ -165,7 +161,7 @@ plugins:
 
 ### 多协议支持
 
-[快速开始](../quick_start/)中介绍的是普通的一应一答式 RPC。tRPC-Go 还支持流式 RPC、HTTP 等。
+[快速开始](./quick_start.zh_CN.md)中介绍的是普通的一应一答式 RPC。tRPC-Go 还支持流式 RPC、HTTP 等。
 
 #### 流式 RPC
 
@@ -174,7 +170,7 @@ plugins:
 服务端流式允许服务端为一个客户端请求生成多次回包。它是一对多关系。  
 双向流式允许客户端服务端可以并行地给对方发送请求，并且是保序的，就像两个交谈中的人一样。它是多对多关系。
 
-本小节代码基于 [`example/stream`](https://github.com/trpc-group/trpc-go/tree/main/examples/features/stream)。
+本小节代码基于 [`example/stream`](/examples/features/stream)。
 
 与普通 RPC 不同，在 protobuf 中声明流式 RPC 需要使用 `stream` 关键字。
 ```protobuf
@@ -243,8 +239,8 @@ func main() {
 
 #### 将 RPC 快速转为 HTTP 服务
 
-在 tRPC-Go 中，将 `trpc_go.yaml` 中的 `server.service[i].protocol` 从 `trpc` 改为 `http`，就可以将普通 tRPC 协议的服务转换为 HTTP 协议。在调用时，HTTP url 对应生成的桩代码中的[方法名](https://github.com/trpc-group/trpc-go/blob/bbfd46a69805ce14c3cbb4c439083fc12f8f20d8/examples/helloworld/pb/helloworld.trpc.go#L49)。
-比如，如果将[快速开始](../quick_start/)里的 RPC 改为 HTTP，在调用时，你需要用下面的 curl 命令：
+在 tRPC-Go 中，将 `trpc_go.yaml` 中的 `server.service[i].protocol` 从 `trpc` 改为 `http`，就可以将普通 tRPC 协议的服务转换为 HTTP 协议。在调用时，HTTP url 对应生成的桩代码中的[方法名](/examples/helloworld/pb/helloworld.trpc.go)。
+比如，如果将[快速开始](./quick_start.zh_CN.md)里的 RPC 改为 HTTP，在调用时，你需要用下面的 curl 命令：
 ```bash
 $ curl -XPOST -H"Content-Type: application/json" -d'{"msg": "world"}' 127.0.0.1:8000/trpc.helloworld.Greeter/Hello
 {"msg":"Hello world!"}
@@ -270,20 +266,20 @@ $ curl -XPOST -H"Content-Type: application/json" -d'{"msg": "world"}' 127.0.0.1:
 
 将 RPC 快速转为 HTTP 虽然很方便，但是却无法定制 HTTP url/parameter/body 和 RPC Request 的映射关系。RESTful 提供了更加灵活的 RPC 到 HTTP 的转换。
 
-你可以参考 [RESTful example](https://github.com/trpc-group/trpc-go/tree/main/examples/features/restful) 快速了解 RESTful。更多细节请参考 RESTful 的[文档](https://github.com/trpc-group/trpc-go/tree/main/restful)。
+你可以参考 [RESTful example](/examples/features/restful) 快速了解 RESTful。更多细节请参考 RESTful 的[文档](/restful)。
 
 ### 进一步阅读
 
 tRPC-Go 还支持
-- [日志管理](https://github.com/trpc-group/trpc-go/blob/main/log/README.zh_CN.md)
+- [日志管理](/log/README.zh_CN.md)
 - [北极星服务发现](https://github.com/trpc-ecosystem/go-naming-polarismesh)
-- [全链路超时控制](https://github.com/trpc-group/trpc-go/blob/main/docs/user_guide/timeout_control.zh_CN.md)
-- [元数据透传](https://github.com/trpc-group/trpc-go/blob/main/docs/user_guide/metadata_transmission.zh_CN.md)
+- [全链路超时控制](/docs/user_guide/timeout_control.zh_CN.md)
+- [元数据透传](/docs/user_guide/metadata_transmission.zh_CN.md)
 - [重试对冲](https://github.com/trpc-ecosystem/go-filter/blob/main/slime/README.zh_CN.md)
-- [指标监控](https://github.com/trpc-group/trpc-go/blob/main/metrics/README.zh_CN.md)
-- [状态追踪](https://github.com/trpc-group/trpc-go/tree/main/rpcz/README.zh_CN.md)
-- [优雅重启](https://github.com/trpc-group/trpc-go/blob/main/docs/user_guide/graceful_restart.zh_CN.md)
-- [健康检查](https://github.com/trpc-group/trpc-go/tree/main/healthcheck/README.zh_CN.md)
+- [指标监控](/metrics/README.zh_CN.md)
+- [状态追踪](/rpcz/README.zh_CN.md)
+- [优雅重启](/docs/user_guide/graceful_restart.zh_CN.md)
+- [健康检查](/healthcheck/README.zh_CN.md)
 - [高性能网络库](https://github.com/trpc-group/tnet)
 
 等等。你可以查看它们的文档了解更多的细节。

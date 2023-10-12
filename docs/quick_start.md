@@ -1,10 +1,6 @@
----
-title: "Quick Start"
-linkTitle: "Quick Start"
-weight: 10
-date: 2023-08-20
-description: This is a simple working example to get you started with tRPC in Go.
----
+English | [中文](quick_start.zh_CN.md)
+
+## Quick Start
 
 ### Prerequisites
 
@@ -95,6 +91,6 @@ Follow the `Run the Example` section to re-run your example and you will see `He
 
 ### What's Next
 
-- Learn how tRPC works in [What is tRPC](../../../what-is-trpc/).
-- Read [basics tutorial](../basics_tutorial/) to get deeper into tRPC-Go.
+- Learn [tRPC Design](https://github.com/trpc-group/trpc).
+- Read [basics tutorial](./basics_tutorial.md) to get deeper into tRPC-Go.
 - Explore the [API reference](https://pkg.go.dev/trpc.group/trpc-go).
