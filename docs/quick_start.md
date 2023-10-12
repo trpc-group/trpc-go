@@ -6,7 +6,7 @@ English | [中文](quick_start.zh_CN.md)
 ## Prerequisites
 
 - **[Go][]**: any one of the **three latest major** [releases][go-releases].
-- **[trpc-go-cmdline][]**: follow the instructions in the [README][trpc-go-cmdline] to install trpc-go-cmdline and its related dependencies correctly.
+- **[trpc-cmdline][]**: follow the instructions in the [README][trpc-cmdline] to install trpc-cmdline and its related dependencies correctly.
 
 ## Create a Full Project Step by Step
 
@@ -35,7 +35,7 @@ service HelloWorldService {
 }
 ```
 
-* Using [trpc-go-cmdline][] to generate a full project:
+* Using [trpc-cmdline][] to generate a full project:
 ```shell
 $ trpc create -p helloworld.proto -o out
 ```
@@ -102,7 +102,7 @@ out
 `-- helloworld_mock.go
 ```
 
-The following lists some frequently used flags for [trpc-go-cmdline][].
+The following lists some frequently used flags for [trpc-cmdline][].
 
 * `-f`: Force overwrite the existing code.
 * `-d some-dir`: Search paths for pb files (including dependent pb files), can be specified multiple times.
@@ -113,12 +113,12 @@ For additional flags please run `trpc -h` and `trpc [subcmd] -h`.
 
 ## What's Next
 
-Try [more features][features]. Learn more about [trpc-go-cmdline][]'s [documentation][cmdline-doc].
+Try [more features][features]. Learn more about [trpc-cmdline][]'s [documentation][cmdline-doc].
 
 [Go]: https://golang.org
 [go-releases]: https://golang.org/doc/devel/release.html
-[trpc-go-cmdline]: https://github.com/trpc-group/trpc-go-cmdline
-[cmdline-releases]: https://github.com/trpc-group/trpc-go-cmdline/releases
+[trpc-cmdline]: https://github.com/trpc-group/trpc-cmdline
+[cmdline-releases]: https://github.com/trpc-group/trpc-cmdline/releases
 [helloworld]: /examples/helloworld/
 [features]: /examples/features/
-[cmdline-doc]: https://github.com/trpc-group/trpc-go-cmdline/tree/main/docs
+[cmdline-doc]: https://github.com/trpc-group/trpc-cmdline/tree/main/docs

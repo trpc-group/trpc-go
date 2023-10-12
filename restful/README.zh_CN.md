@@ -203,7 +203,7 @@ message GetMessageRequest {
 
 **一、PB 定义**
 
-先更新 `trpc-go-cmdline` 工具到最新版本，要使用 **trpc.api.http** 注解，需要 import 一个 proto 文件：
+先更新 `trpc-cmdline` 工具到最新版本，要使用 **trpc.api.http** 注解，需要 import 一个 proto 文件：
 
 ```protobuf
 import "trpc/api/annotations.proto";
@@ -567,7 +567,7 @@ service HelloTrpcGo {
 }
 ```
 
-然后，通过 trpc-go-cmdline 命令行工具重新生成桩代码。
+然后，通过 trpc-cmdline 命令行工具重新生成桩代码。
 最后，在 service 拦载器中配上 CORS 插件。
 
 如果不想修改 pb。RESTful 也提供了代码自定义跨域的方式。

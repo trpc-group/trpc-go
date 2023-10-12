@@ -6,7 +6,7 @@
 ## 安装依赖
 
 - **[Go][]**: **最近的三个 major** [releases][go-releases].
-- **[trpc-go-cmdline][]**: 正确按照 [README][trpc-go-cmdline] 来安装 trpc-go-cmdline 以及相关依赖
+- **[trpc-cmdline][]**: 正确按照 [README][trpc-cmdline] 来安装 trpc-cmdline 以及相关依赖
 
 ## 创建完整的项目
 
@@ -35,7 +35,7 @@ service HelloWorldService {
 }
 ```
 
-* 通过以下命令使用 [trpc-go-cmdline][] 来生成一个完整的项目:
+* 通过以下命令使用 [trpc-cmdline][] 来生成一个完整的项目:
 ```shell
 $ trpc create -p helloworld.proto -o out
 ```
@@ -90,7 +90,7 @@ $ tree
 
 ## 创建服务桩代码
 
-* 在执行 trpc-go-cmdline 工具时直接添加 `--rpconly` 即可只生成服务桩代码：
+* 在执行 trpc-cmdline 工具时直接添加 `--rpconly` 即可只生成服务桩代码：
 ```go
 $ trpc create -p helloworld.proto -o out --rpconly
 $ tree out
@@ -102,7 +102,7 @@ out
 `-- helloworld_mock.go
 ```
 
-下面列举了 [trpc-go-cmdline][] 的一些常用的命令行选项
+下面列举了 [trpc-cmdline][] 的一些常用的命令行选项
 
 * `-f`: 覆盖写入输出目录
 * `-d some-dir`: 指定 proto 文件的搜索路径，可以指定多次以添加多个路径
@@ -113,12 +113,12 @@ out
 
 ## 下一步
 
-尝试 [更多特性][features]，学习更多关于 [trpc-go-cmdline][] 的 [用法][cmdline-doc]。
+尝试 [更多特性][features]，学习更多关于 [trpc-cmdline][] 的 [用法][cmdline-doc]。
 
 [Go]: https://golang.org
 [go-releases]: https://golang.org/doc/devel/release.html
-[trpc-go-cmdline]: https://github.com/trpc-group/trpc-go-cmdline
-[cmdline-releases]: https://github.com/trpc-group/trpc-go-cmdline/releases
+[trpc-cmdline]: https://github.com/trpc-group/trpc-cmdline
+[cmdline-releases]: https://github.com/trpc-group/trpc-cmdline/releases
 [helloworld]: /examples/helloworld/
 [features]: /examples/features/
-[cmdline-doc]: https://github.com/trpc-group/trpc-go-cmdline/tree/main/docs
+[cmdline-doc]: https://github.com/trpc-group/trpc-cmdline/tree/main/docs

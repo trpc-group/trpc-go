@@ -26,7 +26,7 @@ Drawbacks:
 ![flatbuffers](/.resources/user_guide/server/flatbuffers/flatbuffers.png)
 
 # Example
-Firstly, install the latest version of the [trpc-go-cmdline](https://github.com/trpc-group/trpc-go-cmdline) tool.
+Firstly, install the latest version of the [trpc-cmdline](https://github.com/trpc-group/trpc-cmdline) tool.
 
 Next, use the tool to generate flatbuffers corresponding stub code, which currently supports single-send and single-receive, server/client streaming, bidirectional streaming, etc.
 
@@ -38,7 +38,7 @@ First, define an IDL file. Its syntax can be learned from the flatbuffers offici
 namespace trpc.testapp.greeter; // Equivalent to the "package" in protobuf.
 
 // Equivalent to the "go_package" statement in protobuf.
-// Note: "attribute" is a standard syntax in flatbuffers, and the "go_package=xxx" syntax is a custom support implemented by trpc-go-cmdline.
+// Note: "attribute" is a standard syntax in flatbuffers, and the "go_package=xxx" syntax is a custom support implemented by trpc-cmdline.
 attribute "go_package=github.com/trpcprotocol/testapp/greeter";
 
 table HelloReply { // "table" is equivalent to "message" in protobuf.
@@ -222,7 +222,7 @@ The load testing environment consisted of two machines with 8 cores, 2.5 GHz CPU
 # FAQ
 ##  Q1: How to generate stub code when other files are included in the .fbs file?
 
-Refer to the following usage examples on https://github.com/trpc-group/trpc-go-cmdline/tree/main/testcase/flatbuffers:
+Refer to the following usage examples on https://github.com/trpc-group/trpc-cmdline/tree/main/testcase/flatbuffers:
 
 - 2-multi-fb-same-namespace: Multiple .fbs files with the same namespace are in the same directory (namespace in flatbuffers is equivalent to the package statement in protobuf), and one of the main files includes the other .fbs files.
 - 3-multi-fb-diff-namespace: Multiple .fbs files are in the same directory with different namespaces. For example, the main file defining RPC references types in different namespaces.

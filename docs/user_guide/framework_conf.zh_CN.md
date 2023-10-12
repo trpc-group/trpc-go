@@ -236,7 +236,7 @@ plugins:
 
 ### 通过工具创建配置
 
-框架配置文件可以通过 [trpc-go-cmdline](https://github.com/trpc-group/trpc-go-cmdline) 工具生成。配置文件中会自动添加 PB 文件中定义的服务。
+框架配置文件可以通过 [trpc-cmdline](https://github.com/trpc-group/trpc-cmdline) 工具生成。配置文件中会自动添加 PB 文件中定义的服务。
 
 ```shell
 # 通过 PB 文件生成桩代码和框架配置文件 "trpc_go.yaml"

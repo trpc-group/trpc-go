@@ -58,7 +58,7 @@ message HelloReply {
 
 ### 生成服务代码
 
-首先安装 [trpc-go-cmdline](https://github.com/trpc-group/trpc-go-cmdline)
+首先安装 [trpc-cmdline](https://github.com/trpc-group/trpc-cmdline)
 
 然后生成流式服务桩代码
 
