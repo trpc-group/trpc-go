@@ -1,3 +1,5 @@
+English | [中文](attachment.zh_CN.md)
+
 #  tRPC-Go Attachment (Large Binary Data) Transmission
 
 tRPC protocol now supports sending attachments over simple RPC.

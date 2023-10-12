@@ -1,3 +1,5 @@
+[English](log.md) | 中文
+
 # 怎么为 log 类型的插件开发一个 Writer 插件 
 
 `log` 包提供了一个名为 “default” 的 log 插件， 该插件支持以插件的形式配置多个 Writer。

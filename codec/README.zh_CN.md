@@ -1,4 +1,5 @@
 [English](README.md) | 中文
+
 # codec
 
 `codec` 包可以支持任意的第三方业务通信协议，只需要实现相关接口即可。
