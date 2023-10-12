@@ -271,16 +271,5 @@ You can refer to [RESTful example](/examples/features/restful) to get start quic
 
 ### Further Reading
 
-tRPC-Go also supports
-- [log management](/log/README.md)
-- [polaris mesh](https://github.com/trpc-ecosystem/go-naming-polarismesh)
-- [full link timeout control](/docs/user_guide/timeout_control.md)
-- [metadata transparent transmission](/docs/user_guide/metadata_transmission.md)
-- [retry/hedging](https://github.com/trpc-ecosystem/go-filter/blob/main/slime/README.md)
-- [metrics](/metrics/README.md)
-- [status tracking](/rpcz/README.md)
-- [graceful restart](/docs/user_guide/graceful_restart.md)
-- [health check](/healthcheck/README.md)
-- [high performance network library](https://github.com/trpc-group/tnet)
+tRPC-Go also supports other rich features, you can check their [documentations](/docs/user_guide) for more details.
 
-and more. You can check their documentation for more details.

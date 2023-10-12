@@ -270,16 +270,5 @@ $ curl -XPOST -H"Content-Type: application/json" -d'{"msg": "world"}' 127.0.0.1:
 
 ### 进一步阅读
 
-tRPC-Go 还支持
-- [日志管理](/log/README.zh_CN.md)
-- [北极星服务发现](https://github.com/trpc-ecosystem/go-naming-polarismesh)
-- [全链路超时控制](/docs/user_guide/timeout_control.zh_CN.md)
-- [元数据透传](/docs/user_guide/metadata_transmission.zh_CN.md)
-- [重试对冲](https://github.com/trpc-ecosystem/go-filter/blob/main/slime/README.zh_CN.md)
-- [指标监控](/metrics/README.zh_CN.md)
-- [状态追踪](/rpcz/README.zh_CN.md)
-- [优雅重启](/docs/user_guide/graceful_restart.zh_CN.md)
-- [健康检查](/healthcheck/README.zh_CN.md)
-- [高性能网络库](https://github.com/trpc-group/tnet)
+tRPC-Go 还支持其他丰富的功能特性，你可以查看它们的[文档](/main/docs/user_guide)了解更多细节。
 
-等等。你可以查看它们的文档了解更多的细节。
