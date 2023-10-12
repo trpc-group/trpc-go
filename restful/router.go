@@ -191,6 +191,7 @@ var DefaultHeaderMatcher = func(
 func withNewMessage(ctx context.Context, serviceName, methodName string) context.Context {
 	ctx, msg := codec.WithNewMessage(ctx)
 	msg.WithServerRPCName(methodName)
+	msg.WithCalleeMethod(methodName)
 	msg.WithCalleeServiceName(serviceName)
 	msg.WithSerializationType(codec.SerializationTypePB)
 	return ctx

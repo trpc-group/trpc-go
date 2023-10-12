@@ -353,8 +353,8 @@ func unmarshalTransInfo(msg codec.Msg, v string) (map[string][]byte, error) {
 
 // getReqbody gets the body of request.
 func (sc *ServerCodec) getReqbody(head *Header, msg codec.Msg) ([]byte, error) {
-	msg.WithCalleeMethod(head.Request.URL.Path)
 	msg.WithServerRPCName(head.Request.URL.Path)
+	msg.WithCalleeMethod(head.Request.URL.Path)
 
 	if !sc.AutoReadBody {
 		return nil, nil

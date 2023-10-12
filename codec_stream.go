@@ -13,10 +13,10 @@ import (
 	"path"
 	"sync"
 
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
-
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	icodec "trpc.group/trpc-go/trpc-go/internal/codec"
+	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -369,7 +369,9 @@ func (s *ServerStreamCodec) setInitMeta(msg codec.Msg) error {
 	defer s.m.RUnlock()
 	if streamIDToInitMeta, ok := s.initMetas[addr]; ok {
 		if initMeta, ok := streamIDToInitMeta[streamID]; ok {
-			msg.WithServerRPCName(string(initMeta.GetRequestMeta().GetFunc()))
+			rpcName := string(initMeta.GetRequestMeta().GetFunc())
+			msg.WithServerRPCName(rpcName)
+			msg.WithCalleeMethod(icodec.MethodFromRPCName(rpcName))
 			return nil
 		}
 	}
@@ -458,7 +460,9 @@ func (s *ServerStreamCodec) updateMsg(msg codec.Msg, initMeta *trpcpb.TrpcStream
 	msg.WithCallerServiceName(string(req.GetCaller()))
 	msg.WithCalleeServiceName(string(req.GetCallee()))
 	// set server handler method name
-	msg.WithServerRPCName(string(req.GetFunc()))
+	rpcName := string(req.GetFunc())
+	msg.WithServerRPCName(rpcName)
+	msg.WithCalleeMethod(icodec.MethodFromRPCName(rpcName))
 	// set body serialization type
 	msg.WithSerializationType(int(initMeta.GetContentType()))
 	// set body compression type
