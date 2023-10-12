@@ -49,8 +49,8 @@ tRPC-Go 具有以下特点：
 [Go]: https://golang.org
 [tRPC]: https://github.com/trpc-group/trpc
 [trpc-go-cmdline]: https://github.com/trpc-group/trpc-go-cmdline
-[docs]: /docs/
-[quick start]: /docs/quick_start.md
+[docs]: /docs/README.zh_CN.md
+[quick start]: /docs/quick_start.zh_CN.md
 [go-releases]: https://golang.org/doc/devel/release.html
 [contributing]: CONTRIBUTING.md
 [issues]: https://github.com/trpc-group/trpc-go/issues

@@ -50,7 +50,7 @@ If you're interested in contributing, please take a look at the [contribution gu
 [go-releases]: https://golang.org/doc/devel/release.html
 [tRPC]: https://github.com/trpc-group/trpc
 [trpc-go-cmdline]: https://github.com/trpc-group/trpc-go-cmdline
-[docs]: /docs/
+[docs]: /docs/README.md
 [quick start]: /docs/quick_start.md
 [contributing]: CONTRIBUTING.md
 [issues]: https://github.com/trpc-group/trpc-go/issues
