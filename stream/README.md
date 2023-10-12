@@ -59,7 +59,7 @@ message HelloReply {
 
 #### Generate service code
 
-First install [trpc-go-cmdline](https://github.com/trpc-group/trpc-go-cmdline).
+First install [trpc-cmdline](https://github.com/trpc-group/trpc-cmdline).
 
 Then generate the streaming service stub code
 

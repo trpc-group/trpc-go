@@ -245,7 +245,7 @@ After understanding HttpRule, let's take a look at how to enable tRPC-Go's RESTf
 
 **1. PB Definition**
 
-First, update the `trpc-go-cmdline` tool to the latest version. To use the **trpc.api.http** annotation, you need 
+First, update the `trpc-cmdline` tool to the latest version. To use the **trpc.api.http** annotation, you need 
 to import a proto file:
 
 ```protobuf
@@ -626,7 +626,7 @@ service HelloTrpcGo {
 }
 ```
 
-Next, regenerate the stub code using the trpc-go-cmdline command-line tool.
+Next, regenerate the stub code using the trpc-cmdline command-line tool.
 Finally, add the CORS plugin to the service interceptors.
 
 If you do not want to modify the protobuf file, RESTful also provides a code-based custom method for cross-origin requests.

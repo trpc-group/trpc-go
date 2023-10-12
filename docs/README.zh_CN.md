@@ -23,7 +23,7 @@
   - [反向代理](/docs/user_guide/reverse_proxy.zh_CN.md)
   - [优雅重启](/docs/user_guide/graceful_restart.zh_CN.md)
   - [健康检查](/healthcheck/README.zh_CN.md)
-  - [命令行工具](https://github.com/trpc-group/trpc-go-cmdline)
+  - [命令行工具](https://github.com/trpc-group/trpc-cmdline)
   - [高性能网络库 tnet](/docs/user_guide/tnet.zh_CN.md)
   - [运行状态追踪](/rpcz/README.zh_CN.md)
   - [附件（大二进制数据）传输](/docs/user_guide/attachment.zh_CN.md)

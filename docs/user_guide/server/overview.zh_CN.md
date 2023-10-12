@@ -85,7 +85,7 @@ message HelloReply {
 }
 ```
 
-第二步：通过 [trpc-go-cmdline](https://github.com/trpc-group/trpc-go-cmdline) 工具可以生成对应服务端和客户端的桩代码
+第二步：通过 [trpc-cmdline](https://github.com/trpc-group/trpc-cmdline) 工具可以生成对应服务端和客户端的桩代码
 
 ```shell
 trpc create -p helloworld.proto
