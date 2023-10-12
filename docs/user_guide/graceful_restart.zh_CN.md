@@ -1,4 +1,4 @@
-[English](./graceful_restart.md) | 中文
+[English](graceful_restart.md) | 中文
 
 # 前言
 

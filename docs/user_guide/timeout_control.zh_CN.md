@@ -1,3 +1,5 @@
+[English](timeout_control.md) | 中文
+
 # tRPC-Go 超时控制
 
 ## 前言

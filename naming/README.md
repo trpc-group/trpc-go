@@ -1,3 +1,5 @@
+English | [中文](README.zh_CN.md)
+
 ## Background
 
 Package `naming` can register nodes under the corresponding service name. In addition to `ip:port`, the registration information will also include the running environment, container and other customized metadata information. After the caller obtains all nodes based on the service name, the routing module filters the nodes based on metadata information. Finally, the load balancing algorithm selects a node from the nodes that meet the requirements to make the final request. The name provides a unified abstraction for service management and avoids the operation and maintenance difficulties caused by directly using `ip:port`.

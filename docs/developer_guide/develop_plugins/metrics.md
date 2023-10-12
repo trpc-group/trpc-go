@@ -1,3 +1,5 @@
+English | [中文](metrics.zh_CN.md)
+
 # How to develop a metric type plugin
 
 This guide will introduce how to develop a metric type plugin that depends on configuration for loading.

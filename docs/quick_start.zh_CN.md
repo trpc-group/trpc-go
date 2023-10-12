@@ -1,6 +1,7 @@
+[English](quick_start.md) | 中文
+
 # 快速上手
 
-[English](quick_start.md) | 中文
 
 ## 安装依赖
 

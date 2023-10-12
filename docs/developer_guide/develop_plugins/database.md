@@ -1,4 +1,4 @@
-English | [中文](database_zh_CN.md)
+English | [中文](database.zh_CN.md)
 
 # How to Develop a Database Plugin
 
