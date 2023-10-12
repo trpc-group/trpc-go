@@ -7,7 +7,7 @@ English | [中文](README.zh_CN.md)
 [![LICENSE](https://img.shields.io/github/license/trpc.group/trpc-go.svg?style=flat-square)](https://github.com/trpc.group/trpc-go/blob/main/LICENSE)
 [![Releases](https://img.shields.io/github/release/trpc.group/trpc-go.svg?style=flat-square)](https://github.com/trpc.group/trpc-go/releases)
 [![Docs](https://img.shields.io/badge/docs-latest-green)](http://test.trpc.group.woa.com/docs/)
-[![Tests](https://github.com/trpc.group/trpc-go/actions/workflows/prc.yml/badge.svg)](https://github.com/trpc-group/trpc-go/actions/workflows/prc.yml)
+[![Tests](https://github.com/trpc-group/trpc-go/actions/workflows/prc.yml/badge.svg)](https://github.com/trpc-group/trpc-go/actions/workflows/prc.yml)
 [![Coverage](https://codecov.io/gh/trpc.group/trpc-go/branch/main/graph/badge.svg)](https://app.codecov.io/gh/trpc.group/trpc-go/tree/main)
 
 
