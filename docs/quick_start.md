@@ -73,18 +73,18 @@ The Makefile calls `trpc` which should be installed by prerequisites.
 At server side `server/main.go`, add codes to implement `HelloAgain`:
 ```go
 func (g Greeter) HelloAgain(ctx context.Context, req *pb.HelloRequest) (*pb.HelloReply, error) {
-	log.Infof("got HelloAgain request: %s", req.Msg)
-	return &pb.HelloReply{Msg: "Hello " + req.Msg + " again!"}, nil
+    log.Infof("got HelloAgain request: %s", req.Msg)
+    return &pb.HelloReply{Msg: "Hello " + req.Msg + " again!"}, nil
 }
 ```
 
 At client side `client/main.go`, add codes to call `HelloAgain`:
 ```go
-	rsp, err = c.HelloAgain(context.Background(), &pb.HelloRequest{Msg: "world"})
-	if err != nil {
-		log.Error(err)
-	}
-	log.Info(rsp.Msg)
+    rsp, err = c.HelloAgain(context.Background(), &pb.HelloRequest{Msg: "world"})
+    if err != nil {
+        log.Error(err)
+    }
+    log.Info(rsp.Msg)
 ```
 
 Follow the `Run the Example` section to re-run your example and you will see `Hello world again!` in client log.

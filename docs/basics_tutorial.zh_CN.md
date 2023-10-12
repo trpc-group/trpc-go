@@ -92,10 +92,10 @@ type ClientHandleFunc func(ctx context.Context, req, rsp interface{}) error
 当实现你自己的拦截器时：
 ```go
 func MyFilter(ctx context.Context, req, rsp interface{}, next ClientHandleFunc) error {
-	// 前置流程
-	err := next(ctx, req, rsp)
-	// 后置流程
-	return err
+    // 前置流程
+    err := next(ctx, req, rsp)
+    // 后置流程
+    return err
 }
 ```
 `next` 前后的代码代会在实际请求之前和之后分别执行，即前置流程和后置流程。你可以实现很多拦截器，通过 [`client.WithFilters`](/client/options.go) 在调用时使用，框架会自动将这些拦截器串成一个链。
@@ -138,12 +138,12 @@ server:
 package plugin
 
 type Factory interface {
-	Type() string
-	Setup(name string, dec Decoder) error
+    Type() string
+    Setup(name string, dec Decoder) error
 }
 
 type Decoder interface {
-	Decode(cfg interface{}) error
+    Decode(cfg interface{}) error
 }
 ```
 `Type` 返回插件的类型，`Setup` 时会传入插件名和一个 `Decoder`，用于解析 yaml 的内容。yaml 来自 `trpc_go.yaml` 配置：
@@ -186,7 +186,7 @@ service TestStream {
 ```go
 type TestStreamService interface {
     ClientStream(TestStream_ClientStreamServer) error
-	// ...
+    // ...
 }
 
 type TestStream_ClientStreamServer interface {
@@ -229,9 +229,9 @@ server:
 import thttp trpc.group/trpc-go/trpc-go/http
 
 func main() {
-	s := trpc.NewServer()
-	thttp.RegisterNoProtocolServiceMux(s.Service("std_http"), your_http_handler) 
-	log.Info(s.Serve())
+    s := trpc.NewServer()
+    thttp.RegisterNoProtocolServiceMux(s.Service("std_http"), your_http_handler) 
+    log.Info(s.Serve())
 }
 ```
 

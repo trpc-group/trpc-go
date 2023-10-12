@@ -73,18 +73,18 @@ message HelloReply {
 在服务端 `server/main.go`，加入以下代码来实现 `HelloAgain`：
 ```go
 func (g Greeter) HelloAgain(ctx context.Context, req *pb.HelloRequest) (*pb.HelloReply, error) {
-	log.Infof("got HelloAgain request: %s", req.Msg)
-	return &pb.HelloReply{Msg: "Hello " + req.Msg + " again!"}, nil
+    log.Infof("got HelloAgain request: %s", req.Msg)
+    return &pb.HelloReply{Msg: "Hello " + req.Msg + " again!"}, nil
 }
 ```
 
 在客户端 `client/main.go`，加入以下代码来调用 `HelloAgain`：
 ```go
-	rsp, err = c.HelloAgain(context.Background(), &pb.HelloRequest{Msg: "world"})
-	if err != nil {
-		log.Error(err)
-	}
-	log.Info(rsp.Msg)
+    rsp, err = c.HelloAgain(context.Background(), &pb.HelloRequest{Msg: "world"})
+    if err != nil {
+        log.Error(err)
+    }
+    log.Info(rsp.Msg)
 ```
 
 按「执行示例」一节重新再执行一遍示例，你可能看到 `Hello world again!` 出现在客户端日志中。
