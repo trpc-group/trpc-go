@@ -179,6 +179,7 @@ func (cs *clientStream) SendMsg(m interface{}) error {
 	msg.WithFrameHead(newFrameHead(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA, cs.streamID))
 	msg.WithStreamID(cs.streamID)
 	msg.WithClientRPCName(cs.method)
+	msg.WithCalleeMethod(icodec.MethodFromRPCName(cs.method))
 	return cs.stream.Send(ctx, m)
 }
 
@@ -206,6 +207,7 @@ func (cs *clientStream) CloseSend() error {
 func (cs *clientStream) prepare(opt ...client.Option) error {
 	msg := codec.Message(cs.ctx)
 	msg.WithClientRPCName(cs.method)
+	msg.WithCalleeMethod(icodec.MethodFromRPCName(cs.method))
 	msg.WithStreamID(cs.streamID)
 
 	opt = append([]client.Option{client.WithStreamTransport(transport.DefaultClientStreamTransport)}, opt...)
@@ -227,6 +229,7 @@ func (cs *clientStream) invoke(ctx context.Context, _ *client.ClientStreamDesc) 
 	copyMetaData(newMsg, codec.Message(cs.ctx))
 	newMsg.WithFrameHead(newFrameHead(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT, cs.streamID))
 	newMsg.WithClientRPCName(cs.method)
+	newMsg.WithCalleeMethod(icodec.MethodFromRPCName(cs.method))
 	newMsg.WithStreamID(cs.streamID)
 	newMsg.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{
 		RequestMeta:    &trpcpb.TrpcStreamInitRequestMeta{},
@@ -275,6 +278,7 @@ func (cs *clientStream) feedback(i uint32) error {
 	msg.WithFrameHead(newFrameHead(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK, cs.streamID))
 	msg.WithStreamID(cs.streamID)
 	msg.WithClientRPCName(cs.method)
+	msg.WithCalleeMethod(icodec.MethodFromRPCName(cs.method))
 	msg.WithStreamFrame(&trpcpb.TrpcStreamFeedBackMeta{WindowSizeIncrement: i})
 	return cs.stream.Send(ctx, nil)
 }
