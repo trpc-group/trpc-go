@@ -243,8 +243,8 @@ var pattern2Handler map[string]http.HandlerFunc
 // HandleFunc registers the handler function for the given pattern.
 // Each time NewServer is called, all handlers registered through HandleFunc will be in effect.
 // Therefore, please prioritize using Server.HandleFunc.
-func HandleFunc(patten string, handler http.HandlerFunc) {
-	pattern2Handler[patten] = handler
+func HandleFunc(pattern string, handler http.HandlerFunc) {
+	pattern2Handler[pattern] = handler
 }
 
 // ErrorOutput normalizes the error output.
