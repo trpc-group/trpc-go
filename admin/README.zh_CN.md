@@ -135,13 +135,17 @@ func load(w http.ResponseWriter, r *http.Request) {
 
 ## 注册路由
 
-init 函数或者自己的内部函数注册 admin：
+需要在 `trpc.NewServer` 加载完服务端之后再注册自定义的 admin：
 ```go
 import (
+  "trpc.group/trpc-go/trpc-go"
   "trpc.group/trpc-go/trpc-go/admin"
 )
-func init() {
-  admin.HandleFunc("/cmds/load", load)  // 路径自己定义，一般在/cmds 下面，注意不要重复，不然会相互覆盖
+func main() {
+  s := trpc.NewServer()
+  adminServer, err := trpc.GetAdminService(s)
+  if err != nil { .. }
+  adminServer.HandleFunc("/cmds/load", load)  // 路径自己定义，一般在/cmds 下面，注意不要重复，不然会相互覆盖
 }
 ```
 

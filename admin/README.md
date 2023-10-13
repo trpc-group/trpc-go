@@ -145,10 +145,14 @@ Register admin in the init function or in your own internal function:
 
 ```go
 import (
+  "trpc.group/trpc-go/trpc-go"
   "trpc.group/trpc-go/trpc-go/admin"
 )
 func init() {
-  admin.HandleFunc("/cmds/load", load)  // Define the path yourself, usually under /cmds. Be careful not to duplicate, otherwise they will overwrite each other.
+  s := trpc.NewServer()
+  adminServer, err := trpc.GetAdminService(s)
+  if err != nil { .. }
+  adminServer.HandleFunc("/cmds/load", load)  // Define the path yourself, usually under /cmds. Be careful not to duplicate, otherwise they will overwrite each other.
 }
 ```
 
