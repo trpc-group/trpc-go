@@ -193,14 +193,6 @@ func (s *Server) WatchStatus(serviceName string, onStatusChanged func(healthchec
 	s.healthCheck.Watch(serviceName, onStatusChanged)
 }
 
-var pattern2Handler map[string]http.HandlerFunc
-
-// HandleFunc registers the handler function for the given pattern.
-// Each time NewServer is called, all handlers registered through HandleFunc will be in effect.
-func HandleFunc(patten string, handler http.HandlerFunc) {
-	pattern2Handler[patten] = handler
-}
-
 // HandleFunc registers the handler function for the given pattern.
 func (s *Server) HandleFunc(pattern string, handler http.HandlerFunc) {
 	_ = s.router.add(pattern, handler)
@@ -244,6 +236,15 @@ func (s *Server) close() {
 		return
 	}
 	s.closeErr = s.server.Close()
+}
+
+var pattern2Handler map[string]http.HandlerFunc
+
+// HandleFunc registers the handler function for the given pattern.
+// Each time NewServer is called, all handlers registered through HandleFunc will be in effect.
+// Therefore, please prioritize using Server.HandleFunc.
+func HandleFunc(patten string, handler http.HandlerFunc) {
+	pattern2Handler[patten] = handler
 }
 
 // ErrorOutput normalizes the error output.
