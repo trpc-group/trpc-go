@@ -111,6 +111,10 @@ func (s *Server) configRouter(r *router) *router {
 	r.add(pprofSymbol, pprof.Symbol)
 	r.add(pprofTrace, pprof.Trace)
 
+	for pattern, handler := range pattern2Handler {
+		r.add(pattern, handler)
+	}
+
 	// Delete the router registered with http.DefaultServeMux.
 	// Avoid causing security problems: https://github.com/golang/go/issues/22085.
 	err := unregisterHandlers(
@@ -189,8 +193,16 @@ func (s *Server) WatchStatus(serviceName string, onStatusChanged func(healthchec
 	s.healthCheck.Watch(serviceName, onStatusChanged)
 }
 
+var pattern2Handler map[string]http.HandlerFunc
+
 // HandleFunc registers the handler function for the given pattern.
-func (s *Server) HandleFunc(pattern string, handler func(w http.ResponseWriter, r *http.Request)) {
+// Each time NewServer is called, all handlers registered through HandleFunc will be in effect.
+func HandleFunc(patten string, handler http.HandlerFunc) {
+	pattern2Handler[patten] = handler
+}
+
+// HandleFunc registers the handler function for the given pattern.
+func (s *Server) HandleFunc(pattern string, handler http.HandlerFunc) {
 	_ = s.router.add(pattern, handler)
 }
 
