@@ -141,7 +141,7 @@ func load(w http.ResponseWriter, r *http.Request) {
 
 ## Register a route
 
-Register admin in the init function or in your own internal function:
+Register admin handle function after `trpc.NewServer`:
 
 ```go
 import (
