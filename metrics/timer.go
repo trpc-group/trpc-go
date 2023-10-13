@@ -31,6 +31,9 @@ type timer struct {
 // Record records the time cost since last Record.
 func (t *timer) Record() time.Duration {
 	duration := time.Since(t.start)
+	if len(metricsSinks) == 0 {
+		return duration
+	}
 	t.start = time.Now()
 	r := NewSingleDimensionMetrics(t.name, float64(duration), PolicyTimer)
 	for _, sink := range metricsSinks {
@@ -41,6 +44,9 @@ func (t *timer) Record() time.Duration {
 
 // RecordDuration records duration and reset t.start to now.
 func (t *timer) RecordDuration(duration time.Duration) {
+	if len(metricsSinks) == 0 {
+		return
+	}
 	t.start = time.Now()
 	r := NewSingleDimensionMetrics(t.name, float64(duration), PolicyTimer)
 	for _, sink := range metricsSinks {
