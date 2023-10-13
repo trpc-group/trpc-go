@@ -38,7 +38,6 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         with:
           version: latest 
-          skip-cache: true
           only-new-issues: true
           skip-cache: true # To prevent occasional failure of this action.
   typos:
