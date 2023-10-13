@@ -1,92 +1,62 @@
-# tRPC-Go framework
+English | [中文](README.zh_CN.md)
 
-The tRPC-Go framework is the Golang version of the company's unified microservices framework, mainly designed as an RPC framework with high performance, pluggability, and easy testing in mind.
+# tRPC-Go Framework
 
-## Documentation: [iwiki](https://trpc.group/trpc-go/trpc-wiki)
+[![Go Reference](https://pkg.go.dev/badge/github.com/trpc.group/trpc-go.svg)](https://pkg.go.dev/github.com/trpc.group/trpc-go)
+[![Go Report Card](https://goreportcard.com/badge/github.com/trpc.group/trpc-go/trpc-go)](https://goreportcard.com/report/github.com/trpc.group/trpc-go/trpc-go)
+[![LICENSE](https://img.shields.io/github/license/trpc.group/trpc-go.svg?style=flat-square)](https://github.com/trpc.group/trpc-go/blob/main/LICENSE)
+[![Releases](https://img.shields.io/github/release/trpc.group/trpc-go.svg?style=flat-square)](https://github.com/trpc.group/trpc-go/releases)
+[![Docs](https://img.shields.io/badge/docs-latest-green)](http://test.trpc.group.woa.com/docs/)
+[![Tests](https://github.com/trpc-group/trpc-go/actions/workflows/prc.yml/badge.svg)](https://github.com/trpc-group/trpc-go/actions/workflows/prc.yml)
+[![Coverage](https://codecov.io/gh/trpc.group/trpc-go/branch/main/graph/badge.svg)](https://app.codecov.io/gh/trpc.group/trpc-go/tree/main)
 
-## TRY IT
+
+tRPC-Go, as the [Go][] language implementation of [tRPC][], is a battle-tested microservices framework that has been extensively validated in production environments. It not only delivers high performance but also offers ease of use and testability.
+
+For more information, please refer to the [quick start guide][quick start] and [detailed documentation][docs].
 
 ## Overall Architecture
 
-![Architecture Diagram](TODO: After open sourcing, upload the image to GitHub and make sure to adjust the image link)
+![Architecture](.resources/overall.png)
 
-- A server process supports starting multiple service instances and listening to multiple addresses.
-- All components are pluggable, with built-in default implementations for basic functions like transport, which can be replaced. Other components need to be implemented by third-party businesses and registered with the framework.
-- All interfaces can be mocked, using gomock & mockgen to generate mock code for easy testing.
-- Supports any third-party business protocol, just need to implement the business protocol encoding and decoding interface. Default support for trpc and http protocols, switchable at any time, seamless development of CGI and backend servers.
-- Provides a trpc command-line tool for generating code templates.
+tRPC-Go has the following features:
 
-## Plugin Management
-
-- The framework's plugin management design only provides standard interfaces and interface registration capabilities.
-- External components are wrapped by third-party businesses as bridges, wrapping system components according to the framework interface, and registering them with the framework.
-- When using, just import the wrapper bridge path.
-- For specific plugin principles, refer to [plugin](plugin).
-
-## Generation Tool
-
-- Installation
-
-```
-# For the first-time installation, make sure the environment variable PATH is configured with $GOBIN or $GOPATH/bin
-go get -u trpc.tech/trpc-go/trpc-go-cmdline/v2/trpc
-
-# Configure dependent tools, such as protoc, protoc-gen-go, mockgen, etc.
-trpc setup
-
-# Subsequent updates, rollback versions
-trpc version                            # Check version
-trpc upgrade -l                         # Check for version updates
-trpc upgrade [--version <version>]      # Update to the specified version
-```
-
-- Usage
-
-```bash
-trpc help create
-```
-
-```bash
-Specify the pb file to quickly create a project or rpcstub,
-
-'trpc create' has two modes:
-- Generate a complete service project
-- Generate an rpcstub for the called service, specify the '-rpconly' option.
-
-Usage:
-  trpc create [flags]
-
-Flags:
-      --alias                  enable alias mode of rpc name
-      --assetdir string        path of project template
-  -f, --force                  enable overwritten existed code forcibly
-  -h, --help                   help for create
-      --lang string            programming language, including go, java, python (default "go")
-  -m, --mod string             go module, default: ${pb.package}
-  -o, --output string          output directory
-      --protocol string        protocol to use, trpc, http, etc (default "trpc")
-      --protodir stringArray   include path of the target protofile (default [.])
-  -p, --protofile string       protofile used as IDL of target service
-      --rpconly                generate rpc stub only
-      --swagger                enable swagger to gen swagger api document.
-  -v, --verbose                show verbose logging info
-```
-
-## Service Protocol
-
-- The trpc framework supports any third-party protocol and defaults to trpc and http protocols
-- Just specify the protocol field in the configuration file to be equal to http to start a CGI service
-- Using the same service description protocol, completely identical code, can switch between trpc and http at any time, achieving truly seamless development of CGI and backend services
-- Request data is carried using the http post method and parsed into the method's request structure, specifying the use of pb or json through the http header content-type (application/json or application/pb)
-- Third-party custom business protocols can refer to [codec](codec)
+- Multiple services can be started within a single process, listening on multiple addresses.
+- All components are pluggable, with default implementations for various basic functionalities that can be replaced. Other components can be implemented by third parties and registered within the framework.
+- All interfaces can be mock tested using gomock&mockgen to generate mock code, facilitating testing.
+- The framework supports any third-party protocol by implementing the `codec` interfaces for the respective protocol. It defaults to supporting trpc and http protocols and can be switched at any time.
+- It provides the [trpc command-line tool][trpc-cmdline] for generating code templates.
 
 ## Related Documentation
 
-- [Framework Design Document](https://trpc.group/trpc-go/trpc-wiki)
-- [Detailed description of trpc tool](https://trpc.group/trpc-go/trpc-go-cmdline)
-- [helloworld Development Guide](examples/helloworld)
-- [Third-party protocol implementation demo](https://trpc.group/trpc-go/trpc-codec)
+- [quick start guide][quick start] and [detailed documentation][docs]
+- readme documents in each directory
+- [trpc command-line tool][trpc-cmdline]
+- [helloworld development guide][helloworld]
+- [example documentation for various features][features]
+
+## Ecosystem
+
+- [codec plugins][go-codec]
+- [filter plugins][go-filter]
+- [database plugins][go-database]
+- [more...][ecosystem]
 
 ## How to Contribute
 
-Interested students can first take a look at the [Contribution Guide](CONTRIBUTING.md), then look at the unclaimed issues in the Issue, claim tasks for themselves, and contribute to tRPC-Go together.
+If you're interested in contributing, please take a look at the [contribution guidelines][contributing] and check the [unassigned issues][issues] in the repository. Claim a task and let's contribute together to tRPC-Go.
+
+[Go]: https://golang.org
+[go-releases]: https://golang.org/doc/devel/release.html
+[tRPC]: https://github.com/trpc-group/trpc
+[trpc-cmdline]: https://github.com/trpc-group/trpc-cmdline
+[docs]: /docs/README.md
+[quick start]: /docs/quick_start.md
+[contributing]: CONTRIBUTING.md
+[issues]: https://github.com/trpc-group/trpc-go/issues
+[go-codec]: https://github.com/trpc-ecosystem/go-codec
+[go-filter]: https://github.com/trpc-ecosystem/go-filter
+[go-database]: https://github.com/trpc-ecosystem/go-database
+[ecosystem]: https://github.com/orgs/trpc-ecosystem/repositories
+[helloworld]: /examples/helloworld/
+[features]: /examples/features/

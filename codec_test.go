@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"log"
 	"net"
 	"regexp"
@@ -18,6 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
+	"trpc.group/trpc-go/trpc-go/internal/attachment"
 	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	"trpc.group/trpc-go/trpc-go"
@@ -34,19 +36,19 @@ func TestFramer_ReadFrame(t *testing.T) {
 		totalLen := 0
 		buf := new(bytes.Buffer)
 		// MagicNum 0x930, 2bytes
-		err = binary.Write(buf, binary.BigEndian, uint16(trpcpb.TrpcMagic_TRPC_MAGIC_VALUE+1))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(trpcpb.TrpcMagic_TRPC_MAGIC_VALUE+1)))
 		// frame type, 1byte
-		err = binary.Write(buf, binary.BigEndian, uint8(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint8(0)))
 		// stream frame type, 1byte
-		err = binary.Write(buf, binary.BigEndian, uint8(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint8(0)))
 		// total len
-		err = binary.Write(buf, binary.BigEndian, uint32(totalLen))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint32(totalLen)))
 		// pb header len
-		err = binary.Write(buf, binary.BigEndian, uint16(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(0)))
 		// stream ID
-		err = binary.Write(buf, binary.BigEndian, uint16(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(0)))
 		// reserved
-		err = binary.Write(buf, binary.BigEndian, uint32(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint32(0)))
 		assert.Nil(t, err)
 
 		fb := &trpc.FramerBuilder{}
@@ -62,18 +64,18 @@ func TestFramer_ReadFrame(t *testing.T) {
 		totalLen := trpc.DefaultMaxFrameSize + 1
 		buf := new(bytes.Buffer)
 		// MagicNum 0x930, 2bytes
-		err = binary.Write(buf, binary.BigEndian, uint16(trpcpb.TrpcMagic_TRPC_MAGIC_VALUE))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(trpcpb.TrpcMagic_TRPC_MAGIC_VALUE)))
 		// frame type, 1byte
-		err = binary.Write(buf, binary.BigEndian, uint8(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint8(0)))
 		// stream frame type, 1byte
-		err = binary.Write(buf, binary.BigEndian, uint8(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint8(0)))
 		// total len
-		err = binary.Write(buf, binary.BigEndian, uint32(totalLen))
-		err = binary.Write(buf, binary.BigEndian, uint16(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint32(totalLen)))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(0)))
 		// stream ID
-		err = binary.Write(buf, binary.BigEndian, uint16(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(0)))
 		// reserved
-		err = binary.Write(buf, binary.BigEndian, uint32(0))
+		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint32(0)))
 		assert.Nil(t, err)
 
 		fb := &trpc.FramerBuilder{}
@@ -251,38 +253,71 @@ func TestServerCodec_CallTypeDecode(t *testing.T) {
 	reqBuf, err := cc.Encode(msg, nil)
 	assert.Nil(t, err)
 	_, err = sc.Decode(msg, reqBuf)
+	assert.Nil(t, err)
 	assert.Equal(t, msg.CallType(), codec.SendOnly)
 }
 
 func TestClientCodec_EncodeErr(t *testing.T) {
-	cc := trpc.ClientCodec{}
-	msg := codec.Message(trpc.BackgroundContext())
-	msg.WithClientMetaData(codec.MetaData{"overHeadLengthU16": make([]byte, 64*1024)})
-	_, err := cc.Encode(msg, nil)
-	assert.EqualError(t, err, "head len overflows uint16")
+	t.Run("head len overflows uint16", func(t *testing.T) {
+		cc := trpc.ClientCodec{}
+		msg := codec.Message(trpc.BackgroundContext())
+		msg.WithClientMetaData(codec.MetaData{"overHeadLengthU16": make([]byte, 64*1024)})
+		_, err := cc.Encode(msg, nil)
+		assert.EqualError(t, err, "head len overflows uint16")
+	})
+	t.Run("frame len is too large", func(t *testing.T) {
+		cc := trpc.ClientCodec{}
+		msg := codec.Message(trpc.BackgroundContext())
+		_, err := cc.Encode(msg, make([]byte, trpc.DefaultMaxFrameSize))
+		assert.EqualError(t, err, "frame len is larger than MaxFrameSize(10485760)")
+	})
+	t.Run("encoding attachment failed", func(t *testing.T) {
+		cc := trpc.ClientCodec{}
+		msg := codec.Message(trpc.BackgroundContext())
+		msg.WithCommonMeta(codec.CommonMeta{attachment.ClientAttachmentKey{}: &attachment.Attachment{Request: &errorReader{}, Response: attachment.NoopAttachment{}}})
+		_, err := cc.Encode(msg, nil)
+		assert.EqualError(t, err, "encoding attachment: reading errorReader always returns error")
+	})
 
-	msg = codec.Message(trpc.BackgroundContext())
-	_, err = cc.Encode(msg, make([]byte, trpc.DefaultMaxFrameSize))
-	assert.EqualError(t, err, "frame len is larger than MaxFrameSize(10485760)")
+}
+
+type errorReader struct{}
+
+func (*errorReader) Read(p []byte) (n int, err error) {
+	return 0, errors.New("reading errorReader always returns error")
 }
 
 func TestServerCodec_EncodeErr(t *testing.T) {
-	sc := trpc.ServerCodec{}
-	msg := codec.Message(trpc.BackgroundContext())
-	msg.WithServerMetaData(codec.MetaData{"overHeadLengthU16": make([]byte, 64*1024)})
-	rspBuf, err := sc.Encode(msg, nil)
-	assert.Nil(t, err)
-	head := &trpcpb.ResponseProtocol{}
-	err = proto.Unmarshal(rspBuf[16:], head)
-	assert.Nil(t, err)
-	assert.Equal(t, int32(errs.RetServerEncodeFail), head.GetRet())
+	t.Run("head len overflows uint16", func(t *testing.T) {
+		msg := codec.Message(trpc.BackgroundContext())
+		sc := trpc.ServerCodec{}
+		msg.WithServerMetaData(codec.MetaData{"overHeadLengthU16": make([]byte, 64*1024)})
+		rspBuf, err := sc.Encode(msg, nil)
+		assert.Nil(t, err)
 
-	msg = codec.Message(trpc.BackgroundContext())
-	rspBuf, err = sc.Encode(msg, make([]byte, trpc.DefaultMaxFrameSize))
-	assert.Nil(t, err)
-	err = proto.Unmarshal(rspBuf[16:], head)
-	assert.Nil(t, err)
-	assert.Equal(t, int32(errs.RetServerEncodeFail), head.GetRet())
+		head := &trpcpb.ResponseProtocol{}
+		err = proto.Unmarshal(rspBuf[16:], head)
+		assert.Nil(t, err)
+		assert.Equal(t, int32(errs.RetServerEncodeFail), head.GetRet())
+	})
+	t.Run("frame len is too large", func(t *testing.T) {
+		msg := codec.Message(trpc.BackgroundContext())
+		sc := trpc.ServerCodec{}
+		rspBuf, err := sc.Encode(msg, make([]byte, trpc.DefaultMaxFrameSize))
+		assert.Nil(t, err)
+
+		head := &trpcpb.ResponseProtocol{}
+		err = proto.Unmarshal(rspBuf[16:], head)
+		assert.Nil(t, err)
+		assert.Equal(t, int32(errs.RetServerEncodeFail), head.GetRet())
+	})
+	t.Run("encoding attachment failed", func(t *testing.T) {
+		msg := codec.Message(trpc.BackgroundContext())
+		msg.WithCommonMeta(codec.CommonMeta{attachment.ServerAttachmentKey{}: &attachment.Attachment{Request: attachment.NoopAttachment{}, Response: &errorReader{}}})
+		sc := trpc.ServerCodec{}
+		_, err := sc.Encode(msg, nil)
+		assert.EqualError(t, err, "encoding attachment: reading errorReader always returns error")
+	})
 }
 
 func TestMultiplexFrame(t *testing.T) {

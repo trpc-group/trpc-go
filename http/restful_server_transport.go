@@ -75,6 +75,7 @@ func putRESTMsgInCtx(
 	ctx, msg := codec.WithNewMessage(ctx)
 	msg.WithCalleeServiceName(service)
 	msg.WithServerRPCName(method)
+	msg.WithCalleeMethod(method)
 	msg.WithSerializationType(codec.SerializationTypePB)
 	if v := headerGetter(TrpcTimeout); v != "" {
 		i, _ := strconv.Atoi(v)

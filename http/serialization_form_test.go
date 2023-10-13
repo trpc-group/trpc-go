@@ -132,7 +132,7 @@ func TestMarshal(t *testing.T) {
 		Iface:  map[interface{}]string{nil: "time"},
 		Struct: map[struct{}]string{{}: "str"},
 	}
-	buf, err = s.Marshal(&test)
+	_, err = s.Marshal(&test)
 	require.NotNil(err)
 
 	nestedMap := map[string]interface{}{
@@ -141,7 +141,7 @@ func TestMarshal(t *testing.T) {
 			"name": "haha",
 		},
 	}
-	buf, err = s.Marshal(nestedMap)
+	_, err = s.Marshal(nestedMap)
 	require.Nil(err)
 }
 

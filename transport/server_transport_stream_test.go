@@ -132,6 +132,8 @@ func TestStreamTCPListenAndServeFail(t *testing.T) {
 	ct = transport.NewClientStreamTransport()
 	err = ct.Init(ctx, transport.WithDialNetwork("tcp"), transport.WithDialAddress(":12014"),
 		transport.WithClientFramerBuilder(&multiplexedFramerBuilder{}))
+	assert.NotNil(t, err)
+
 	ctx = context.Background()
 	ctx, msg = codec.WithNewMessage(ctx)
 	msg.WithStreamID(defaultStreamID)

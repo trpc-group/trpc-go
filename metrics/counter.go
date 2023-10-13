@@ -26,6 +26,9 @@ func (c *counter) Incr() {
 
 // IncrBy increases counter by v and reports for each external Sink-able systems.
 func (c *counter) IncrBy(v float64) {
+	if len(metricsSinks) == 0 {
+		return
+	}
 	rec := NewSingleDimensionMetrics(c.name, v, PolicySUM)
 	for _, sink := range metricsSinks {
 		sink.Report(rec)

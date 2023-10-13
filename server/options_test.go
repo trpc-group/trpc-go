@@ -193,10 +193,9 @@ func TestMoreOptions(t *testing.T) {
 	assert.Equal(t, transportOpts.ServerAsync, true)
 
 	// WithMaxRoutines
-	o = server.WithMaxRoutines(100)
+	server.WithMaxRoutines(100)(opts)
 	// WithWritev
-	o = server.WithWritev(true)
-	o(opts)
+	server.WithWritev(true)(opts)
 	for _, o := range opts.ServeOptions {
 		o(transportOpts)
 	}

@@ -564,6 +564,8 @@ func TestSaveListener(t *testing.T) {
 		t.Fatalf("get freeport error: %v", err)
 	}
 	err = transport.SaveListener(NewPacketConn{})
+	assert.NotNil(t, err)
+
 	newListener, _ := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	err = transport.SaveListener(newListener)
 	assert.Nil(t, err)

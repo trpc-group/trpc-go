@@ -95,9 +95,9 @@ func TestBuf_Read(t *testing.T) {
 	require.Equal(t, 3, n)
 	require.Equal(t, "123", string(bts))
 
-	n, err = b.Read(bts)
+	_, err = b.Read(bts)
 	require.Nil(t, err)
-	n, err = b.Read(bts)
+	_, err = b.Read(bts)
 	require.Nil(t, err)
 
 	n, err = b.Read(bts)

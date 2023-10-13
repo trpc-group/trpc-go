@@ -28,7 +28,7 @@ import (
 
 func TestPutBackMessage(t *testing.T) {
 	ctx := context.Background()
-	ctx, msg := codec.WithCloneMessage(ctx)
+	_, msg := codec.WithCloneMessage(ctx)
 	type foo struct {
 		I int
 	}
@@ -77,7 +77,7 @@ func TestPutBackMessage(t *testing.T) {
 	codec.PutBackMessage(msg)
 
 	ctx2 := context.Background()
-	ctx2, msg2 := codec.WithNewMessage(ctx2)
+	_, msg2 := codec.WithNewMessage(ctx2)
 
 	assert.Nil(t, msg2.FrameHead())
 	assert.Equal(t, time.Duration(0), msg2.RequestTimeout())
@@ -275,7 +275,7 @@ func TestMoreRegisterMessage(t *testing.T) {
 	ctx, m3 := codec.WithNewMessage(ctx)
 	assert.Equal(t, m3, msg)
 	assert.Equal(t, m3.CalleeApp(), "")
-	ctx, m4 := codec.WithNewMessage(ctx)
+	_, m4 := codec.WithNewMessage(ctx)
 	assert.NotEqual(t, m4, m1)
 
 	var fakemsg codec.Msg = nil
@@ -468,45 +468,4 @@ func TestEnsureMessage(t *testing.T) {
 	newCtx, newMsg := codec.EnsureMessage(ctx)
 	require.Equal(t, ctx, newCtx)
 	require.Equal(t, msg, newMsg)
-}
-
-func TestSetMethodNameUsingRPCName(t *testing.T) {
-	msg := codec.Message(context.Background())
-	testSetMethodNameUsingRPCName(t, msg, msg.WithServerRPCName)
-	testSetMethodNameUsingRPCName(t, msg, msg.WithClientRPCName)
-}
-
-func testSetMethodNameUsingRPCName(t *testing.T, msg codec.Msg, msgWithRPCName func(string)) {
-	var cases = []struct {
-		name           string
-		originalMethod string
-		rpcName        string
-		expectMethod   string
-	}{
-		{"normal trpc rpc name", "", "/trpc.app.server.service/method", "method"},
-		{"normal http url path", "", "/v1/subject/info/get", "/v1/subject/info/get"},
-		{"invalid trpc rpc name (method name is empty)", "", "trpc.app.server.service", "trpc.app.server.service"},
-		{"invalid trpc rpc name (method name is not mepty)", "/v1/subject/info/get", "trpc.app.server.service", "/v1/subject/info/get"},
-		{"valid trpc rpc name will override existing method name", "/v1/subject/info/get", "/trpc.app.server.service/method", "method"},
-		{"invalid trpc rpc will not override existing method name", "/v1/subject/info/get", "/trpc.app.server.service", "/v1/subject/info/get"},
-	}
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			resetMsgRPCNameAndMethodName(msg)
-			msg.WithCalleeMethod(tt.originalMethod)
-			msgWithRPCName(tt.rpcName)
-			method := msg.CalleeMethod()
-			if method != tt.expectMethod {
-				t.Errorf("given original method %s and rpc name %s, expect new method name %s, got %s",
-					tt.originalMethod, tt.rpcName, tt.expectMethod, method)
-			}
-		})
-	}
-}
-
-func resetMsgRPCNameAndMethodName(msg codec.Msg) {
-	msg.WithCalleeMethod("")
-	msg.WithClientRPCName("")
-	msg.WithServerRPCName("")
 }

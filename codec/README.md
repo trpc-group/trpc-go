@@ -1,53 +1,81 @@
-# tRPC-Go Codec [中文主页](README_CN.md)
-tRPC-Go codec package defines the business communication protocol of packing and unpacking.
-- tRPC-Go can support any third party business communication protocol, which implements codec interface.
-- Every business protocol uses one single go module, and the `go get` command only pulls the specific codec module.
-- There are two typical business protocol pattern: IDL protocol, such as tars, and non-IDL protocol, such as oidb. those two examples can be refer when implements other protocol.
+English | [中文](README.zh_CN.md)
 
-## Business Protocol Implementation Repository: https://trpc.group/trpc-go/trpc-codec
+The `codec` package can support any third-party business communication protocol by simply implementing the relevant interfaces.
+The following introduces the related interfaces of the `codec` package with the server-side protocol processing flow as an example.
+The client-side protocol processing flow is the reverse of the server-side protocol processing flow, and is not described here.
+For information on how to develop third-party business communication protocol plugins, please refer to [here](/docs/developer_guide/develop_plugins/protocol.md).
 
+## Related Interfaces
 
-# Core Concept
-- Message: common message body for every request. To support any third party protocol, tRPC provides the `message` structure to carry framework basic information.
-- Codec: business protocol packing and unpacking interface. Business protocol contains head and body, the codec implementation only needs to parse binary body, and don't need to care about head, which is in msg.
+The following diagram shows the server-side protocol processing flow, which includes the related interfaces in the `codec` package.
 
-```golang
+```ascii
+                              package                     req body                                                       req struct
++-------+        +-------+    []byte     +--------------+  []byte    +-----------------------+    +----------------------+
+|       +------->+ Framer +------------->| Codec-Decode +----------->| Compressor-Decompress +--->| Serializer-Unmarshal +------------+
+|       |        +-------+               +--------------+            +-----------------------+    +----------------------+            |
+|       |                                                                                                                        +----v----+
+|network|                                                                                                                        | Handler |
+|       |                                                 rsp body                                                               +----+----+
+|       |                                                  []byte                                                         rsp struct  |
+|       |                                +---------------+           +---------------------+       +--------------------+             |
+|       <--------------------------------+  Codec-Encode +<--------- + Compressor-Compress + <-----+ Serializer-Marshal +-------------+
++-------+                                +---------------+           +---------------------+       +--------------------+
+```
+
+- `codec.Framer` reads binary data from the network.
+
+```go
+// Framer defines how to read a data frame.
+type Framer interface {
+    ReadFrame() ([]byte, error)
+}
+```
+
+- `code.Codec`: Provides the `Decode` and `Encode` interfaces, which parse the binary request body from the complete binary network data package and package the binary response body into a complete binary network data package, respectively.
+
+```go
+// Codec defines the interface of business communication protocol,
+// which contains head and body. It only parses the body in binary,
+// and then the business body struct will be handled by serializer.
+// In common, the body's protocol is pb, json, etc. Specially,
+// we can register our own serializer to handle other body type.
 type Codec interface {
-	// Encode pack the body into binary buffer.
-	Encode(message Msg, body []byte) (buffer []byte, err error)
+    // Encode pack the body into binary buffer.
+    // client: Encode(msg, reqBody)(request-buffer, err)
+    // server: Encode(msg, rspBody)(response-buffer, err)
+    Encode(message Msg, body []byte) (buffer []byte, err error)
 
-	// Decode unpack the body from binary buffer.
-	Decode(message Msg, buffer []byte) (body []byte, err error)
+    // Decode unpack the body from binary buffer
+    // server: Decode(msg, request-buffer)(reqBody, err)
+    // client: Decode(msg, response-buffer)(rspBody, err)
+    Decode(message Msg, buffer []byte) (body []byte, err error)
 }
 ```
 
-- Serializer: body serialization interface, now tRPC-Go supports protobuf, json, fb and xml protocol. This serializer is pluggable and users can define their own and register it. 
-```golang
-type Serializer interface {
-	// Unmarshal deserialize the in bytes into body
-	Unmarshal(in []byte, body interface{}) error
+- `codec.Compressor`: Provides the `Decompress` and `Compress` interfaces. 
+Currently, gzip and snappy type `Compressor` are supported. 
+You can define your own `Compressor` and register it to the `codec` package.
 
-	// Marshal returns the bytes serialized from body.
-	Marshal(body interface{}) (out []byte, err error)
-}
-```
-
-- Compressor: body compress and decompress interface, now tRPC-Go supports gzip and snappy protocol. This compressor is also pluggable and users can define their own and register it
-  
-```golang
+```go
+// Compressor is body compress and decompress interface.
 type Compressor interface {
-    // Decompress returns the origin binary data decompressed by the compressor.
-	Decompress(in []byte) (out []byte, err error)
-	// Compress returns the compressed binary body data.
 	Compress(in []byte) (out []byte, err error)
+	Decompress(in []byte) (out []byte, err error)
 }
 ```
 
-# Specific Implementation Steps (refer to [trpc-codec](codec.go))
-- 1. Implements tRPC-Go [FrameBuilder unpacking interface](transport/transport.go), parses out a complete message package。
-- 2. Implements tRPC-Go [Codec packing and unpacking interface](codec/codec.go), and the following points should be noted:
-    - after server codec decode receives request package, it needs to tell tRPC how to dispatch route by `msg.WithServerRPCName` and set upstream left timeout by `msg.WithRequestTimeout`。
-    - before server codec encode sends response package, it needs to transfer the error returned by handler function into business protocol package head error code by `msg.ServerRspErr`.
-    - before client codec encode sends request package, it needs to set request route by `msg.ClientRPCName` and tell the left timeout to downstream by `msg.RequestTimeout`.
-    - after client codec decode receives response package, it needs to transfer business protocol error code into error by `errs.New`, which will returned to user call function.
-- 3. registers the codec implementation into tRPC framework by `init()` function.
+- `codec.Serializer`: Provides the `Unmarshal` and `Marshal` interfaces. 
+Currently, protobuf, json, fb, and xml types of `Serializer` are supported. 
+You can define your own `Serializer` and register it to the `codec` package.
+
+```go
+// Serializer defines body serialization interface.
+type Serializer interface {
+    // Unmarshal deserialize the in bytes into body
+    Unmarshal(in []byte, body interface{}) error
+
+    // Marshal returns the bytes serialized from body.
+    Marshal(body interface{}) (out []byte, err error)
+}
+```
