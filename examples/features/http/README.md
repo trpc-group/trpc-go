@@ -23,5 +23,5 @@ The server log will be displayed as follows:
 ## Explanation
 For more Information, please refer to:
 
-- [Building a Generic HTTP Standard Service with tRPC-Go](https://iwiki.woa.com/pages/viewpage.action?pageId=490796278)
-- [Building a Generic HTTP RPC Service with tRPC-Go](https://iwiki.woa.com/pages/viewpage.action?pageId=490796254)
+- [Building a Generic HTTP Standard Service with tRPC-Go](/http/README.md#pan-http-standard-services)
+- [Building a Generic HTTP RPC Service with tRPC-Go](/http/README.md#pan-http-rpc-service)
