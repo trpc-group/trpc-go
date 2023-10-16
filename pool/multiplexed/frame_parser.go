@@ -10,5 +10,5 @@ import "io"
 // FrameParser is the interface to parse a single frame.
 type FrameParser interface {
 	// Parse parses vid and frame from r.
-	Parse(r io.Reader) (vid uint32, buf []byte, err error)
+	Parse(r io.Reader) (vid uint32, frame []byte, err error)
 }

@@ -95,7 +95,7 @@ const (
 )
 
 // errSendingQueueFull indicates sending queue is full.
-var errSendingQueueFull = errors.New("connection's send queue is full")
+var errSendingQueueFull = errors.New("connection's sending queue is full")
 
 type connOptions struct {
 	sendingQueueSize int

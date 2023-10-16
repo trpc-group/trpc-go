@@ -17,7 +17,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/internal/allocator"
 )
 
-// ErrReadFrom indicates packet connection Readfrom failed.
+// ErrReadFrom indicates packet connection ReadFrom failed.
 var ErrReadFrom = errors.New("packet connection ReadFrom failed")
 
 // New creates a packet buffer with specific packet connection and size.
