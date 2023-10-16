@@ -41,6 +41,10 @@ func GetCompressor(compressType int) Compressor {
 // Compress returns the compressed data, the data is compressed
 // by a specific compressor.
 func Compress(compressorType int, in []byte) ([]byte, error) {
+	// Explicitly check for noop to avoid accessing the map.
+	if compressorType == CompressTypeNoop {
+		return in, nil
+	}
 	if len(in) == 0 {
 		return nil, nil
 	}
@@ -54,6 +58,10 @@ func Compress(compressorType int, in []byte) ([]byte, error) {
 // Decompress returns the decompressed data, the data is decompressed
 // by a specific compressor.
 func Decompress(compressorType int, in []byte) ([]byte, error) {
+	// Explicitly check for noop to avoid accessing the map.
+	if compressorType == CompressTypeNoop {
+		return in, nil
+	}
 	if len(in) == 0 {
 		return nil, nil
 	}
