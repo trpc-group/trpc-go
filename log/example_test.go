@@ -1,7 +1,15 @@
+//
+//
 // Tencent is pleased to support the open source community by making tRPC available.
-// Copyright (C) 2023 THL A29 Limited, a Tencent company. All rights reserved.
+//
+// Copyright (C) 2023 THL A29 Limited, a Tencent company.
+// All rights reserved.
+//
 // If you have downloaded a copy of the tRPC source code from Tencent,
-// please note that tRPC source code is licensed under the Apache 2.0 License that can be found in the LICENSE file.
+// please note that tRPC source code is licensed under the  Apache 2.0 License,
+// A copy of the Apache 2.0 License is included in this file.
+//
+//
 
 package log_test
 
@@ -36,14 +44,14 @@ func Example() {
 	l.Errorf("hello world")
 
 	// Output:
-	// xxx	DEBUG	log/example_test.go:27	hello world	{"tRPC-Go": "log"}
-	// xxx	DEBUG	log/example_test.go:28	hello world	{"tRPC-Go": "log"}
-	// xxx	INFO	log/example_test.go:29	hello world	{"tRPC-Go": "log"}
-	// xxx	WARN	log/example_test.go:30	hello world	{"tRPC-Go": "log"}
-	// xxx	ERROR	log/example_test.go:31	hello world	{"tRPC-Go": "log"}
-	// xxx	DEBUG	log/example_test.go:32	hello world	{"tRPC-Go": "log"}
-	// xxx	DEBUG	log/example_test.go:33	hello world	{"tRPC-Go": "log"}
-	// xxx	INFO	log/example_test.go:34	hello world	{"tRPC-Go": "log"}
-	// xxx	WARN	log/example_test.go:35	hello world	{"tRPC-Go": "log"}
-	// xxx	ERROR	log/example_test.go:36	hello world	{"tRPC-Go": "log"}
+	// xxx	DEBUG	log/example_test.go:35	hello world	{"tRPC-Go": "log"}
+	// xxx	DEBUG	log/example_test.go:36	hello world	{"tRPC-Go": "log"}
+	// xxx	INFO	log/example_test.go:37	hello world	{"tRPC-Go": "log"}
+	// xxx	WARN	log/example_test.go:38	hello world	{"tRPC-Go": "log"}
+	// xxx	ERROR	log/example_test.go:39	hello world	{"tRPC-Go": "log"}
+	// xxx	DEBUG	log/example_test.go:40	hello world	{"tRPC-Go": "log"}
+	// xxx	DEBUG	log/example_test.go:41	hello world	{"tRPC-Go": "log"}
+	// xxx	INFO	log/example_test.go:42	hello world	{"tRPC-Go": "log"}
+	// xxx	WARN	log/example_test.go:43	hello world	{"tRPC-Go": "log"}
+	// xxx	ERROR	log/example_test.go:44	hello world	{"tRPC-Go": "log"}
 }
