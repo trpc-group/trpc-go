@@ -28,7 +28,7 @@ func newRouter() *router {
 }
 
 // newRouterHandler creates a new restful route info handler.
-func newRouterHandler(pattern string, handler func(w http.ResponseWriter, r *http.Request)) *routerHandler {
+func newRouterHandler(pattern string, handler http.HandlerFunc) *routerHandler {
 	return &routerHandler{
 		pattern: pattern,
 		handler: handler,
@@ -43,7 +43,7 @@ type router struct {
 }
 
 // add adds a routing pattern and handler function.
-func (r *router) add(pattern string, handler func(w http.ResponseWriter, r *http.Request)) *routerHandler {
+func (r *router) add(pattern string, handler http.HandlerFunc) *routerHandler {
 	r.Lock()
 	defer r.Unlock()
 
@@ -85,6 +85,6 @@ func (r *router) list() []*routerHandler {
 
 // routerHandler routing information handler.
 type routerHandler struct {
-	handler func(w http.ResponseWriter, r *http.Request)
+	handler http.HandlerFunc
 	pattern string
 }
