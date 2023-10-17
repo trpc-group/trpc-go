@@ -238,7 +238,7 @@ func (s *Server) close() {
 	s.closeErr = s.server.Close()
 }
 
-var pattern2Handler map[string]http.HandlerFunc
+var pattern2Handler = make(map[string]http.HandlerFunc)
 
 // HandleFunc registers the handler function for the given pattern.
 // Each time NewServer is called, all handlers registered through HandleFunc will be in effect.
