@@ -15,4 +15,4 @@ You will see `Hello world!` displayed as a log.
 
 Congratulations! You’ve just run a client-server application with tRPC-Go.
 
-Check [docs](https://trpc.group/docs/trpc-go) to get deeper into tRPC-Go.
+Check [docs](https://trpc.group/docs/languages/go/) to get deeper into tRPC-Go.
