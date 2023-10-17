@@ -21,7 +21,7 @@ issue 会被分类以管理工作流程。
 
 大多数 issue 都会被标记为以下工作流标签之一：
 - **NeedsInvestigation**：issue 尚未完全理解，需要分析以了解根本原因。
-- **NeedsDecision**：issue 相对已经理解得很好，但tRPC-Go团队尚未决定解决 issue 的最佳方法。
+- **NeedsDecision**：issue 相对已经理解得很好，但 tRPC-Go 团队尚未决定解决 issue 的最佳方法。
   在编写代码之前最好等待决策。
   如果一段时间内没有决策且您有兴趣处理处于这种状态的 issue，请随时在 issue 评论中“ping”维护者。
 - **NeedsFix**：issue 已完全理解，可以编写代码进行修复。
@@ -40,7 +40,7 @@ issue 会被分类以管理工作流程。
 4. 您期望看到什么？
 5. 您实际看到的是什么？
 
-关于变更提案，请参阅向 [tRPC-Go-Proposals](https://github.com/trpc-group/trpc/tree/main/proposal) 提议变更。
+关于变更提案，请参阅向 [tRPC-Proposals](https://github.com/trpc-group/trpc/tree/main/proposal) 提议变更。
 
 ## 贡献代码
 
@@ -100,11 +100,18 @@ tRPC-Go 代码仓库中的文件不列出作者姓名，以避免混乱并避免
 
 您贡献的新文件应使用标准版权声明：
 ```go
+//
+//
 // Tencent is pleased to support the open source community by making tRPC available.
-// Copyright (C) 2023 THL A29 Limited, a Tencent company. All rights reserved.
+//
+// Copyright (C) 2023 THL A29 Limited, a Tencent company.
+// All rights reserved.
+//
 // If you have downloaded a copy of the tRPC source code from Tencent,
-// please note that tRPC-Go source code is licensed under the Apache 2.0 License,
-// A copy of the Apache 2.0 License can be found in the LICENSE file.
+// please note that tRPC source code is licensed under the  Apache 2.0 License,
+// A copy of the Apache 2.0 License is included in this file.
+//
+//
 ```
 
 代码仓库中的文件在添加时受版权保护。

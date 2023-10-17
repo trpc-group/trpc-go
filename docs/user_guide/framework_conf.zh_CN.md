@@ -40,7 +40,7 @@ func NewServerWithConfig(cfg *Config, opt ...server.Option) *server.Server
 
 ``` go
 import (
-    "trpc.group/trpc-go/trpc-go"
+  trpc "trpc.group/trpc-go/trpc-go"
     server "trpc.group/trpc-go/trpc-go/server"
 )
 func main() {

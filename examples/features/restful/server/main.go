@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	"trpc.group/trpc-go/trpc-go"
+	trpc "trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/examples/features/restful/pb"
 	"trpc.group/trpc-go/trpc-go/log"
 )

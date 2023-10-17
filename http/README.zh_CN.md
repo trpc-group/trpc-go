@@ -136,7 +136,7 @@ import (
     trpc "trpc.group/trpc-go/trpc-go"
     "trpc.group/trpc-go/trpc-go/client"
     "trpc.group/trpc-go/trpc-go/codec"
-    "trpc.group/trpc-go/trpc-go"
+  trpc "trpc.group/trpc-go/trpc-go"
     "trpc.group/trpc-go/trpc-go/log"
 )
 
@@ -213,7 +213,7 @@ import (
     "context"
     "fmt"
 
-    "trpc.group/trpc-go/trpc-go"
+  trpc "trpc.group/trpc-go/trpc-go"
     "trpc.group/trpc-go/trpc-go/client"
     pb "github.com/xxxx/helloworld/pb"
 )

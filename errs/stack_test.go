@@ -1,7 +1,15 @@
+//
+//
 // Tencent is pleased to support the open source community by making tRPC available.
-// Copyright (C) 2023 THL A29 Limited, a Tencent company. All rights reserved.
+//
+// Copyright (C) 2023 THL A29 Limited, a Tencent company.
+// All rights reserved.
+//
 // If you have downloaded a copy of the tRPC source code from Tencent,
-// please note that tRPC source code is licensed under the Apache 2.0 License that can be found in the LICENSE file.
+// please note that tRPC source code is licensed under the  Apache 2.0 License,
+// A copy of the Apache 2.0 License is included in this file.
+//
+//
 
 package errs
 
@@ -52,7 +60,7 @@ func TestFrameFormat(t *testing.T) {
 	}, {
 		initpc,
 		"%d",
-		"16",
+		"24",
 	}, {
 		0,
 		"%d",
@@ -82,7 +90,7 @@ func TestFrameFormat(t *testing.T) {
 	}, {
 		initpc,
 		"%v",
-		"stack_test.go:16",
+		"stack_test.go:24",
 	}, {
 		initpc,
 		"%+v",
@@ -177,19 +185,19 @@ func TestStackTraceFormat(t *testing.T) {
 	}, {
 		getStackTrace()[:2],
 		"%v",
-		`\[stack_test.go:126 stack_test.go:178\]`,
+		`\[stack_test.go:134 stack_test.go:186\]`,
 	}, {
 		getStackTrace()[:2],
 		"%+v",
 		"\n" +
 			"trpc.group/trpc-go/trpc-go/errs.getStackTrace\n" +
-			"\t.+errs/stack_test.go:126\n" +
+			"\t.+errs/stack_test.go:134\n" +
 			"trpc.group/trpc-go/trpc-go/errs.TestStackTraceFormat\n" +
-			"\t.+errs/stack_test.go:182",
+			"\t.+errs/stack_test.go:190",
 	}, {
 		getStackTrace()[:2],
 		"%#v",
-		`\[\]errs\.frame{stack_test.go:126, stack_test.go:190}`,
+		`\[\]errs\.frame{stack_test.go:134, stack_test.go:198}`,
 	}}
 
 	for i, tt := range tests {
