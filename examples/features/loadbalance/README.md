@@ -68,7 +68,7 @@ The tRPC-Go load balancing strategy defaults to a random strategy, Users can cus
 - weight round robin
 - consistent hash
 
-This demo uses a custom service discovery strategy, which can be referred to at [Discovery](../discovery/README.md). In this example, testLB uses an assigned strategy with parameter `balancerName`.
+This demo uses a custom service discovery strategy, which can be referred to at [Discovery](/examples/features/discovery/README.md). In this example, testLB uses an assigned strategy with parameter `balancerName`.
 
 There are two points to note:
 
