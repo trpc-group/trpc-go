@@ -1,7 +1,15 @@
+//
+//
 // Tencent is pleased to support the open source community by making tRPC available.
-// Copyright (C) 2023 THL A29 Limited, a Tencent company. All rights reserved.
+//
+// Copyright (C) 2023 THL A29 Limited, a Tencent company.
+// All rights reserved.
+//
 // If you have downloaded a copy of the tRPC source code from Tencent,
-// please note that tRPC source code is licensed under the Apache 2.0 License that can be found in the LICENSE file.
+// please note that tRPC source code is licensed under the  Apache 2.0 License,
+// A copy of the Apache 2.0 License is included in this file.
+//
+//
 
 package connpool
 
@@ -705,7 +713,7 @@ func TestConnPoolIdleTimeout(t *testing.T) {
 	time.Sleep(poolIdleTimeout + defaultCheckInterval)
 	assert.Equal(t, 0, getSize(p))
 
-	//get again
+	// get again
 	c, err = p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
 	assert.Nil(t, err)
 	assert.NotNil(t, c)

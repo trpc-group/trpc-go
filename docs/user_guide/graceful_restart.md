@@ -48,7 +48,7 @@ You can register hooks to run on process exit for resource cleanup, for example:
 
 ```go
 import (
-    "trpc.group/trpc-go/trpc-go"
+  trpc "trpc.group/trpc-go/trpc-go"
     "trpc.group/trpc-go/trpc-go/server"
 )
 
