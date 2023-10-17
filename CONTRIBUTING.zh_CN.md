@@ -12,7 +12,7 @@
 ## 在贡献代码之前
 
 项目欢迎代码补丁，但为了确保事情得到良好协调，您应该在开始工作之前讨论任何重大变更。
-建议您在 issue 跟踪器中表明您的贡献意图，可以通过[认领现有 issue](https://github.com/golang/go/issues)或[创建新 issue](https://github.com/trpc-group/trpc-go/issues/new) 来实现。
+建议您在 issue 跟踪器中表明您的贡献意图，可以通过[认领现有 issue](https://github.com/trpc-group/trpc-go/issues)或[创建新 issue](https://github.com/trpc-group/trpc-go/issues/new) 来实现。
 
 ### 查看 issue 跟踪器
 

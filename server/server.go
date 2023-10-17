@@ -4,7 +4,7 @@
 // please note that tRPC source code is licensed under the Apache 2.0 License that can be found in the LICENSE file.
 
 // Package server provides a framework for managing multiple services within a single process.
-// A server process may listen on multiple ports, providing different business services on different ports.
+// A server process may listen on multiple ports, providing different services on different ports.
 package server
 
 import (
