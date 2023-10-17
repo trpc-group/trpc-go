@@ -1,7 +1,15 @@
+//
+//
 // Tencent is pleased to support the open source community by making tRPC available.
-// Copyright (C) 2023 THL A29 Limited, a Tencent company. All rights reserved.
+//
+// Copyright (C) 2023 THL A29 Limited, a Tencent company.
+// All rights reserved.
+//
 // If you have downloaded a copy of the tRPC source code from Tencent,
-// please note that tRPC source code is licensed under the Apache 2.0 License that can be found in the LICENSE file.
+// please note that tRPC source code is licensed under the  Apache 2.0 License,
+// A copy of the Apache 2.0 License is included in this file.
+//
+//
 
 //go:build linux || darwin || dragonfly || freebsd || netbsd || openbsd
 // +build linux darwin dragonfly freebsd netbsd openbsd
@@ -103,7 +111,7 @@ func TestNewReusablePortServers(t *testing.T) {
 	assert.Nil(t, err)
 	defer listenerOne.Close()
 
-	//listenerTwo, err := NewReusablePortListener("tcp6", ":10081")
+	// listenerTwo, err := NewReusablePortListener("tcp6", ":10081")
 	listenerTwo, err := NewReusablePortListener("tcp", "localhost:10081")
 	assert.Nil(t, err)
 	defer listenerTwo.Close()
@@ -180,12 +188,12 @@ func TestBoundaryCase(t *testing.T) {
 		t.Errorf("expect error")
 	}
 
-	//getTCPAddr 边界
+	// getTCPAddr 边界
 	if _, _, err := getTCPAddr("udp", "localhost:8001"); err == nil {
 		t.Error("expect error")
 	}
 
-	//ipv6 zone id，不存在的网卡
+	// ipv6 zone id，不存在的网卡
 	addr := &net.TCPAddr{
 		IP:   net.IPv4(127, 0, 0, 1),
 		Zone: "ethx",
@@ -193,7 +201,7 @@ func TestBoundaryCase(t *testing.T) {
 	_, _, err = getTCP6Sockaddr(addr)
 	assert.NotNil(t, err)
 
-	//udp ipv6
+	// udp ipv6
 	udpAddr := &net.UDPAddr{
 		IP:   net.IPv4(127, 0, 0, 1),
 		Zone: "ethx",
@@ -201,7 +209,7 @@ func TestBoundaryCase(t *testing.T) {
 	_, _, err = getUDP6Sockaddr(udpAddr)
 	assert.NotNil(t, err)
 
-	//ResolveUDPAddr failed
+	// ResolveUDPAddr failed
 	_, _, err = getUDPSockaddr("xxx", ":10086")
 	assert.NotNil(t, err)
 }

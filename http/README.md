@@ -213,7 +213,7 @@ import (
     "context"
     "fmt"
 
-    "trpc.group/trpc-go/trpc-go"
+  trpc "trpc.group/trpc-go/trpc-go"
     "trpc.group/trpc-go/trpc-go/client"
     pb "github.com/xxxx/helloworld/pb"
 )
