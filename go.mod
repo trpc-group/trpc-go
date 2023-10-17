@@ -28,8 +28,8 @@ require (
 	golang.org/x/sys v0.4.0
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/yaml.v3 v3.0.1
-	trpc.group/trpc-go/tnet v0.0.0-20230810071536-9d05338021cf
-	trpc.group/trpc/trpc-protocol/pb/go/trpc v0.0.0-20230803031059-de4168eb5952
+	trpc.group/trpc-go/tnet v1.0.0
+	trpc.group/trpc/trpc-protocol/pb/go/trpc v1.0.0
 )
 
 require (
