@@ -5,7 +5,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/trpc-group/trpc-go.svg)](https://pkg.go.dev/github.com/trpc-group/trpc-go)
 [![Go Report Card](https://goreportcard.com/badge/trpc.group/trpc-go/trpc-go)](https://goreportcard.com/report/trpc.group/trpc-go/trpc-go)
 [![LICENSE](https://img.shields.io/badge/license-Apache--2.0-green.svg)](https://github.com/trpc-group/trpc-go/blob/main/LICENSE)
-[![Releases](https://img.shields.io/github/release/trpc.group/trpc-go.svg?style=flat-square)](https://github.com/trpc-group/trpc-go/releases)
+[![Releases](https://img.shields.io/github/release/trpc-group/trpc-go.svg?style=flat-square)](https://github.com/trpc-group/trpc-go/releases)
 [![Docs](https://img.shields.io/badge/docs-latest-green)](https://trpc.group/zh/docs/languages/go/)
 [![Tests](https://github.com/trpc-group/trpc-go/actions/workflows/prc.yml/badge.svg)](https://github.com/trpc-group/trpc-go/actions/workflows/prc.yml)
 [![Coverage](https://codecov.io/gh/trpc-group/trpc-go/branch/main/graph/badge.svg)](https://app.codecov.io/gh/trpc-group/trpc-go/tree/main)
