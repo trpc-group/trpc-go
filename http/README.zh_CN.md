@@ -8,7 +8,7 @@ tRPC-Go 框架支持搭建与 HTTP 相关的三种服务:
 2. 泛 HTTP RPC 服务 (共享 RPC 协议使用的桩代码以及 IDL 文件)
 3. 泛 HTTP RESTful 服务 (基于 IDL 及桩代码提供 RESTful API)
 
-其中 RESTful 相关文档见 [../restful](../restful/)
+其中 RESTful 相关文档见 [/restful](/restful/)
 
 ## 泛 HTTP 标准服务
 

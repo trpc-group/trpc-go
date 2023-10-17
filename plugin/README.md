@@ -4,7 +4,7 @@ English | [中文](README.zh_CN.md)
 
 tRPC-Go is designed with a plugin architecture concept, which allows the framework to connect with various ecosystems through plugins, providing openness and extensibility.
 The plugin package is used to manage plugins that need to be loaded based on configurations.
-Plugins that do not rely on configuration are relatively simple, such as [codec plugins](../codec/README.md), which will not be discussed here.
+Plugins that do not rely on configuration are relatively simple, such as [codec plugins](/codec/README.md), which will not be discussed here.
 Therefore, we will first introduce the design of the plugin package and then explain how to develop a plugin that needs to be loaded based on configuration.
 
 ## Design of the `plugin` package
@@ -43,7 +43,7 @@ According to their functions, the framework provides the following five types of
 
 ## How to develop a plugin that needs to be loaded based on configuration
 
-Developing a plugin that needs to be loaded based on configuration usually involves implementing the plugin and configuring the plugin. [A runnable specific example](../examples/features/plugin)
+Developing a plugin that needs to be loaded based on configuration usually involves implementing the plugin and configuring the plugin. [A runnable specific example](/examples/features/plugin)
 
 ### Implementing the plugin
 

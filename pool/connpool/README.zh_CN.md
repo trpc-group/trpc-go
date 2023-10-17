@@ -17,7 +17,7 @@ pool 维护一个 sync.Map 作为连接池，key 为<network, address, protocol>
 ## 设计实现
 
 连接池的整体代码结构如下图所示：
-![design_implementation](../../.resources/pool/connpool/design_implementation.png)
+![design_implementation](/.resources/pool/connpool/design_implementation.png)
 
 ### 初始化连接池
 
@@ -163,7 +163,7 @@ MinIdle 是 ConnectionPool 维持的最小空闲连接，在初始化和周期�
 - 加入空闲连接链表。
 
 用户使用连接发生读写错误时，将直接关闭连接。检查连接存活失败后，也会直接关闭：
-![life_cycle](../../.resources/pool/connpool/life_cycle.png)
+![life_cycle](/.resources/pool/connpool/life_cycle.png)
 
 ## 空闲连接管理策略
 
