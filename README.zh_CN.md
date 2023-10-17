@@ -2,13 +2,13 @@
 
 # tRPC-Go Framework
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/trpc.group/trpc-go.svg)](https://pkg.go.dev/github.com/trpc.group/trpc-go)
-[![Go Report Card](https://goreportcard.com/badge/github.com/trpc.group/trpc-go/trpc-go)](https://goreportcard.com/report/github.com/trpc.group/trpc-go/trpc-go)
+[![Go Reference](https://pkg.go.dev/badge/github.com/trpc-group/trpc-go.svg)](https://pkg.go.dev/github.com/trpc-group/trpc-go)
+[![Go Report Card](https://goreportcard.com/badge/trpc.group/trpc-go/trpc-go)](https://goreportcard.com/report/trpc.group/trpc-go/trpc-go)
 [![LICENSE](https://img.shields.io/badge/license-Apache--2.0-green.svg)](https://github.com/trpc-group/trpc-go/blob/main/LICENSE)
-[![Releases](https://img.shields.io/github/release/trpc.group/trpc-go.svg?style=flat-square)](https://github.com/trpc-group/trpc-go/releases)
-[![Docs](https://img.shields.io/badge/docs-latest-green)](http://test.trpc.group.woa.com/docs/)
+[![Releases](https://img.shields.io/github/release/trpc-group/trpc-go.svg?style=flat-square)](https://github.com/trpc-group/trpc-go/releases)
+[![Docs](https://img.shields.io/badge/docs-latest-green)](https://trpc.group/zh/)
 [![Tests](https://github.com/trpc-group/trpc-go/actions/workflows/prc.yml/badge.svg)](https://github.com/trpc-group/trpc-go/actions/workflows/prc.yml)
-[![Coverage](https://codecov.io/gh/trpc.group/trpc-go/branch/main/graph/badge.svg)](https://app.codecov.io/gh/trpc.group/trpc-go/tree/main)
+[![Coverage](https://codecov.io/gh/trpc-group/trpc-go/branch/main/graph/badge.svg)](https://app.codecov.io/gh/trpc-group/trpc-go/tree/main)
 
 
 tRPC-Go，作为 [tRPC][] 的 [Go][] 语言版本，是经过大规模线上业务使用验证过的微服务框架，它不仅性能高，而且易于使用和测试。
