@@ -93,4 +93,5 @@ Follow the `Run the Example` section to re-run your example and you will see `He
 
 - Learn [tRPC Design](https://github.com/trpc-group/trpc).
 - Read [basics tutorial](./basics_tutorial.md) to get deeper into tRPC-Go.
-- Explore the [API reference](https://pkg.go.dev/trpc.group/trpc-go).
+- Explore the [API reference](https://pkg.go.dev/trpc.group/trpc-go/trpc-go).
+

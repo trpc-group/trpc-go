@@ -7,7 +7,7 @@ import "trpc.group/trpc-go/trpc-go/transport"
 
 func attemptSwitchingTransport(o *Options) transport.ServerTransport {
 	if o.Transport == nil {
-		return transport.DefaultServerTransport
+		return transport.DefaultServerStreamTransport
 	}
 	return o.Transport
 }

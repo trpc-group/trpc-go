@@ -38,7 +38,7 @@ import (
 const transportName = "go-net"
 
 func init() {
-	RegisterServerTransport(transportName, DefaultServerTransport)
+	RegisterServerTransport(transportName, DefaultServerStreamTransport)
 }
 
 const (
