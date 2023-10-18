@@ -260,7 +260,7 @@ func WithReplicas(r int) Option {
 	}
 }
 
-// WithTarget returns an Option that sets target address using schema_name://endpoint .
+// WithTarget returns an Option that sets target address using URI scheme://endpoint.
 // e.g. ip://ip_addr:port
 func WithTarget(t string) Option {
 	return func(o *Options) {
