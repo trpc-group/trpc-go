@@ -29,7 +29,7 @@ func attemptSwitchingTransport(o *Options) transport.ServerTransport {
 			"we haven't fully test for some third-party protocols, you can set 'transport: tnet' "+
 			"in your service configuration to force using tnet and test it at your own risk",
 			o.ServiceName, o.network, o.protocol)
-		return transport.DefaultServerTransport
+		return transport.DefaultServerStreamTransport
 	}
 	return o.Transport
 }
