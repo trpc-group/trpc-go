@@ -42,8 +42,8 @@ func TestConfigOptions(t *testing.T) {
 	assert.Equal(t, "udp", transportOpts.Network)
 	assert.Equal(t, trpc.DefaultClientCodec, clientOpts.Codec)
 
-	filter.Register("tjg", filter.NoopServerFilter, filter.NoopClientFilter)
-	filter.Register("m007", filter.NoopServerFilter, filter.NoopClientFilter)
+	filter.Register("Monitoring", filter.NoopServerFilter, filter.NoopClientFilter)
+	filter.Register("Authentication", filter.NoopServerFilter, filter.NoopClientFilter)
 }
 
 func TestConfigNoDiscovery(t *testing.T) {
@@ -54,7 +54,7 @@ func TestConfigNoDiscovery(t *testing.T) {
 		Network:     "tcp",
 		Timeout:     1000,
 		Protocol:    "trpc",
-		Filter:      []string{"tjg", "m007"},
+		Filter:      []string{"Monitoring", "Authentication"},
 	}
 	err := client.RegisterClientConfig("trpc.test.nodiscovery", backconfig)
 	assert.NotNil(t, err)
@@ -68,7 +68,7 @@ func TestConfigNoServiceRouter(t *testing.T) {
 		Network:       "tcp",
 		Timeout:       1000,
 		Protocol:      "trpc",
-		Filter:        []string{"tjg", "m007"},
+		Filter:        []string{"Monitoring", "Authentication"},
 	}
 	err := client.RegisterClientConfig("trpc.test.noservicerouter", backconfig)
 	assert.NotNil(t, err)
@@ -82,7 +82,7 @@ func TestConfigNoBalance(t *testing.T) {
 		Network:     "tcp",
 		Timeout:     1000,
 		Protocol:    "trpc",
-		Filter:      []string{"tjg", "m007"},
+		Filter:      []string{"Monitoring", "Authentication"},
 	}
 	err := client.RegisterClientConfig("trpc.test.nobalance", backconfig)
 	assert.NotNil(t, err)
@@ -150,7 +150,7 @@ func TestConfigNoBreaker(t *testing.T) {
 		Network:        "tcp",
 		Timeout:        1000,
 		Protocol:       "trpc",
-		Filter:         []string{"tjg", "m007"},
+		Filter:         []string{"Monitoring", "Authentication"},
 	}
 	err := client.RegisterClientConfig("trpc.test.nobreaker", backconfig)
 	assert.NotNil(t, err)
@@ -163,7 +163,7 @@ func TestConfigNoFilter(t *testing.T) {
 		Network:     "tcp",
 		Timeout:     1000,
 		Protocol:    "trpc",
-		Filter:      []string{"tjg", "no-exists"},
+		Filter:      []string{"Monitoring", "no-exists"},
 	}
 	err := client.RegisterClientConfig("trpc.test.nofilter", backconfig)
 	assert.NotNil(t, err)
@@ -176,9 +176,9 @@ func TestConfigFilter(t *testing.T) {
 		Network:     "tcp",
 		Timeout:     1000,
 		Protocol:    "trpc",
-		Filter:      []string{"tjg"},
+		Filter:      []string{"Monitoring"},
 	}
-	filter.Register("tjg", nil, filter.NoopClientFilter)
+	filter.Register("Monitoring", nil, filter.NoopClientFilter)
 	err := client.RegisterClientConfig("trpc.test.filter", backconfig)
 	assert.Nil(t, err)
 }

@@ -169,9 +169,9 @@ func TestOptions(t *testing.T) {
 	require.Equal(t, "trpc.test.helloworld", opts.ServiceName)
 
 	// WithTarget sets target address
-	o = client.WithTarget("cl5://111:222")
+	o = client.WithTarget("ip://0.0.0.0:8080")
 	o(opts)
-	require.Equal(t, "cl5://111:222", opts.Target)
+	require.Equal(t, "ip://0.0.0.0:8080", opts.Target)
 
 	// WithNetwork sets network of backend service: tcp or udp, tcp by default
 	o = client.WithNetwork("tcp")

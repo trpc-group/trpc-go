@@ -34,7 +34,7 @@ type Options struct {
 	Timeout           time.Duration // Timeout.
 
 	// Target is address of backend service: name://endpoint,
-	// also compatible with old addressing like cl5://sid cmlb://appid ip://ip:port
+	// also compatible with old addressing like ip://ip:port
 	Target   string
 	endpoint string // The same as service name if target is not set.
 
@@ -260,8 +260,8 @@ func WithReplicas(r int) Option {
 	}
 }
 
-// WithTarget returns an Option that sets target address with scheme name://endpoint,
-// like cl5://sid ons://zkname ip://ip:port.
+// WithTarget returns an Option that sets target address using schema_name://endpoint .
+// e.g. ip://ip_addr:port
 func WithTarget(t string) Option {
 	return func(o *Options) {
 		o.Target = t
