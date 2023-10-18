@@ -153,6 +153,7 @@ func bidirectionalStream(ctx context.Context, proxy pb.TestStreamClientProxy) er
 		}
 		if err != nil {
 			log.ErrorContextf(ctx, "BidirectionalStream receive error from server: %v", err)
+			break
 		}
 		log.InfoContextf(ctx, "BidirectionalStream reply message is: %s", rsp.GetMsg())
 	}
