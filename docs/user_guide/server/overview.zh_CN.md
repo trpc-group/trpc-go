@@ -208,13 +208,8 @@ func main() {
 
 常见服务类型的搭建，请参考如下链接：
 
-- [搭建 tRPC 服务](todo)
-- [搭建 tRPC 流式服务](todo)
-- [搭建泛 HTTP RPC 服务](todo)
-- [搭建泛 HTTP 标准服务](todo)
-- [搭建 gRPC 服务](todo)
-- [搭建定时器服务](todo)
-- [搭建消费者服务](todo)
+- [搭建 tRPC 流式服务](/stream/README.zh_CN.md)
+- [搭建泛 HTTP RPC/标准服务](/http/README.zh_CN.md)
 
 一些第三方协议插件见：[trpc-ecosystem/go-codec](https://github.com/trpc-ecosystem/go-codec)。
 
