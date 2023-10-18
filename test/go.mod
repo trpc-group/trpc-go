@@ -7,7 +7,7 @@ replace trpc.group/trpc-go/trpc-go => ../
 require (
 	github.com/stretchr/testify v1.8.0
 	go.uber.org/zap v1.24.0
-	golang.org/x/net v0.5.0
+	golang.org/x/net v0.17.0
 	golang.org/x/sync v0.1.0
 	google.golang.org/protobuf v1.30.0
 	trpc.group/trpc-go/go_reuseport v1.7.1-0.20230423021710-f5eeff5d87a3
@@ -43,8 +43,8 @@ require (
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/automaxprocs v1.4.0 // indirect
 	go.uber.org/multierr v1.7.0 // indirect
-	golang.org/x/sys v0.4.0 // indirect
-	golang.org/x/text v0.6.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
+	golang.org/x/text v0.13.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	trpc.group/trpc-go/tnet v1.0.0 // indirect
