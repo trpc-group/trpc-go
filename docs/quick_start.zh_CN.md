@@ -93,4 +93,5 @@ func (g Greeter) HelloAgain(ctx context.Context, req *pb.HelloRequest) (*pb.Hell
 
 - 了解 [tRPC 设计原理](https://github.com/trpc-group/trpc)。
 - 阅读 [基础教程](./basics_tutorial.zh_CN.md) 来更深入地了解 tRPC-Go。
-- 查阅 [API 手册](https://pkg.go.dev/trpc.group/trpc-go)。
+- 查阅 [API 手册](https://pkg.go.dev/trpc.group/trpc-go/trpc-go)。
+
