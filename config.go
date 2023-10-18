@@ -24,15 +24,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	yaml "gopkg.in/yaml.v3"
+	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
+
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/rand"
 	"trpc.group/trpc-go/trpc-go/plugin"
 	"trpc.group/trpc-go/trpc-go/rpcz"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
-
-	"gopkg.in/yaml.v3"
 )
 
 // ServerConfigPath is the file path of trpc server config file.

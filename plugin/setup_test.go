@@ -20,10 +20,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	yaml "gopkg.in/yaml.v3"
 
 	"trpc.group/trpc-go/trpc-go/plugin"
-
-	"gopkg.in/yaml.v3"
 )
 
 type config struct {

@@ -16,7 +16,7 @@ package log
 import (
 	"time"
 
-	"gopkg.in/yaml.v3"
+	yaml "gopkg.in/yaml.v3"
 )
 
 // output name, default support console and file.
