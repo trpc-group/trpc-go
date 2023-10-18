@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
+	reuseport "github.com/kavu/go_reuseport"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	reuseport "trpc.group/trpc-go/go_reuseport"
 
 	trpc "trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
