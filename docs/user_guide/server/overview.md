@@ -208,13 +208,8 @@ These three types of services all use PB files to define interfaces. In order to
 
 For the setup of common service types, please refer to the following links:
 
-- [Setup tRPC service](todo)
-- [Setup tRPC streaming service](todo)
-- [Setup generic HTTP RPC service](todo)
-- [Setup generic HTTP standard service](todo)
-- [Setup gRPC service](todo)
-- [Setup scheduled task service](todo)
-- [Setup consumer service](todo)
+- [Setup tRPC streaming service](/stream/README.md)
+- [Setup HTTP RPC/standard service](/http/README.md)
 
 Some third-party codec plugins: [trpc-ecosystem/go-codec](https://github.com/trpc-ecosystem/go-codec).
 
