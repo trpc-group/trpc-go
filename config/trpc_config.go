@@ -20,11 +20,11 @@ import (
 	"strings"
 	"sync"
 
-	"trpc.group/trpc-go/trpc-go/log"
-
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cast"
-	"gopkg.in/yaml.v3"
+	yaml "gopkg.in/yaml.v3"
+
+	"trpc.group/trpc-go/trpc-go/log"
 )
 
 var (
