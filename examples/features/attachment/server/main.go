@@ -14,7 +14,7 @@
 // Package main provides an echo server.
 package main
 
-//go:generate trpc create -p ../proto/echo/echo.proto --api-version 2 --rpconly -o ../proto/echo --protodir . --mock=false
+//go:generate trpc create -p ../proto/echo/echo.proto --rpconly -o ../proto/echo --protodir . --mock=false
 
 import (
 	"bytes"

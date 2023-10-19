@@ -13,7 +13,7 @@
 
 // Package test to end-to-end testing.
 //
-//go:generate trpc create -p ./protocols/test.proto --api-version 2 --rpconly -o ./protocols --protodir . --mock=false
+//go:generate trpc create -p ./protocols/test.proto --rpconly -o ./protocols --protodir . --mock=false
 package test
 
 import (
