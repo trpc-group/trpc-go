@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	"trpc.group/trpc-go/trpc-go"
+	trpc "trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/examples/helloworld/pb"
 	"trpc.group/trpc-go/trpc-go/log"
 )

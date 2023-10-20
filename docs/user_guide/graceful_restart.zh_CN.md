@@ -48,7 +48,7 @@ func main() {
 
 ```go
 import (
-    "trpc.group/trpc-go/trpc-go"
+  trpc "trpc.group/trpc-go/trpc-go"
     "trpc.group/trpc-go/trpc-go/server"
 )
 

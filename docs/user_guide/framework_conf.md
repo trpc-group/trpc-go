@@ -40,7 +40,7 @@ Both of these methods provide `Option` parameters to change local parameters. `O
 
 ```go
 import (
-    "trpc.group/trpc-go/trpc-go"
+  trpc "trpc.group/trpc-go/trpc-go"
     server "trpc.group/trpc-go/trpc-go/server"
 )
 func main() {

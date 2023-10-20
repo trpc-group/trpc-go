@@ -1,7 +1,15 @@
+//
+//
 // Tencent is pleased to support the open source community by making tRPC available.
-// Copyright (C) 2023 THL A29 Limited, a Tencent company. All rights reserved.
+//
+// Copyright (C) 2023 THL A29 Limited, a Tencent company.
+// All rights reserved.
+//
 // If you have downloaded a copy of the tRPC source code from Tencent,
-// please note that tRPC source code is licensed under the Apache 2.0 License that can be found in the LICENSE file.
+// please note that tRPC source code is licensed under the  Apache 2.0 License,
+// A copy of the Apache 2.0 License is included in this file.
+//
+//
 
 // Package main trpc-go supports stream RPC，with stream RPC,
 // the client and server can establish a continuous connection to continuously send and receive data,
@@ -16,7 +24,7 @@ import (
 	"io"
 	"strconv"
 
-	"trpc.group/trpc-go/trpc-go"
+	trpc "trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	pb "trpc.group/trpc-go/trpc-go/examples/features/stream/proto"
 	"trpc.group/trpc-go/trpc-go/log"
@@ -78,7 +86,7 @@ func clientStream(ctx context.Context, proxy pb.TestStreamClientProxy) error {
 		// Call Send to continuously send data.
 		if err = streamClient.Send(&pb.HelloReq{Msg: fmt.Sprintf("ping : %v", i)}); err != nil {
 			log.ErrorContextf(ctx, "ClientStream send error: %v", err)
-			break
+			return err
 		}
 	}
 
@@ -126,7 +134,7 @@ func bidirectionalStream(ctx context.Context, proxy pb.TestStreamClientProxy) er
 		// The client send request data to the server 5 times using a for loop.
 		if err = streamClient.Send(&pb.HelloReq{Msg: "ping: " + strconv.Itoa(i)}); err != nil {
 			log.ErrorContextf(ctx, "BidirectionalStream Send message error: %v", err)
-			break
+			return err
 		}
 	}
 
@@ -145,6 +153,7 @@ func bidirectionalStream(ctx context.Context, proxy pb.TestStreamClientProxy) er
 		}
 		if err != nil {
 			log.ErrorContextf(ctx, "BidirectionalStream receive error from server: %v", err)
+			break
 		}
 		log.InfoContextf(ctx, "BidirectionalStream reply message is: %s", rsp.GetMsg())
 	}

@@ -1,64 +1,72 @@
+//
+//
 // Tencent is pleased to support the open source community by making tRPC available.
-// Copyright (C) 2023 THL A29 Limited, a Tencent company. All rights reserved.
+//
+// Copyright (C) 2023 THL A29 Limited, a Tencent company.
+// All rights reserved.
+//
 // If you have downloaded a copy of the tRPC source code from Tencent,
-// please note that tRPC source code is licensed under the Apache 2.0 License that can be found in the LICENSE file.
+// please note that tRPC source code is licensed under the  Apache 2.0 License,
+// A copy of the Apache 2.0 License is included in this file.
+//
+//
 
 // Package plugin is the plugin package.
 package plugin
 
 import (
-	"trpc.group/trpc-go/trpc-go/log"
+    "trpc.group/trpc-go/trpc-go/log"
 
-	"trpc.group/trpc-go/trpc-go/plugin"
+    "trpc.group/trpc-go/trpc-go/plugin"
 )
 
 const (
-	pluginName = "custom"
-	pluginType = "custom"
+    pluginName = "custom"
+    pluginType = "custom"
 )
 
 func init() {
-	plugin.Register(pluginName, &customPlugin{})
+    plugin.Register(pluginName, &customPlugin{})
 }
 
 // customPlugin struct implements plugin.Factory interface.
 type customPlugin struct {
-	config customConfig
+    config customConfig
 }
 
 var c customPlugin
 
 // customConfig plugin config
 type customConfig struct {
-	Test    string `yaml:"test"`
-	TestObj struct {
-		Key1 string `yaml:"key1"`
-		Key2 bool   `yaml:"key2"`
-		Key3 int32  `yaml:"key3"`
-	} `yaml:"test_obj"`
+    Test    string `yaml:"test"`
+    TestObj struct {
+        Key1 string `yaml:"key1"`
+        Key2 bool   `yaml:"key2"`
+        Key3 int32  `yaml:"key3"`
+    } `yaml:"test_obj"`
 }
 
 // Type return plugin type
 func (custom *customPlugin) Type() string {
-	return pluginType
+    return pluginType
 }
 
 // Setup init plugin
 // trpc will call Setup function to init plugin.
 func (custom *customPlugin) Setup(name string, decoder plugin.Decoder) error {
 
-	if err := decoder.Decode(&c.config); err != nil {
-		return err
-	}
+    if err := decoder.Decode(&c.config); err != nil {
+        return err
+    }
 
-	log.Infof("[plugin] init customPlugin success, config: %v", c.config)
+    log.Infof("[plugin] init customPlugin success, config: %v", c.config)
 
-	return nil
+    return nil
 }
 
 // Record is a custom plugin function
 // you can call this function in your code print plugin config.
 func Record() {
-	log.Infof("[plugin] call key1 : %s, key2 : %t, key3 : %d",
-		c.config.TestObj.Key1, c.config.TestObj.Key2, c.config.TestObj.Key3)
+    log.Infof("[plugin] call key1 : %s, key2 : %t, key3 : %d",
+        c.config.TestObj.Key1, c.config.TestObj.Key2, c.config.TestObj.Key3)
 }

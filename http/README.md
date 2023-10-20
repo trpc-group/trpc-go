@@ -8,7 +8,7 @@ The tRPC-Go framework supports building three types of HTTP-related services:
 2. pan-HTTP RPC service (shares the stub code and IDL files used by the RPC protocol)
 3. pan-HTTP RESTful service (provides RESTful API based on IDL and stub code)
 
-The RESTful related documentation is available in [../restful](../restful/)
+The RESTful related documentation is available in [/restful](/restful/)
 
 ## Pan-HTTP standard services
 
@@ -213,7 +213,7 @@ import (
     "context"
     "fmt"
 
-    "trpc.group/trpc-go/trpc-go"
+  trpc "trpc.group/trpc-go/trpc-go"
     "trpc.group/trpc-go/trpc-go/client"
     pb "github.com/xxxx/helloworld/pb"
 )

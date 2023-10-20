@@ -5,7 +5,7 @@ import (
 	"context"
 	"net/http"
 
-	"trpc.group/trpc-go/trpc-go"
+	trpc "trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	thttp "trpc.group/trpc-go/trpc-go/http"
 	"trpc.group/trpc-go/trpc-go/log"

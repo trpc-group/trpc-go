@@ -1,7 +1,15 @@
+//
+//
 // Tencent is pleased to support the open source community by making tRPC available.
-// Copyright (C) 2023 THL A29 Limited, a Tencent company. All rights reserved.
+//
+// Copyright (C) 2023 THL A29 Limited, a Tencent company.
+// All rights reserved.
+//
 // If you have downloaded a copy of the tRPC source code from Tencent,
-// please note that tRPC source code is licensed under the Apache 2.0 License that can be found in the LICENSE file.
+// please note that tRPC source code is licensed under the  Apache 2.0 License,
+// A copy of the Apache 2.0 License is included in this file.
+//
+//
 
 package client
 
@@ -34,7 +42,7 @@ type Options struct {
 	Timeout           time.Duration // Timeout.
 
 	// Target is address of backend service: name://endpoint,
-	// also compatible with old addressing like cl5://sid cmlb://appid ip://ip:port
+	// also compatible with old addressing like ip://ip:port
 	Target   string
 	endpoint string // The same as service name if target is not set.
 
@@ -260,8 +268,8 @@ func WithReplicas(r int) Option {
 	}
 }
 
-// WithTarget returns an Option that sets target address with scheme name://endpoint,
-// like cl5://sid ons://zkname ip://ip:port.
+// WithTarget returns an Option that sets target address using URI scheme://endpoint.
+// e.g. ip://ip_addr:port
 func WithTarget(t string) Option {
 	return func(o *Options) {
 		o.Target = t
