@@ -4,5 +4,6 @@ all:
 		--rpconly \
 		--nogomod \
 		--mock=false \
+		--noservicesuffix=false
 
 .PHONY: all
