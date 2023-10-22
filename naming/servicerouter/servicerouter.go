@@ -16,6 +16,8 @@
 package servicerouter
 
 import (
+	"sync"
+
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 )
 
@@ -34,16 +36,22 @@ type ServiceRouter interface {
 
 var (
 	servicerouters = make(map[string]ServiceRouter)
+	lock           = sync.RWMutex{}
 )
 
 // Register registers a named service router.
 func Register(name string, s ServiceRouter) {
+	lock.Lock()
 	servicerouters[name] = s
+	lock.Unlock()
 }
 
 // Get gets a named service router.
 func Get(name string) ServiceRouter {
-	return servicerouters[name]
+	lock.RLock()
+	s := servicerouters[name]
+	lock.RUnlock()
+	return s
 }
 
 // NoopServiceRouter is the noop service router.
@@ -56,5 +64,7 @@ func (*NoopServiceRouter) Filter(serviceName string, nodes []*registry.Node, opt
 }
 
 func unregisterForTesting(name string) {
+	lock.Lock()
 	delete(servicerouters, name)
+	lock.Unlock()
 }

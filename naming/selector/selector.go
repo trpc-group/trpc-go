@@ -16,6 +16,7 @@
 package selector
 
 import (
+	"sync"
 	"time"
 
 	"trpc.group/trpc-go/trpc-go/naming/registry"
@@ -31,19 +32,26 @@ type Selector interface {
 
 var (
 	selectors = make(map[string]Selector)
+	lock      = sync.RWMutex{}
 )
 
 // Register registers a named Selector.
 func Register(name string, s Selector) {
+	lock.Lock()
 	selectors[name] = s
+	lock.Unlock()
 }
 
 // Get gets a named Selector.
 func Get(name string) Selector {
+	lock.RLock()
 	s := selectors[name]
+	lock.RUnlock()
 	return s
 }
 
 func unregisterForTesting(name string) {
+	lock.Lock()
 	delete(selectors, name)
+	lock.Unlock()
 }
