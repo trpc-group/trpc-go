@@ -11,7 +11,7 @@
 [![Coverage](https://codecov.io/gh/trpc-group/trpc-go/branch/main/graph/badge.svg)](https://app.codecov.io/gh/trpc-group/trpc-go/tree/main)
 
 
-tRPC-Go，作为 [tRPC][] 的 [Go][] 语言版本，是经过大规模线上业务使用验证过的微服务框架，它不仅性能高，而且易于使用和测试。
+tRPC-Go，是 [tRPC][] 的 [Go][] 语言实现，它是一个可插拔的高性能 RPC 框架。
 
 更多信息见：[快速上手][quick start] 以及 [详细文档][docs] 
 
