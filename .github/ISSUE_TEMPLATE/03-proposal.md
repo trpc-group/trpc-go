@@ -7,5 +7,5 @@ labels: Proposal
 
 <!--
 Our proposal process is documented here:
-todo
+https://github.com/trpc-group/trpc/tree/main/proposal
 -->
