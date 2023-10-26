@@ -23,10 +23,12 @@ func TestWatch(t *testing.T) {
 	require.Nil(t, watchers["testService"], "testService watcher")
 	Watch("testService", func(status Status) {})
 	require.NotNil(t, watchers["testService"], "testService watcher")
+	delete(watchers, "testService")
 }
 
 func TestGetWatchers(t *testing.T) {
 	Watch("testService", func(status Status) {})
 	ws := GetWatchers()
 	require.NotNil(t, ws["testService"])
+	delete(ws, "testService")
 }
