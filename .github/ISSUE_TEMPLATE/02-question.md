@@ -12,7 +12,7 @@ Please confirm the following before submitting your issue. Thanks!
 -->
 
 - [ ] I have read the project's documentation.
-- [ ] I have searched [existing issues](https://github.com/trpc-group/tnet/issues) for similar questions to see if my question has already been addressed.
+- [ ] I have searched [existing issues](https://github.com/trpc-group/trpc-go/issues) for similar questions to see if my question has already been addressed.
 
 ### Question
 
