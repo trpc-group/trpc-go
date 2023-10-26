@@ -26,6 +26,7 @@ import (
 
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/addrutil"
 	"trpc.group/trpc-go/trpc-go/internal/report"
 	"trpc.group/trpc-go/trpc-go/internal/writev"
 	"trpc.group/trpc-go/trpc-go/log"
@@ -148,7 +149,7 @@ func (s *serverTransport) serveTCP(ctx context.Context, ln net.Listener, opts *L
 		// To avoid over writing packages, checks whether should we copy packages by Framer and
 		// some other configurations.
 		tc.copyFrame = frame.ShouldCopy(opts.CopyFrame, tc.serverAsync, codec.IsSafeFramer(tc.fr))
-		key := addrToKey(tc.remoteAddr)
+		key := addrutil.AddrToKey(tc.localAddr, tc.remoteAddr)
 		s.m.Lock()
 		s.addrToConn[key] = tc
 		s.m.Unlock()
@@ -210,7 +211,7 @@ func (c *tcpconn) close() {
 		}
 
 		// Remove cache in server stream transport.
-		key := addrToKey(c.remoteAddr)
+		key := addrutil.AddrToKey(c.localAddr, c.remoteAddr)
 		c.st.m.Lock()
 		delete(c.st.addrToConn, key)
 		c.st.m.Unlock()

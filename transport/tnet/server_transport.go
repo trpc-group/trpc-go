@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"strings"
 	"sync"
 
@@ -31,6 +30,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/transport"
+	"trpc.group/trpc-go/trpc-go/internal/addrutil"
 )
 
 const transportName = "tnet"
@@ -79,11 +79,14 @@ func (s *serverTransport) ListenAndServe(ctx context.Context, opts ...transport.
 
 // Send implements ServerStreamTransport, sends stream messages.
 func (s *serverTransport) Send(ctx context.Context, req []byte) error {
-	addr := codec.Message(ctx).RemoteAddr()
-	if addr == nil {
-		return errs.NewFrameError(errs.RetServerSystemErr, "remote addr is invalid")
+	msg := codec.Message(ctx)
+	raddr := msg.RemoteAddr()
+	laddr := msg.LocalAddr()
+	if raddr == nil || laddr == nil {
+		return errs.NewFrameError(errs.RetServerSystemErr,
+			fmt.Sprintf("Address is invalid, local: %s, remote: %s", laddr, raddr))
 	}
-	tc, ok := s.loadConn(addrToKey(addr))
+	tc, ok := s.loadConn(addrutil.AddrToKey(laddr, raddr))
 	if !ok {
 		return errs.NewFrameError(errs.RetServerSystemErr, "can't find conn by addr")
 	}
@@ -97,7 +100,10 @@ func (s *serverTransport) Send(ctx context.Context, req []byte) error {
 
 // Close closes transport, and cleans up cached connections.
 func (s *serverTransport) Close(ctx context.Context) {
-	s.deleteConn(addrToKey(codec.Message(ctx).RemoteAddr()))
+	msg := codec.Message(ctx)
+	raddr := msg.RemoteAddr()
+	laddr := msg.LocalAddr()
+	s.deleteConn(addrutil.AddrToKey(laddr, raddr))
 }
 
 func (s *serverTransport) switchNetworkToServe(ctx context.Context, opts *transport.ListenServeOptions) error {
@@ -140,8 +146,4 @@ func buildListenServeOptions(opts ...transport.ListenServeOption) (*transport.Li
 		return nil, errors.New("transport FramerBuilder empty")
 	}
 	return lsOpts, nil
-}
-
-func addrToKey(addr net.Addr) string {
-	return fmt.Sprintf("%s//%s", addr.Network(), addr.String())
 }
