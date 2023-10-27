@@ -2,7 +2,7 @@
 name: Proposals
 about: New external API or other notable changes
 title: "proposal: affected/package: "
-labels: Proposal
+labels: proposal
 ---
 
 <!--
