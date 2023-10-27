@@ -20,15 +20,17 @@ import (
 )
 
 func TestWatch(t *testing.T) {
-	require.Nil(t, watchers["testService"], "testService watcher")
-	Watch("testService", func(status Status) {})
-	require.NotNil(t, watchers["testService"], "testService watcher")
-	delete(watchers, "testService")
+	serviceName := t.Name()
+	require.Nil(t, watchers[serviceName])
+	Watch(serviceName, func(status Status) {})
+	require.NotNil(t, watchers[serviceName])
+	delete(watchers, serviceName)
 }
 
 func TestGetWatchers(t *testing.T) {
-	Watch("testService", func(status Status) {})
+	serviceName := t.Name()
+	Watch(serviceName, func(status Status) {})
 	ws := GetWatchers()
-	require.NotNil(t, ws["testService"])
-	delete(ws, "testService")
+	require.NotNil(t, ws[serviceName])
+	delete(ws, serviceName)
 }
