@@ -201,7 +201,7 @@ func (t *ServerTransport) getListener(network, addr string) (net.Listener, error
 		}
 		ln, ok = pln.(net.Listener)
 		if !ok {
-			return nil, errors.New("invalid net.Listener")
+			return nil, fmt.Errorf("invalid listener type, want net.Listener, got %T", pln)
 		}
 		return ln, nil
 	}
