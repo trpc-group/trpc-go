@@ -15,6 +15,7 @@ package test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -196,7 +197,7 @@ func newPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error) {
 			Body: make([]byte, size),
 		}, nil
 	case testpb.PayloadType_UNCOMPRESSABLE:
-		return nil, fmt.Errorf("PayloadType UNCOMPRESSABLE is not supported")
+		return nil, errors.New("PayloadType UNCOMPRESSABLE is not supported")
 	default:
 		return nil, errs.New(retUnsupportedPayload, fmt.Sprintf("unsupported payload type: %d", t))
 	}

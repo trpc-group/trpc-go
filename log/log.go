@@ -16,7 +16,7 @@ package log
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os"
 
 	"go.uber.org/zap"
@@ -93,7 +93,7 @@ func RedirectStdLogAt(logger Logger, level zapcore.Level) (func(), error) {
 		return zap.RedirectStdLogAt(l.logger, level)
 	}
 
-	return nil, fmt.Errorf("log: only supports redirecting std logs to trpc zap logger")
+	return nil, errors.New("log: only supports redirecting std logs to trpc zap logger")
 }
 
 // Trace logs to TRACE log. Arguments are handled in the manner of fmt.Print.
