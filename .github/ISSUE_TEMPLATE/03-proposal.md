@@ -2,10 +2,10 @@
 name: Proposals
 about: New external API or other notable changes
 title: "proposal: affected/package: "
-labels: Proposal
+labels: proposal
 ---
 
 <!--
 Our proposal process is documented here:
-todo
+https://github.com/trpc-group/trpc/tree/main/proposal
 -->
