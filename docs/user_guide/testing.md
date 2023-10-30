@@ -12,7 +12,7 @@ docker run -p 8080:8080 linuxsuren/api-testing:master
 ```
 
 ## Usage
-Once the container is ready, you can vist the web page with the following address:
+Once the container is ready, you can visit the web page with the following address:
 
 `http://localhost:8080`
 
