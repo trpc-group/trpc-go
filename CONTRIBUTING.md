@@ -99,6 +99,9 @@ The [benchstat](https://godoc.org/golang.org/x/perf/cmd/benchstat) tool is conve
 The special notation "Fixes #12345" associates the change with issue 12345 in the tRPC-Go issue tracker.
 When this change is eventually applied, the issue tracker will automatically mark the issue as fixed.
 
+- If there is a corresponding issue, add either `Fixes #12345` or `Updates #12345` (the latter if this is not a complete fix) to this comment
+- If referring to a repo other than `trpc-go` you can use the `owner/repo#issue_number` syntax: `Fixes trpc-group/tnet#12345`
+
 
 ## Miscellaneous topics
 
