@@ -22,9 +22,9 @@ import (
 
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/addrutil"
 	icodec "trpc.group/trpc-go/trpc-go/internal/codec"
 	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
-	"trpc.group/trpc-go/trpc-go/internal/addrutil"
 
 	"google.golang.org/protobuf/proto"
 )

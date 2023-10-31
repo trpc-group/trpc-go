@@ -28,9 +28,9 @@ import (
 
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/addrutil"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/transport"
-	"trpc.group/trpc-go/trpc-go/internal/addrutil"
 )
 
 const transportName = "tnet"
