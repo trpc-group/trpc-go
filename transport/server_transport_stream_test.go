@@ -167,11 +167,12 @@ func TestStreamTCPListenAndServeFail(t *testing.T) {
 
 // TestStreamTCPListenAndServeSend tests listen and send failures.
 func TestStreamTCPListenAndServeSend(t *testing.T) {
+	lnAddr := "127.0.0.1:12016"
 	st := transport.NewServerStreamTransport()
 	go func() {
 		err := st.ListenAndServe(context.Background(),
 			transport.WithListenNetwork("tcp"),
-			transport.WithListenAddress(":12016"),
+			transport.WithListenAddress(lnAddr),
 			transport.WithHandler(&echoStreamHandler{}),
 			transport.WithServerFramerBuilder(&multiplexedFramerBuilder{}),
 		)
@@ -203,13 +204,16 @@ func TestStreamTCPListenAndServeSend(t *testing.T) {
 	port := getFreeAddr("tcp")
 	la := "127.0.0.1" + port
 	ct := transport.NewClientStreamTransport()
-	err = ct.Init(ctx, transport.WithDialNetwork("tcp"), transport.WithDialAddress(":12016"),
+	err = ct.Init(ctx, transport.WithDialNetwork("tcp"), transport.WithDialAddress(lnAddr),
 		transport.WithClientFramerBuilder(fb), transport.WithMsg(msg), transport.WithLocalAddr(la))
 	assert.Nil(t, err)
 	time.Sleep(100 * time.Millisecond)
-	addr, err := net.ResolveTCPAddr("tcp", la)
+	raddr, err := net.ResolveTCPAddr("tcp", la)
 	assert.Nil(t, err)
-	msg.WithRemoteAddr(addr)
+	laddr, err := net.ResolveTCPAddr("tcp", lnAddr)
+	assert.Nil(t, err)
+	msg.WithRemoteAddr(raddr)
+	msg.WithLocalAddr(laddr)
 	err = st.Send(ctx, reqData)
 	assert.Nil(t, err)
 }
