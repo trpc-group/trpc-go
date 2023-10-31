@@ -286,6 +286,9 @@ func TestServerTCP_SendAndClose(t *testing.T) {
 	assert.True(t, ok)
 	ctx, msg := codec.EnsureMessage(context.Background())
 	msg.WithRemoteAddr(cliAddr)
+	svrAddr, err := net.ResolveTCPAddr("tcp", addr)
+	assert.Nil(t, err)
+	msg.WithLocalAddr(svrAddr)
 	err = streamTransport.Send(ctx, helloWorld)
 	assert.Nil(t, err)
 

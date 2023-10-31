@@ -16,10 +16,10 @@ package transport
 import (
 	"context"
 	"fmt"
-	"net"
 
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/addrutil"
 )
 
 // serverStreamTransport implements ServerStreamTransport and keeps backward compatibility with the
@@ -36,10 +36,6 @@ func NewServerStreamTransport(opt ...ServerTransportOption) ServerStreamTranspor
 	return &serverStreamTransport{s}
 }
 
-func addrToKey(addr net.Addr) string {
-	return fmt.Sprintf("%s//%s", addr.Network(), addr.String())
-}
-
 // DefaultServerStreamTransport is the default ServerStreamTransport.
 var DefaultServerStreamTransport = NewServerStreamTransport()
 
@@ -52,11 +48,13 @@ func (st *serverStreamTransport) ListenAndServe(ctx context.Context, opts ...Lis
 // Send is the method to send stream messages.
 func (st *serverStreamTransport) Send(ctx context.Context, req []byte) error {
 	msg := codec.Message(ctx)
-	addr := msg.RemoteAddr()
-	if addr == nil {
-		return errs.NewFrameError(errs.RetServerSystemErr, "Remote addr is invalid")
+	raddr := msg.RemoteAddr()
+	laddr := msg.LocalAddr()
+	if raddr == nil || laddr == nil {
+		return errs.NewFrameError(errs.RetServerSystemErr,
+			fmt.Sprintf("Address is invalid, local: %s, remote: %s", laddr, raddr))
 	}
-	key := addrToKey(addr)
+	key := addrutil.AddrToKey(laddr, raddr)
 	st.serverTransport.m.RLock()
 	tc, ok := st.serverTransport.addrToConn[key]
 	st.serverTransport.m.RUnlock()
@@ -74,8 +72,7 @@ func (st *serverStreamTransport) Send(ctx context.Context, req []byte) error {
 // Close closes ServerStreamTransport, it also cleans up cached connections.
 func (st *serverStreamTransport) Close(ctx context.Context) {
 	msg := codec.Message(ctx)
-	addr := msg.RemoteAddr()
-	key := addrToKey(addr)
+	key := addrutil.AddrToKey(msg.LocalAddr(), msg.RemoteAddr())
 	st.m.Lock()
 	delete(st.serverTransport.addrToConn, key)
 	st.m.Unlock()

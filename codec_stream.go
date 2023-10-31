@@ -16,13 +16,13 @@ package trpc
 import (
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"path"
 	"sync"
 
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/addrutil"
 	icodec "trpc.group/trpc-go/trpc-go/internal/codec"
 	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
@@ -46,7 +46,7 @@ var (
 
 // NewServerStreamCodec initializes and returns a ServerStreamCodec.
 func NewServerStreamCodec() *ServerStreamCodec {
-	return &ServerStreamCodec{initMetas: make(map[net.Addr]map[uint32]*trpcpb.TrpcStreamInitMeta), m: &sync.RWMutex{}}
+	return &ServerStreamCodec{initMetas: make(map[string]map[uint32]*trpcpb.TrpcStreamInitMeta), m: &sync.RWMutex{}}
 }
 
 // NewClientStreamCodec initializes and returns a ClientStreamCodec.
@@ -58,7 +58,7 @@ func NewClientStreamCodec() *ClientStreamCodec {
 // Used for trpc server streaming codec.
 type ServerStreamCodec struct {
 	m         *sync.RWMutex
-	initMetas map[net.Addr]map[uint32]*trpcpb.TrpcStreamInitMeta // addr->streamID->TrpcStreamInitMeta
+	initMetas map[string]map[uint32]*trpcpb.TrpcStreamInitMeta // addr->streamID->TrpcStreamInitMeta
 }
 
 // ClientStreamCodec is an implementation of codec.Codec.
@@ -372,7 +372,7 @@ func (s *ServerStreamCodec) decodeFeedbackFrame(msg codec.Msg, reqBuf []byte) ([
 // setInitMeta finds the InitMeta and sets the ServerRPCName by the server handler in the InitMeta.
 func (s *ServerStreamCodec) setInitMeta(msg codec.Msg) error {
 	streamID := msg.StreamID()
-	addr := msg.RemoteAddr()
+	addr := addrutil.AddrToKey(msg.LocalAddr(), msg.RemoteAddr())
 	s.m.RLock()
 	defer s.m.RUnlock()
 	if streamIDToInitMeta, ok := s.initMetas[addr]; ok {
@@ -388,7 +388,7 @@ func (s *ServerStreamCodec) setInitMeta(msg codec.Msg) error {
 
 // deleteInitMeta deletes the cached info by msg.
 func (s *ServerStreamCodec) deleteInitMeta(msg codec.Msg) {
-	addr := msg.RemoteAddr()
+	addr := addrutil.AddrToKey(msg.LocalAddr(), msg.RemoteAddr())
 	streamID := msg.StreamID()
 	s.m.Lock()
 	defer s.m.Unlock()
@@ -447,7 +447,7 @@ func (s *ServerStreamCodec) decodeInitFrame(msg codec.Msg, reqBuf []byte) ([]byt
 // storeInitMeta stores the InitMeta every time when a new frame is received.
 func (s *ServerStreamCodec) storeInitMeta(msg codec.Msg, initMeta *trpcpb.TrpcStreamInitMeta) {
 	streamID := msg.StreamID()
-	addr := msg.RemoteAddr()
+	addr := addrutil.AddrToKey(msg.LocalAddr(), msg.RemoteAddr())
 	s.m.Lock()
 	defer s.m.Unlock()
 	if _, ok := s.initMetas[addr]; ok {
