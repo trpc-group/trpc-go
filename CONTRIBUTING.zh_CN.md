@@ -91,6 +91,9 @@ tRPC-Go 中的提交消息遵循一套特定的约定，我们将在本节中讨
 特殊表示法 "Fixes #12345" 将变更与 tRPC-Go issue 跟踪器中的 issue 12345关联。
 当此变更最终应用时，issue 跟踪器将自动将该 issue 标记为已修复。
 
+- 如果有相关 issue，请在此评论中添加 `Fixes #12345` 或` Updates #12345`（如果这不是完整的修复）
+- 如果涉及到的仓库不是 `trpc-go`，则可以使用 `owner/repo#issue_number` 语法：`Fixes trpc-group/tnet#12345`
+
 ## 其他主题
 
 ### 版权声明
