@@ -530,7 +530,9 @@ type ServiceConfig struct {
 	TLSCert           string   `yaml:"tls_cert"`               // Server TLS certificate.
 	CACert            string   `yaml:"ca_cert"`                // CA certificate to validate client certificate.
 	ServerAsync       *bool    `yaml:"server_async,omitempty"` // Whether to enable server asynchronous mode.
-	// Maximum number of goroutines for server asynchronous mode.
+	// MaxRoutines is the maximum number of goroutines for server asynchronous mode.
+	// Requests exceeding MaxRoutines will be queued. Prolonged overages may lead to OOM!
+	// MaxRoutines is not the solution to alleviate server overloading.
 	MaxRoutines int    `yaml:"max_routines"`
 	Writev      *bool  `yaml:"writev,omitempty"` // Whether to enable writev.
 	Transport   string `yaml:"transport"`        // Transport type.
