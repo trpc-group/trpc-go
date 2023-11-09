@@ -69,6 +69,8 @@ tRPC-Go 中的提交消息遵循一套特定的约定，我们将在本节中讨
 > The algorithm is described at https://wikipedia.org/wiki/McGillicutty_Algorithm
 >
 > Fixes #159
+>
+> RELEASE NOTES: Improved precision of Sin, Cos, and Tan for very large arguments (>1e10) 
 
 #### 第一行
 
@@ -93,6 +95,35 @@ tRPC-Go 中的提交消息遵循一套特定的约定，我们将在本节中讨
 
 - 如果有相关 issue，请在此评论中添加 `Fixes #12345` 或` Updates #12345`（如果这不是完整的修复）
 - 如果涉及到的仓库不是 `trpc-go`，则可以使用 `owner/repo#issue_number` 语法：`Fixes trpc-group/tnet#12345`
+
+#### PR 类型标签
+
+PR 类型标签用于标识当前 PR 变更所属的类型，为后续发布版本提供参考。这有助于发布团队在更快的发布周期里，准确识别当前周期内所有类型的问题。
+
+对于所有 PR，必须设置以下之一的 PR 类型标签：
+
+- type/bug: 修复新发现的 bug。
+- type/enhancement: 添加测试，重构内部代码。
+- type/feature: 新功能。
+- type/documentation: 添加文档。
+- type/api-change: 添加、删除或更改 API。
+- type/failing-test: CI 测试用例偶发失败。
+- type/performance: 改进性能的变更。
+- type/ci: 更改 CI 配置文件和脚本。
+
+#### 发布说明
+
+对于任何造成用户可见更改的 PR，都需要提供发布说明。这可能包括：
+
+- 用户可见的关键 bug 修复
+- 显著的功能增加
+- 功能弃用或移除
+- API 更改
+- 文档添加
+
+如果当前 PR 没有用户可见的变更，例如代码内部重构，添加测试用例等情况，发布说明内容填为 'NONE'，这个 PR 的变更就不会记录在下个版本的 CHANGELOG 中；如果当前 PR 有用户可见的变更，发布说明内容需要按照实际情况填写，尽量不要涉及技术细节，在用户视角描述当前变更会造成的影响。
+
+发布说明是用户即将使用或升级到 tRPC-Go 特定版本时的最重要参考点之一。
 
 ## 其他主题
 
