@@ -695,8 +695,6 @@ func (opts *Options) LoadNodeConfig(node *registry.Node) {
 	if node.Network != "" {
 		opts.Network = node.Network
 		opts.CallOptions = append(opts.CallOptions, transport.WithDialNetwork(node.Network))
-	} else {
-		node.Network = opts.Network
 	}
 	if node.Protocol != "" {
 		WithProtocol(node.Protocol)(opts)

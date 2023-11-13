@@ -154,7 +154,7 @@ func (s *stream) Init(ctx context.Context, opt ...Option) (*Options, error) {
 		report.SelectNodeFail.Incr()
 		return nil, err
 	}
-	ensureMsgRemoteAddr(msg, node.Network, node.Address)
+	ensureMsgRemoteAddr(msg, findFirstNonEmpty(node.Network, opts.Network), node.Address)
 	const invalidCost = -1
 	opts.Node.set(node, node.Address, invalidCost)
 	if opts.Codec == nil {
@@ -164,6 +164,15 @@ func (s *stream) Init(ctx context.Context, opt ...Option) (*Options, error) {
 	opts.CallOptions = append(opts.CallOptions, transport.WithMsg(msg))
 	s.opts = opts
 	return s.opts, nil
+}
+
+func findFirstNonEmpty(ss ...string) string {
+	for _, s := range ss {
+		if s != "" {
+			return s
+		}
+	}
+	return ""
 }
 
 // Invoke implements Stream.

@@ -393,7 +393,7 @@ func selectorFilter(ctx context.Context, req interface{}, rsp interface{}, next 
 	if err != nil {
 		return OptionsFromContext(ctx).fixTimeout(err)
 	}
-	ensureMsgRemoteAddr(msg, node.Network, node.Address)
+	ensureMsgRemoteAddr(msg, findFirstNonEmpty(node.Network, opts.Network), node.Address)
 
 	// Start to process the next filter and report.
 	begin := time.Now()
