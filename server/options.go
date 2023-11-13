@@ -215,6 +215,8 @@ func WithWritev(writev bool) Option {
 // MaxRoutines should be set to twice as expected number of routines (can be calculated by expected QPS),
 // and larger than MAXPROCS.
 // If MaxRoutines is not set or set to 0, it will be set to (1<<31 - 1).
+// Requests exceeding MaxRoutines will be queued. Prolonged overages may lead to OOM!
+// MaxRoutines is not the solution to alleviate server overloading.
 func WithMaxRoutines(routines int) Option {
 	return func(o *Options) {
 		o.ServeOptions = append(o.ServeOptions, transport.WithMaxRoutines(routines))
