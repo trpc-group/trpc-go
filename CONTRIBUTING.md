@@ -75,7 +75,8 @@ Here is an example of a good one:
 > The algorithm is described at https://wikipedia.org/wiki/McGillicutty_Algorithm
 >
 > Fixes #159
-
+>
+> RELEASE NOTES: Improved precision of Sin, Cos, and Tan for very large arguments (>1e10) 
 
 #### First line
 
@@ -99,6 +100,37 @@ The [benchstat](https://godoc.org/golang.org/x/perf/cmd/benchstat) tool is conve
 The special notation "Fixes #12345" associates the change with issue 12345 in the tRPC-Go issue tracker.
 When this change is eventually applied, the issue tracker will automatically mark the issue as fixed.
 
+- If there is a corresponding issue, add either `Fixes #12345` or `Updates #12345` (the latter if this is not a complete fix) to this comment
+- If referring to a repo other than `trpc-go` you can use the `owner/repo#issue_number` syntax: `Fixes trpc-group/tnet#12345`
+
+#### PR type label
+
+The PR type label is used to help identify the types of changes going into the release over time. This may allow the Release Team to develop a better understanding of what sorts of issues we would miss with a faster release cadence.
+
+For all pull requests, one of the following PR type labels must be set:
+
+- type/bug: Fixes a newly discovered bug.
+- type/enhancement: Adding tests, refactoring.
+- type/feature: New functionality.
+- type/documentation: Adds documentation.
+- type/api-change: Adds, removes, or changes an API.
+- type/failing-test: CI test case is showing intermittent failures.
+- type/performance: Changes that improves performance.
+- type/ci: Changes the CI configuration files and scripts.
+
+#### Release notes
+
+Release notes are required for any pull request with user-visible changes, this could mean:
+
+- User facing, critical bug-fixes
+- Notable feature additions
+- Deprecations or removals
+- API changes
+- Documents additions
+
+If the current PR doesn't have user-visible changes, such as internal code refactoring or adding test cases, the release notes should be filled with 'NONE' and the changes in this PR will not be recorded in the next version's CHANGELOG. If the current PR has user-visible changes, the release notes should be filled out according to the actual situation, avoiding technical details and describing the impact of the current changes from a user's perspective as much as possible.
+
+Release notes are one of the most important reference points for users about to import or upgrade to a particular release of tRPC-Go.
 
 ## Miscellaneous topics
 

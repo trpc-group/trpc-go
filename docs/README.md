@@ -27,6 +27,7 @@ English | [中文](README.zh_CN.md)
   - [High Performance Network Package tnet](/docs/user_guide/tnet.md)
   - [Track Running Status](/rpcz/README.md)
   - [Attachment (Big Binary Data) Transfer](/docs/user_guide/attachment.md)
+  - [Testing](/docs/user_guide/testing.md)
 - Developer Guide
   - Plugin Development
     - [Plugin Overview](/plugin/README.md)

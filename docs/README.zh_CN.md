@@ -27,6 +27,7 @@
   - [高性能网络库 tnet](/docs/user_guide/tnet.zh_CN.md)
   - [运行状态追踪](/rpcz/README.zh_CN.md)
   - [附件（大二进制数据）传输](/docs/user_guide/attachment.zh_CN.md)
+  - [测试](/docs/user_guide/testing.zh_CN.md)
 - 开发指南
   - 插件开发
     - [插件向导](/plugin/README.zh_CN.md)

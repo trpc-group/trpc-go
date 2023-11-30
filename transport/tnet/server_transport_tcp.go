@@ -34,6 +34,7 @@ import (
 
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/addrutil"
 	"trpc.group/trpc-go/trpc-go/internal/report"
 	intertls "trpc.group/trpc-go/trpc-go/internal/tls"
 	"trpc.group/trpc-go/trpc-go/log"
@@ -232,7 +233,7 @@ func (s *serverTransport) onConnOpened(conn net.Conn, pool *ants.PoolWithFunc,
 	// To avoid overwriting packets, check whether we should copy packages by Framer and some other configurations.
 	tc.copyFrame = frame.ShouldCopy(opts.CopyFrame, tc.serverAsync, codec.IsSafeFramer(tc.framer))
 
-	s.storeConn(addrToKey(conn.RemoteAddr()), tc)
+	s.storeConn(addrutil.AddrToKey(conn.LocalAddr(), conn.RemoteAddr()), tc)
 	return tc
 }
 
@@ -255,7 +256,7 @@ func (s *serverTransport) onConnClosed(conn net.Conn, handler transport.Handler)
 	}
 
 	// Release the connection resources stored on the transport.
-	s.deleteConn(addrToKey(conn.RemoteAddr()))
+	s.deleteConn(addrutil.AddrToKey(conn.LocalAddr(), conn.RemoteAddr()))
 }
 
 func handleTCP(conn interface{}) error {

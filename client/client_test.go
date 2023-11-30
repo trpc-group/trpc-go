@@ -182,7 +182,7 @@ func TestClientFail(t *testing.T) {
 		client.WithSelectorNode(node), client.WithProtocol("fake")))
 	require.Equal(t, node.Address, "127.0.0.1:8080")
 	require.Equal(t, node.ServiceName, "127.0.0.1:8080")
-	require.Equal(t, node.Network, "tcp")
+	require.Empty(t, node.Network)
 
 	// test encode failure
 	reqBody = &codec.Body{Data: []byte("failbody")}

@@ -15,6 +15,7 @@ package trpc_test
 
 import (
 	"context"
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -52,6 +53,12 @@ func TestStreamCodecInit(t *testing.T) {
 	msg.WithStreamID(100)
 	msg.WithCallerServiceName("trpc.app.server.service")
 	msg.WithClientRPCName("/trpc.test.helloworld.Greeter/SayHello")
+	laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10000")
+	assert.Nil(t, err)
+	raddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	assert.Nil(t, err)
+	msg.WithLocalAddr(laddr)
+	msg.WithRemoteAddr(raddr)
 	initBuf, err := clientCodec.Encode(msg, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, initResult, initBuf)
@@ -77,6 +84,8 @@ func TestStreamCodecInit(t *testing.T) {
 	// server Decode
 	serverCtx := context.Background()
 	_, serverMsg := codec.WithNewMessage(serverCtx)
+	serverMsg.WithLocalAddr(laddr)
+	serverMsg.WithRemoteAddr(raddr)
 	init, err := serverCodec.Decode(serverMsg, initResult)
 	assert.Nil(t, err)
 	assert.Nil(t, init)
@@ -138,6 +147,12 @@ func TestStreamCodecData(t *testing.T) {
 	// server Decode
 	serverCtx := context.Background()
 	_, serverMsg := codec.WithNewMessage(serverCtx)
+	laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10000")
+	assert.Nil(t, err)
+	raddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	assert.Nil(t, err)
+	serverMsg.WithLocalAddr(laddr)
+	serverMsg.WithRemoteAddr(raddr)
 	init, err := serverCodec.Decode(serverMsg, initResult)
 	assert.Nil(t, err)
 	assert.Nil(t, init)
@@ -162,6 +177,8 @@ func TestStreamCodecData(t *testing.T) {
 	// Server Decode
 	serverCtx = context.Background()
 	_, serverMsg = codec.WithNewMessage(serverCtx)
+	serverMsg.WithLocalAddr(laddr)
+	serverMsg.WithRemoteAddr(raddr)
 	dataDecode, err := serverCodec.Decode(serverMsg, dataResult)
 	assert.Nil(t, err)
 	assert.Equal(t, dataDecode, data)
@@ -170,6 +187,8 @@ func TestStreamCodecData(t *testing.T) {
 	// server Encode
 	ctx = context.Background()
 	_, encodeMsg := codec.WithNewMessage(ctx)
+	encodeMsg.WithLocalAddr(laddr)
+	encodeMsg.WithRemoteAddr(raddr)
 	serverFrameHead := &trpc.FrameHead{
 		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
 		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA),
@@ -223,6 +242,12 @@ func TestStreamCodecClose(t *testing.T) {
 	// server Decode
 	serverCtx := context.Background()
 	_, serverMsg := codec.WithNewMessage(serverCtx)
+	laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10000")
+	assert.Nil(t, err)
+	raddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	assert.Nil(t, err)
+	serverMsg.WithLocalAddr(laddr)
+	serverMsg.WithRemoteAddr(raddr)
 	init, err := serverCodec.Decode(serverMsg, initResult)
 	assert.Nil(t, err)
 	assert.Nil(t, init)
@@ -249,6 +274,8 @@ func TestStreamCodecClose(t *testing.T) {
 	// server Decode Close
 	serverCtx = context.Background()
 	_, serverMsg = codec.WithNewMessage(serverCtx)
+	serverMsg.WithLocalAddr(laddr)
+	serverMsg.WithRemoteAddr(raddr)
 	closeDecode, err := serverCodec.Decode(serverMsg, closeResult)
 	assert.Nil(t, err)
 	assert.Nil(t, closeDecode)
@@ -257,6 +284,8 @@ func TestStreamCodecClose(t *testing.T) {
 	// server encode Close
 	ctx = context.Background()
 	_, encodeMsg := codec.WithNewMessage(ctx)
+	encodeMsg.WithLocalAddr(laddr)
+	encodeMsg.WithRemoteAddr(raddr)
 	serverFrameHead := &trpc.FrameHead{
 		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
 		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE),
@@ -277,6 +306,8 @@ func TestStreamCodecClose(t *testing.T) {
 	// Server decode error after encode close
 	serverCtx = context.Background()
 	_, serverMsg = codec.WithNewMessage(serverCtx)
+	serverMsg.WithLocalAddr(laddr)
+	serverMsg.WithRemoteAddr(raddr)
 	closeDecode, err = serverCodec.Decode(serverMsg, closeResult)
 	assert.NotNil(t, err)
 	assert.Nil(t, closeDecode)
@@ -284,6 +315,8 @@ func TestStreamCodecClose(t *testing.T) {
 	// Client decode close
 	clientCtx := context.Background()
 	_, clientMsg := codec.WithNewMessage(clientCtx)
+	clientMsg.WithLocalAddr(laddr)
+	clientMsg.WithRemoteAddr(raddr)
 	CloseRsp, err := clientCodec.Decode(clientMsg, serverEncodeData)
 	assert.Nil(t, err)
 	assert.Nil(t, CloseRsp)
@@ -329,6 +362,12 @@ func TestStreamCodecReset(t *testing.T) {
 	// Server decode Reset
 	serverCtx := context.Background()
 	_, serverMsg := codec.WithNewMessage(serverCtx)
+	laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10000")
+	assert.Nil(t, err)
+	raddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	assert.Nil(t, err)
+	serverMsg.WithLocalAddr(laddr)
+	serverMsg.WithRemoteAddr(raddr)
 	resetDecode, err := serverCodec.Decode(serverMsg, resetResult)
 	assert.Nil(t, err)
 	assert.Nil(t, resetDecode)
@@ -339,6 +378,8 @@ func TestStreamCodecReset(t *testing.T) {
 	// server encode Close
 	ctx = context.Background()
 	_, encodeMsg := codec.WithNewMessage(ctx)
+	encodeMsg.WithLocalAddr(laddr)
+	encodeMsg.WithRemoteAddr(raddr)
 	serverFrameHead := &trpc.FrameHead{
 		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
 		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE),
@@ -361,6 +402,8 @@ func TestStreamCodecReset(t *testing.T) {
 	// client Decode reset
 	clientCtx := context.Background()
 	_, clientMsg := codec.WithNewMessage(clientCtx)
+	encodeMsg.WithLocalAddr(laddr)
+	encodeMsg.WithRemoteAddr(raddr)
 	resetRsp, err := clientCodec.Decode(clientMsg, serverEncodeData)
 	assert.Nil(t, err)
 	assert.Nil(t, resetRsp)
@@ -448,6 +491,12 @@ func TestFeedbackFrameType(t *testing.T) {
 	// server Decode
 	serverCtx := context.Background()
 	_, serverMsg := codec.WithNewMessage(serverCtx)
+	laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10000")
+	assert.Nil(t, err)
+	raddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	assert.Nil(t, err)
+	serverMsg.WithLocalAddr(laddr)
+	serverMsg.WithRemoteAddr(raddr)
 	init, err := serverCodec.Decode(serverMsg, initResult)
 	assert.Nil(t, err)
 	assert.Nil(t, init)
@@ -485,6 +534,8 @@ func TestFeedbackFrameType(t *testing.T) {
 	// server Decode  feedback frame
 	serverCtx = context.Background()
 	_, serverMsg = codec.WithNewMessage(serverCtx)
+	serverMsg.WithLocalAddr(laddr)
+	serverMsg.WithRemoteAddr(raddr)
 	dataDecode, err := serverCodec.Decode(serverMsg, encodeData)
 	assert.Nil(t, dataDecode)
 	assert.Nil(t, err)
@@ -529,6 +580,12 @@ func TestDecodeEncodeFail(t *testing.T) {
 	// server Decode
 	serverCtx := context.Background()
 	_, serverMsg := codec.WithNewMessage(serverCtx)
+	laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10000")
+	assert.Nil(t, err)
+	raddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	assert.Nil(t, err)
+	serverMsg.WithLocalAddr(laddr)
+	serverMsg.WithRemoteAddr(raddr)
 	init, err := serverCodec.Decode(serverMsg, initResult)
 	assert.Nil(t, err)
 	assert.Nil(t, init)
@@ -605,6 +662,12 @@ func TestEncodeWithMetadata(t *testing.T) {
 
 	// Server Decode
 	serverCtx, serverMsg := codec.WithNewMessage(context.Background())
+	laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10000")
+	assert.Nil(t, err)
+	raddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	assert.Nil(t, err)
+	serverMsg.WithLocalAddr(laddr)
+	serverMsg.WithRemoteAddr(raddr)
 	initRsp, err := serverCodec.Decode(serverMsg, initResult)
 	assert.Nil(t, err)
 	assert.Nil(t, initRsp)
@@ -644,6 +707,12 @@ func TestEncodeWithDyeing(t *testing.T) {
 
 	// Server Decode
 	serverCtx, serverMsg := codec.WithNewMessage(context.Background())
+	laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10000")
+	assert.Nil(t, err)
+	raddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	assert.Nil(t, err)
+	serverMsg.WithLocalAddr(laddr)
+	serverMsg.WithRemoteAddr(raddr)
 	initRsp, err := serverCodec.Decode(serverMsg, initResult)
 	assert.Nil(t, err)
 	assert.Nil(t, initRsp)
@@ -682,6 +751,12 @@ func TestEncodeWithEnvTransfer(t *testing.T) {
 
 	// Server Decode
 	serverCtx, serverMsg := codec.WithNewMessage(context.Background())
+	laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10000")
+	assert.Nil(t, err)
+	raddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	assert.Nil(t, err)
+	serverMsg.WithLocalAddr(laddr)
+	serverMsg.WithRemoteAddr(raddr)
 	initRsp, err := serverCodec.Decode(serverMsg, initResult)
 	assert.Nil(t, err)
 	assert.Nil(t, initRsp)
