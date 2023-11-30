@@ -49,6 +49,8 @@ import (
 
 func init() {
 	st := NewServerTransport(func() *stdhttp.Server { return &stdhttp.Server{} })
+	DefaultServerTransport = st
+	DefaultHTTP2ServerTransport = st
 	// Server transport (protocol file service).
 	transport.RegisterServerTransport("http", st)
 	transport.RegisterServerTransport("http2", st)
@@ -59,6 +61,12 @@ func init() {
 	transport.RegisterClientTransport("http", DefaultClientTransport)
 	transport.RegisterClientTransport("http2", DefaultHTTP2ClientTransport)
 }
+
+// DefaultServerTransport is the default server http transport.
+var DefaultServerTransport transport.ServerTransport
+
+// DefaultHTTP2ServerTransport is the default server http2 transport.
+var DefaultHTTP2ServerTransport transport.ServerTransport
 
 // ServerTransport is the http transport layer.
 type ServerTransport struct {
