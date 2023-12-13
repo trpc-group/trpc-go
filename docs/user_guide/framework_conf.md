@@ -110,6 +110,7 @@ server:
     - # Optional, whether to prohibit inheriting the upstream timeout time, used to close the full link timeout mechanism, the default is false
       disable_request_timeout: Boolean
       # Optional, the IP address of the service monitors, if it is empty, it will try to get the network card IP, if it is still empty, use global.local_ip
+      # To listen on all addresses, please use "0.0.0.0" (IPv4) or "::" (IPv6).
       ip: String(ipv4 or ipv6)
       # Required, the service name, used for service discovery
       name: String

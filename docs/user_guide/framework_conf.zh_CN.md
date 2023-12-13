@@ -108,6 +108,7 @@ server:
     - # 选填，是否禁止继承上游的超时时间，用于关闭全链路超时机制，默认为 false
       disable_request_timeout: Boolean
       # 选填，service 监听的 IP 地址，如果为空，则会尝试获取网卡 IP，如果仍为空，则使用 global.local_ip
+      # 如果需要监听所有地址的话，请使用 "0.0.0.0" (ipv4) 或 "::" (ipv6)
       ip: String(ipv4 or ipv6)
       # 必填，服务名，用于服务发现
       name: String
