@@ -119,14 +119,26 @@ func newEncoder(c *OutputConfig) zapcore.Encoder {
 	if c.EnableColor {
 		encoderCfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	}
-	switch c.Formatter {
-	case "console":
-		return zapcore.NewConsoleEncoder(encoderCfg)
-	case "json":
-		return zapcore.NewJSONEncoder(encoderCfg)
-	default:
-		return zapcore.NewConsoleEncoder(encoderCfg)
+	if newFormatEncoder, ok := formatEncoders[c.Formatter]; ok {
+		return newFormatEncoder(encoderCfg)
 	}
+	// Defaults to console encoder.
+	return zapcore.NewConsoleEncoder(encoderCfg)
+}
+
+var formatEncoders = map[string]NewFormatEncoder{
+	"console": zapcore.NewConsoleEncoder,
+	"json":    zapcore.NewJSONEncoder,
+}
+
+// NewFormatEncoder is the function type for creating a format encoder out of an encoder config.
+type NewFormatEncoder func(zapcore.EncoderConfig) zapcore.Encoder
+
+// RegisterFormatEncoder registers a NewFormatEncoder with the specified formatName key.
+// The existing formats include "console" and "json", but you can override these format encoders
+// or provide a new custom one.
+func RegisterFormatEncoder(formatName string, newFormatEncoder NewFormatEncoder) {
+	formatEncoders[formatName] = newFormatEncoder
 }
 
 // GetLogEncoderKey gets user defined log output name, uses defKey if empty.

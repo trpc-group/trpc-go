@@ -17,12 +17,14 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 
@@ -333,4 +335,51 @@ func TestLogEnableColor(t *testing.T) {
 	l.Info("hello")
 	l.Warn("hello")
 	l.Error("hello")
+}
+
+func TestLogNewFormatEncoder(t *testing.T) {
+	const myFormatter = "myformatter"
+	log.RegisterFormatEncoder(myFormatter, func(ec zapcore.EncoderConfig) zapcore.Encoder {
+		return &consoleEncoder{
+			Encoder: zapcore.NewJSONEncoder(zapcore.EncoderConfig{}),
+			pool:    buffer.NewPool(),
+			cfg:     ec,
+		}
+	})
+	cfg := []log.OutputConfig{{Writer: "console", Level: "trace", Formatter: myFormatter}}
+	l := log.NewZapLog(cfg).With(log.Field{Key: "trace-id", Value: "xx"})
+	l.Trace("hello")
+	l.Debug("hello")
+	l.Info("hello")
+	l.Warn("hello")
+	l.Error("hello")
+	// 2023/12/14 10:54:55 {"trace-id":"xx"} DEBUG hello
+	// 2023/12/14 10:54:55 {"trace-id":"xx"} DEBUG hello
+	// 2023/12/14 10:54:55 {"trace-id":"xx"} INFO hello
+	// 2023/12/14 10:54:55 {"trace-id":"xx"} WARN hello
+	// 2023/12/14 10:54:55 {"trace-id":"xx"} ERROR hello
+}
+
+type consoleEncoder struct {
+	zapcore.Encoder
+	pool buffer.Pool
+	cfg  zapcore.EncoderConfig
+}
+
+func (c consoleEncoder) Clone() zapcore.Encoder {
+	return consoleEncoder{Encoder: c.Encoder.Clone(), pool: buffer.NewPool(), cfg: c.cfg}
+}
+
+func (c consoleEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
+	buf, err := c.Encoder.EncodeEntry(zapcore.Entry{}, nil)
+	if err != nil {
+		return nil, err
+	}
+	buffer := c.pool.Get()
+	buffer.AppendString(entry.Time.Format("2006/01/02 15:04:05"))
+	field := buf.String()
+	buffer.AppendString(" " + field[:len(field)-1] + " ")
+	buffer.AppendString(strings.ToUpper(entry.Level.String()) + " ")
+	buffer.AppendString(entry.Message + "\n")
+	return buffer, nil
 }
