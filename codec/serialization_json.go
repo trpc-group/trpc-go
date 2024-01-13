@@ -14,17 +14,33 @@
 package codec
 
 import (
-	jsoniter "github.com/json-iterator/go"
+	"encoding/json"
 )
 
 // JSONAPI is json packing and unpacking object, users can change
 // the internal parameter.
-var JSONAPI = jsoniter.ConfigCompatibleWithStandardLibrary
+var JSONAPI JSONSerializer = StandardJSONSerializer{}
+
+// JSONSerializer is json packing and unpacking object interface
+type JSONSerializer interface {
+	Unmarshal([]byte, interface{}) error
+	Marshal(interface{}) ([]byte, error)
+}
+
+// StandardJSONSerializer is a JSONSerializer using standard encoding/json.
+type StandardJSONSerializer struct{}
+
+// Unmarshal deserializes the in bytes into body.
+func (StandardJSONSerializer) Unmarshal(in []byte, body interface{}) error {
+	return json.Unmarshal(in, body)
+}
+
+// Marshal returns the serialized bytes in json protocol.
+func (StandardJSONSerializer) Marshal(body interface{}) ([]byte, error) {
+	return json.Marshal(body)
+}
 
 // JSONSerialization provides json serialization mode.
-// golang official json package is implemented by reflection,
-// and has very low performance. So trpc-go choose json-iterator package
-// to implement json serialization.
 type JSONSerialization struct{}
 
 // Unmarshal deserializes the in bytes into body.

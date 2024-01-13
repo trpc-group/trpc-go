@@ -84,46 +84,43 @@ Copyright (c) 2016 Go Playground
 5. go-strftime
 Copyright (c) 2012 Jehiah Czebotar
 
-6. go
-Copyright (c) 2016 json-iterator
-
-7. file-rotatelogs
+6. file-rotatelogs
 Copyright (c) 2014 lestrrat
 
-8. strftime
+7. strftime
 Copyright (c) 2016 lestrrat
 
-9. mapstructure
+8. mapstructure
 Copyright (c) 2013 Mitchell Hashimoto
 
-10. lumberjack
+9.  lumberjack
 Copyright (c) 2014 Nate Finch 
 
-11. ants
+10.  ants
 Copyright (c) 2018 Andy Pan
 
-12. cast
+11.  cast
 Copyright (c) 2014 Steve Francia
 
-13. testify
+12.  testify
 Copyright (c) 2012-2020 Mat Ryer, Tyler Bunnell and contributors.
 
-14. fasthttp
+13.  fasthttp
 Copyright (c) 2015-present Aliaksandr Valialkin, VertaMedia, Kirill Danshin, Erik Dubbelboer, FastHTTP Authors
 
-15. atomic
+14.  atomic
 Copyright (c) 2016 Uber Technologies, Inc.
 
-16. automaxprocs
+15.  automaxprocs
 Copyright (c) 2017 Uber Technologies, Inc.
 
-17. zap
+16.  zap
 Copyright (c) 2016-2017 Uber Technologies, Inc.
 
-18. assert
+17.  assert
 Copyright (c) 2015 Dean Karn
 
-19. lumberjack
+18.  lumberjack
 Copyright (c) 2014 Nate Finch 
 
 
