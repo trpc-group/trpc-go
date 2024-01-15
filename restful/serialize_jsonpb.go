@@ -15,6 +15,7 @@ package restful
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -35,9 +36,36 @@ type JSONPBSerializer struct {
 	AllowUnmarshalNil bool // allow unmarshalling nil body
 }
 
-// JSONAPI is a copy of jsoniter.ConfigCompatibleWithStandardLibrary.
-// github.com/json-iterator/go is faster than Go's standard json library.
-var JSONAPI = jsoniter.ConfigCompatibleWithStandardLibrary
+// JSONAPI is json packing and unpacking object, users can deside you own JSON
+// serialization implementation.
+var JSONAPI JSONSerializer = jsoniter.ConfigCompatibleWithStandardLibrary
+
+// JSONSerializer is json packing and unpacking object interface
+type JSONSerializer interface {
+	Unmarshal([]byte, interface{}) error
+	Marshal(interface{}) ([]byte, error)
+	MarshalIndent(v any, prefix, indent string) ([]byte, error)
+}
+
+// StandardJSONSerializer is a JSONSerializer using standard encoding/json.
+type StandardJSONSerializer struct{}
+
+// Unmarshal deserializes the in bytes into body.
+func (StandardJSONSerializer) Unmarshal(in []byte, body interface{}) error {
+	return json.Unmarshal(in, body)
+}
+
+// Marshal returns the serialized bytes in json protocol.
+func (StandardJSONSerializer) Marshal(body interface{}) ([]byte, error) {
+	return json.Marshal(body)
+}
+
+// MarshalIndent is like Marshal but applies Indent to format the output.
+// Each JSON element in the output will begin on a new line beginning with prefix
+// followed by one or more copies of indent according to the indentation nesting.
+func (StandardJSONSerializer) MarshalIndent(v interface{}, prefix, indent string) ([]byte, error) {
+	return json.MarshalIndent(v, prefix, indent)
+}
 
 // Marshaller is a configurable protojson marshaler.
 var Marshaller = protojson.MarshalOptions{EmitUnpopulated: true}
@@ -104,7 +132,7 @@ func marshalNonProtoField(v interface{}) ([]byte, error) {
 	// marshal map proto message
 	if rv.Kind() == reflect.Map {
 		// make map for marshalling
-		m := make(map[string]*jsoniter.RawMessage)
+		m := make(map[string]*json.RawMessage)
 		for _, key := range rv.MapKeys() { // range all keys
 			// marshal value
 			out, err := marshal(rv.MapIndex(key).Interface())
@@ -112,7 +140,7 @@ func marshalNonProtoField(v interface{}) ([]byte, error) {
 				return out, err
 			}
 			// assignment
-			m[fmt.Sprintf("%v", key.Interface())] = (*jsoniter.RawMessage)(&out)
+			m[fmt.Sprintf("%v", key.Interface())] = (*json.RawMessage)(&out)
 			if Marshaller.Indent != "" { // 指定 indent
 				return JSONAPI.MarshalIndent(v, "", Marshaller.Indent)
 			}
@@ -193,7 +221,7 @@ func unmarshalNonProtoField(data []byte, v interface{}) error {
 	// can only unmarshal numeric enum
 	if _, ok := rv.Interface().(wrappedEnum); ok {
 		var x interface{}
-		if err := jsoniter.Unmarshal(data, &x); err != nil {
+		if err := json.Unmarshal(data, &x); err != nil {
 			return err
 		}
 		switch t := x.(type) {
@@ -206,8 +234,8 @@ func unmarshalNonProtoField(data []byte, v interface{}) error {
 	}
 	// unmarshal to slice
 	if rv.Kind() == reflect.Slice {
-		// unmarshal to jsoniter.RawMessage first
-		var rms []jsoniter.RawMessage
+		// unmarshal to json.RawMessage first
+		var rms []json.RawMessage
 		if err := JSONAPI.Unmarshal(data, &rms); err != nil {
 			return err
 		}
@@ -229,8 +257,8 @@ func unmarshalNonProtoField(data []byte, v interface{}) error {
 		if rv.IsNil() { // rv MakeMap
 			rv.Set(reflect.MakeMap(rv.Type()))
 		}
-		// unmarshal to map[string]*jsoniter.RawMessage first
-		m := make(map[string]*jsoniter.RawMessage)
+		// unmarshal to map[string]*json.RawMessage first
+		m := make(map[string]*json.RawMessage)
 		if err := JSONAPI.Unmarshal(data, &m); err != nil {
 			return err
 		}
@@ -242,7 +270,7 @@ func unmarshalNonProtoField(data []byte, v interface{}) error {
 			}
 			// unmarshal value
 			if value == nil {
-				rm := jsoniter.RawMessage("null")
+				rm := json.RawMessage("null")
 				value = &rm
 			}
 			rn := reflect.New(rv.Type().Elem())
