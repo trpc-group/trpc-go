@@ -616,6 +616,9 @@ func WithCloneContextAndMessage(ctx context.Context) (context.Context, Msg) {
 
 // copyCommonMessage copy common data of message.
 func copyCommonMessage(m *msg, newMsg *msg) {
+	// Do not copy compress type here, as it will cause subsequence RPC calls to inherit the upstream
+	// compress type which is not the expected behavior. Compress type should not be propagated along
+	// the entire RPC invocation chain.
 	newMsg.frameHead = m.frameHead
 	newMsg.requestTimeout = m.requestTimeout
 	newMsg.serializationType = m.serializationType
