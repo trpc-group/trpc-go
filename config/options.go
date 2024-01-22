@@ -13,8 +13,6 @@
 
 package config
 
-import "trpc.group/trpc-go/trpc-go/internal/expandenv"
-
 // WithCodec returns an option which sets the codec's name.
 func WithCodec(name string) LoadOption {
 	return func(c *TrpcConfig) {
@@ -33,7 +31,21 @@ func WithProvider(name string) LoadOption {
 // Note, method TrpcConfig.Bytes will return the replaced bytes.
 func WithExpandEnv() LoadOption {
 	return func(c *TrpcConfig) {
-		c.expandEnv = expandenv.ExpandEnv
+		c.expandEnv = true
+	}
+}
+
+// WithWatch returns an option to start watch model
+func WithWatch() LoadOption {
+	return func(c *TrpcConfig) {
+		c.watch = true
+	}
+}
+
+// WithWatchHook returns an option to set log func for config change logger
+func WithWatchHook(f func(msg WatchMessage)) LoadOption {
+	return func(c *TrpcConfig) {
+		c.watchHook = f
 	}
 }
 
