@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -910,4 +911,57 @@ func serverFilterAdd2(ss server.Stream, si *server.StreamServerInfo,
 	}
 	err := handler(newWrappedServerStream(ss))
 	return err
+}
+
+// TestServerStreamAllFailWhenConnectionClosedAndReconnect tests when a connection
+// is closed and then reconnected (with the same client IP and port), both SendMsg
+// and RecvMsg on the server side result in errors.
+func TestServerStreamAllFailWhenConnectionClosedAndReconnect(t *testing.T) {
+	ch := make(chan struct{})
+	addr := "127.0.0.1:30211"
+	svrOpts := []server.Option{
+		server.WithAddress(addr),
+	}
+	handle := func(s server.Stream) error {
+		<-ch
+		err := s.SendMsg(getBytes(100))
+		assert.Equal(t, errs.Code(err), errs.RetServerSystemErr)
+		err = s.RecvMsg(getBytes(100))
+		assert.Equal(t, errs.Code(err), errs.RetServerSystemErr)
+		ch <- struct{}{}
+		return nil
+	}
+	svr := startStreamServer(handle, svrOpts)
+	defer closeStreamServer(svr)
+
+	// Init a stream
+	dialer := net.Dialer{
+		LocalAddr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 20001},
+	}
+	conn, err := dialer.Dial("tcp", addr)
+	assert.Nil(t, err)
+	_, msg := codec.WithNewMessage(context.Background())
+	msg.WithFrameHead(&trpc.FrameHead{
+		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT),
+	})
+	msg.WithClientRPCName("/trpc.test.stream.Greeter/StreamSayHello")
+	initReq, err := trpc.DefaultClientCodec.Encode(msg, nil)
+	assert.Nil(t, err)
+	_, err = conn.Write(initReq)
+	assert.Nil(t, err)
+
+	// Close the connection
+	conn.Close()
+
+	// Dial another connection using the same client ip:port
+	time.Sleep(time.Millisecond * 200)
+	_, err = dialer.Dial("tcp", addr)
+	assert.Nil(t, err)
+
+	// Notify server to send and receive
+	ch <- struct{}{}
+
+	// Wait server sending and receiving result assertion
+	<-ch
 }

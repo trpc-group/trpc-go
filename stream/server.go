@@ -20,6 +20,7 @@ import (
 	"net"
 	"sync"
 
+	"go.uber.org/atomic"
 	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	trpc "trpc.group/trpc-go/trpc-go"
@@ -40,7 +41,7 @@ type serverStream struct {
 	opts      *server.Options
 	recvQueue *queue.Queue[*response]
 	done      chan struct{}
-	err       error // Carry the server tcp failure information.
+	err       atomic.Error // Carry the server tcp failure information.
 	once      sync.Once
 	rControl  *receiveControl // Receiver flow control.
 	sControl  *sendControl    // Sender flow control.
@@ -48,6 +49,9 @@ type serverStream struct {
 
 // SendMsg is the API that users use to send streaming messages.
 func (s *serverStream) SendMsg(m interface{}) error {
+	if err := s.err.Load(); err != nil {
+		return errs.WrapFrameError(err, errs.Code(err), "stream sending error")
+	}
 	msg := codec.Message(s.ctx)
 	ctx, newMsg := codec.WithCloneContextAndMessage(s.ctx)
 	defer codec.PutBackMessage(newMsg)
@@ -119,8 +123,8 @@ func (s *serverStream) serializationAndCompressType(msg codec.Msg) (int, int) {
 func (s *serverStream) RecvMsg(m interface{}) error {
 	resp, ok := s.recvQueue.Get()
 	if !ok {
-		if s.err != nil {
-			return s.err
+		if err := s.err.Load(); err != nil {
+			return err
 		}
 		return errs.NewFrameError(errs.RetServerSystemErr, streamClosed)
 	}
@@ -320,7 +324,7 @@ func (sd *streamDispatcher) startStreamHandler(addr net.Addr, streamID uint32,
 		err = ss.CloseSend(int32(trpcpb.TrpcStreamCloseType_TRPC_STREAM_CLOSE), 0, "")
 	}
 	if err != nil {
-		ss.err = err
+		ss.err.Store(err)
 		log.Trace(closeSendFail, err)
 	}
 }
@@ -435,7 +439,7 @@ func (sd *streamDispatcher) handleError(msg codec.Msg) ([]byte, error) {
 		return nil, errs.NewFrameError(errs.RetServerSystemErr, noSuchAddr)
 	}
 	for streamID, ss := range addrToStream {
-		ss.err = msg.ServerRspErr()
+		ss.err.Store(msg.ServerRspErr())
 		ss.once.Do(func() { close(ss.done) })
 		delete(addrToStream, streamID)
 	}
