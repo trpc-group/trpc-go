@@ -25,6 +25,7 @@ import (
 	"time"
 
 	yaml "gopkg.in/yaml.v3"
+	"trpc.group/trpc-go/trpc-go/internal/expandenv"
 	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	"trpc.group/trpc-go/trpc-go/client"
@@ -608,11 +609,8 @@ func parseConfigFromFile(configPath string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	// expand environment variables
-	buf = []byte(expandEnv(string(buf)))
-
 	cfg := defaultConfig()
-	if err := yaml.Unmarshal(buf, cfg); err != nil {
+	if err := yaml.Unmarshal(expandenv.ExpandEnv(buf), cfg); err != nil {
 		return nil, err
 	}
 	return cfg, nil

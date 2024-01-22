@@ -13,6 +13,8 @@
 
 package config
 
+import "trpc.group/trpc-go/trpc-go/internal/expandenv"
+
 // WithCodec returns an option which sets the codec's name.
 func WithCodec(name string) LoadOption {
 	return func(c *TrpcConfig) {
@@ -24,6 +26,14 @@ func WithCodec(name string) LoadOption {
 func WithProvider(name string) LoadOption {
 	return func(c *TrpcConfig) {
 		c.p = GetProvider(name)
+	}
+}
+
+// WithExpandEnv replaces ${var} in raw bytes with environment value of var.
+// Note, method TrpcConfig.Bytes will return the replaced bytes.
+func WithExpandEnv() LoadOption {
+	return func(c *TrpcConfig) {
+		c.expandEnv = expandenv.ExpandEnv
 	}
 }
 

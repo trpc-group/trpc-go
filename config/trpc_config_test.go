@@ -126,3 +126,43 @@ func TestYamlCodec_Unmarshal(t *testing.T) {
 		require.NotNil(t, GetCodec("yaml").Unmarshal([]byte("[1, 2]"), &tt))
 	})
 }
+
+func TestEnvExpanded(t *testing.T) {
+	RegisterProvider(NewEnvProvider(t.Name(), []byte(`
+password: ${pwd}
+`)))
+
+	t.Setenv("pwd", t.Name())
+	cfg, err := DefaultConfigLoader.Load(
+		t.Name(),
+		WithProvider(t.Name()),
+		WithExpandEnv())
+	require.Nil(t, err)
+
+	require.Equal(t, t.Name(), cfg.GetString("password", ""))
+	require.Contains(t, string(cfg.Bytes()), fmt.Sprintf("password: %s", t.Name()))
+}
+
+func NewEnvProvider(name string, data []byte) *EnvProvider {
+	return &EnvProvider{
+		name: name,
+		data: data,
+	}
+}
+
+type EnvProvider struct {
+	name string
+	data []byte
+}
+
+func (ep *EnvProvider) Name() string {
+	return ep.name
+}
+
+func (ep *EnvProvider) Read(string) ([]byte, error) {
+	return ep.data, nil
+}
+
+func (ep *EnvProvider) Watch(cb ProviderCallback) {
+	cb("", ep.data)
+}
