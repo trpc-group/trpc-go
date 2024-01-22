@@ -17,6 +17,7 @@ package stream
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -252,12 +253,13 @@ func (cs *clientStream) invoke(ctx context.Context, _ *client.ClientStreamDesc) 
 	if _, err := cs.stream.Recv(newCtx); err != nil {
 		return nil, err
 	}
-
-	initWindowSize := defaultInitWindowSize
-	if initRspMeta, ok := newMsg.StreamFrame().(*trpcpb.TrpcStreamInitMeta); ok {
-		// If the server has feedback, use the server's window, if not, use the default window.
-		initWindowSize = initRspMeta.GetInitWindowSize()
+	initRspMeta, ok := newMsg.StreamFrame().(*trpcpb.TrpcStreamInitMeta)
+	if !ok {
+		return nil, fmt.Errorf("client stream (method = %s, streamID = %d) recv "+
+			"unexpected frame type: %T, expected: %T",
+			cs.method, cs.streamID, newMsg.StreamFrame(), (*trpcpb.TrpcStreamInitMeta)(nil))
 	}
+	initWindowSize := initRspMeta.GetInitWindowSize()
 	cs.configSendControl(initWindowSize)
 
 	// Start the dispatch goroutine loop to send packets.

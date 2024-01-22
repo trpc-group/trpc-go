@@ -85,7 +85,6 @@ func checkUpdate(updatedWindow, increment int64) bool {
 type receiveControl struct {
 	buffer    uint32   // upper limit.
 	unUpdated uint32   // Consumed, no window update sent.
-	left      uint32   // remaining available buffer.
 	fb        feedback // function for feedback.
 }
 
@@ -93,7 +92,6 @@ func newReceiveControl(buffer uint32, fb feedback) *receiveControl {
 	return &receiveControl{
 		buffer: buffer,
 		fb:     fb,
-		left:   buffer,
 	}
 }
 
@@ -103,17 +101,10 @@ func (r *receiveControl) OnRecv(n uint32) error {
 	if r.unUpdated >= r.buffer/4 {
 		increment := r.unUpdated
 		r.unUpdated = 0
-		r.updateLeft()
 		if r.fb != nil {
 			return r.fb(increment)
 		}
 		return nil
 	}
-	r.updateLeft()
 	return nil
-}
-
-// updateLeft updates the remaining available buffers.
-func (r *receiveControl) updateLeft() {
-	atomic.StoreUint32(&r.left, r.buffer-r.unUpdated)
 }

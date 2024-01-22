@@ -15,7 +15,6 @@ package stream
 
 import (
 	"errors"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -41,8 +40,8 @@ func TestSendControl(t *testing.T) {
 	}()
 	err = sc.GetWindow(200)
 	assert.Nil(t, err)
-	t2 := int64(time.Now().Sub(t1))
-	assert.GreaterOrEqual(t, t2, int64(500*time.Millisecond))
+	t2 := time.Since(t1)
+	assert.GreaterOrEqual(t, t2, 500*time.Millisecond)
 }
 
 // TestReceiveControl test.
@@ -53,9 +52,6 @@ func TestReceiveControl(t *testing.T) {
 	rc := newReceiveControl(defaultInitWindowSize, fb)
 	err := rc.OnRecv(100)
 	assert.Nil(t, err)
-
-	n := atomic.LoadUint32(&rc.left)
-	assert.Equal(t, defaultInitWindowSize-uint32(100), n)
 
 	// need to send updates.
 	err = rc.OnRecv(defaultInitWindowSize / 4)
