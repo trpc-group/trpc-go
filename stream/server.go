@@ -17,10 +17,10 @@ import (
 	"context"
 	"errors"
 	"io"
-	"net"
 	"sync"
 
 	"go.uber.org/atomic"
+	"trpc.group/trpc-go/trpc-go/internal/addrutil"
 	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	trpc "trpc.group/trpc-go/trpc-go"
@@ -222,9 +222,12 @@ func (s *serverStream) Context() context.Context {
 
 // The structure of streamDispatcher is used to distribute streaming data.
 type streamDispatcher struct {
-	m                      sync.RWMutex
-	streamIDToServerStream map[net.Addr]map[uint32]*serverStream
-	opts                   *server.Options
+	m sync.RWMutex
+	// local address + remote address + network
+	//  => stream ID
+	//    => serverStream
+	addrToServerStream map[string]map[uint32]*serverStream
+	opts               *server.Options
 }
 
 // DefaultStreamDispatcher is the default implementation of the trpc dispatcher,
@@ -234,45 +237,45 @@ var DefaultStreamDispatcher = NewStreamDispatcher()
 // NewStreamDispatcher returns a new dispatcher.
 func NewStreamDispatcher() server.StreamHandle {
 	return &streamDispatcher{
-		streamIDToServerStream: make(map[net.Addr]map[uint32]*serverStream),
+		addrToServerStream: make(map[string]map[uint32]*serverStream),
 	}
 }
 
 // storeServerStream msg contains the socket address of the client connection,
 // there are multiple streams under each socket address, and map it to serverStream
 // again according to the id of the stream.
-func (sd *streamDispatcher) storeServerStream(addr net.Addr, streamID uint32, ss *serverStream) {
+func (sd *streamDispatcher) storeServerStream(addr string, streamID uint32, ss *serverStream) {
 	sd.m.Lock()
 	defer sd.m.Unlock()
-	if addrToStreamID, ok := sd.streamIDToServerStream[addr]; !ok {
+	if addrToStreamID, ok := sd.addrToServerStream[addr]; !ok {
 		// Does not exist, indicating that a new connection is coming, re-create the structure.
-		sd.streamIDToServerStream[addr] = map[uint32]*serverStream{streamID: ss}
+		sd.addrToServerStream[addr] = map[uint32]*serverStream{streamID: ss}
 	} else {
 		addrToStreamID[streamID] = ss
 	}
 }
 
 // deleteServerStream deletes the serverStream from cache.
-func (sd *streamDispatcher) deleteServerStream(addr net.Addr, streamID uint32) {
+func (sd *streamDispatcher) deleteServerStream(addr string, streamID uint32) {
 	sd.m.Lock()
 	defer sd.m.Unlock()
-	if addrToStreamID, ok := sd.streamIDToServerStream[addr]; ok {
+	if addrToStreamID, ok := sd.addrToServerStream[addr]; ok {
 		if _, ok = addrToStreamID[streamID]; ok {
 			delete(addrToStreamID, streamID)
 		}
 		if len(addrToStreamID) == 0 {
-			delete(sd.streamIDToServerStream, addr)
+			delete(sd.addrToServerStream, addr)
 		}
 	}
 }
 
 // loadServerStream loads the stored serverStream through the socket address
 // of the client connection and the id of the stream.
-func (sd *streamDispatcher) loadServerStream(addr net.Addr, streamID uint32) (*serverStream, error) {
+func (sd *streamDispatcher) loadServerStream(addr string, streamID uint32) (*serverStream, error) {
 	sd.m.RLock()
 	defer sd.m.RUnlock()
-	addrToStream, ok := sd.streamIDToServerStream[addr]
-	if !ok || addr == nil {
+	addrToStream, ok := sd.addrToServerStream[addr]
+	if !ok {
 		return nil, errs.NewFrameError(errs.RetServerSystemErr, noSuchAddr)
 	}
 
@@ -298,7 +301,7 @@ func (sd *streamDispatcher) Init(opts *server.Options) error {
 
 // startStreamHandler is used to start the goroutine, execute streamHandler,
 // streamHandler is implemented for the specific streaming server.
-func (sd *streamDispatcher) startStreamHandler(addr net.Addr, streamID uint32,
+func (sd *streamDispatcher) startStreamHandler(addr string, streamID uint32,
 	ss *serverStream, si *server.StreamServerInfo, sh server.StreamHandler) {
 	defer func() {
 		sd.deleteServerStream(addr, streamID)
@@ -362,7 +365,7 @@ func (sd *streamDispatcher) handleInit(ctx context.Context,
 	ss := newServerStream(ctx, streamID, sd.opts)
 	w := getWindowSize(sd.opts.MaxWindowSize)
 	ss.rControl = newReceiveControl(w, ss.feedback)
-	sd.storeServerStream(msg.RemoteAddr(), streamID, ss)
+	sd.storeServerStream(addrutil.AddrToKey(msg.LocalAddr(), msg.RemoteAddr()), streamID, ss)
 
 	cw, err := ss.setSendControl(msg)
 	if err != nil {
@@ -395,13 +398,13 @@ func (sd *streamDispatcher) handleInit(ctx context.Context,
 	}
 
 	// Initiate a goroutine to execute specific business logic.
-	go sd.startStreamHandler(msg.RemoteAddr(), streamID, ss, si, sh)
+	go sd.startStreamHandler(addrutil.AddrToKey(msg.LocalAddr(), msg.RemoteAddr()), streamID, ss, si, sh)
 	return nil, errs.ErrServerNoResponse
 }
 
 // handleData handles data messages.
 func (sd *streamDispatcher) handleData(msg codec.Msg, req []byte) ([]byte, error) {
-	ss, err := sd.loadServerStream(msg.RemoteAddr(), msg.StreamID())
+	ss, err := sd.loadServerStream(addrutil.AddrToKey(msg.LocalAddr(), msg.RemoteAddr()), msg.StreamID())
 	if err != nil {
 		return nil, err
 	}
@@ -411,7 +414,7 @@ func (sd *streamDispatcher) handleData(msg codec.Msg, req []byte) ([]byte, error
 
 // handleClose handles the Close message.
 func (sd *streamDispatcher) handleClose(msg codec.Msg) ([]byte, error) {
-	ss, err := sd.loadServerStream(msg.RemoteAddr(), msg.StreamID())
+	ss, err := sd.loadServerStream(addrutil.AddrToKey(msg.LocalAddr(), msg.RemoteAddr()), msg.StreamID())
 	if err != nil {
 		// The server has sent the Close frame.
 		// Since the timing of the Close frame is unpredictable, when the server receives the Close frame from the client,
@@ -434,9 +437,9 @@ func (sd *streamDispatcher) handleError(msg codec.Msg) ([]byte, error) {
 	sd.m.Lock()
 	defer sd.m.Unlock()
 
-	addr := msg.RemoteAddr()
-	addrToStream, ok := sd.streamIDToServerStream[addr]
-	if !ok || addr == nil {
+	addr := addrutil.AddrToKey(msg.LocalAddr(), msg.RemoteAddr())
+	addrToStream, ok := sd.addrToServerStream[addr]
+	if !ok {
 		return nil, errs.NewFrameError(errs.RetServerSystemErr, noSuchAddr)
 	}
 	for streamID, ss := range addrToStream {
@@ -444,7 +447,7 @@ func (sd *streamDispatcher) handleError(msg codec.Msg) ([]byte, error) {
 		ss.once.Do(func() { close(ss.done) })
 		delete(addrToStream, streamID)
 	}
-	delete(sd.streamIDToServerStream, addr)
+	delete(sd.addrToServerStream, addr)
 	return nil, errs.ErrServerNoResponse
 }
 
@@ -467,7 +470,7 @@ func (sd *streamDispatcher) StreamHandleFunc(ctx context.Context,
 
 // handleFeedback handles the feedback frame.
 func (sd *streamDispatcher) handleFeedback(msg codec.Msg) ([]byte, error) {
-	ss, err := sd.loadServerStream(msg.RemoteAddr(), msg.StreamID())
+	ss, err := sd.loadServerStream(addrutil.AddrToKey(msg.LocalAddr(), msg.RemoteAddr()), msg.StreamID())
 	if err != nil {
 		return nil, err
 	}
