@@ -333,6 +333,18 @@ func TestClientError(t *testing.T) {
 	assert.Nil(t, cs)
 	assert.NotNil(t, err)
 
+	// receive unexpected stream frame type
+	f = func(fh *trpc.FrameHead, msg codec.Msg) ([]byte, error) {
+		msg.WithStreamFrame(int(1))
+		return nil, nil
+	}
+	ft.expectChan <- f
+	cs, err = cli.NewStream(ctx, bidiDesc, "/trpc.test.helloworld.Greeter/SayHello",
+		client.WithTarget("ip://127.0.0.1:8000"),
+		client.WithProtocol("fake"), client.WithSerializationType(codec.SerializationTypeNoop),
+		client.WithStreamTransport(ft), client.WithClientStreamQueueSize(100000))
+	assert.Nil(t, cs)
+	assert.Contains(t, err.Error(), "unexpected frame type")
 }
 
 // TestClientContext tests the case of streaming client context cancel and timeout.
