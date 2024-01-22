@@ -96,7 +96,7 @@ func RedirectStdLogAt(logger Logger, level zapcore.Level) (func(), error) {
 	return nil, errors.New("log: only supports redirecting std logs to trpc zap logger")
 }
 
-// Trace logs to TRACE log. Arguments are handled in the manner of fmt.Print.
+// Trace logs to TRACE log. Arguments are handled in the manner of fmt.Println.
 func Trace(args ...interface{}) {
 	if traceEnabled {
 		GetDefaultLogger().Trace(args...)
@@ -110,7 +110,7 @@ func Tracef(format string, args ...interface{}) {
 	}
 }
 
-// TraceContext logs to TRACE log. Arguments are handled in the manner of fmt.Print.
+// TraceContext logs to TRACE log. Arguments are handled in the manner of fmt.Println.
 func TraceContext(ctx context.Context, args ...interface{}) {
 	if !traceEnabled {
 		return
@@ -134,7 +134,7 @@ func TraceContextf(ctx context.Context, format string, args ...interface{}) {
 	GetDefaultLogger().Tracef(format, args...)
 }
 
-// Debug logs to DEBUG log. Arguments are handled in the manner of fmt.Print.
+// Debug logs to DEBUG log. Arguments are handled in the manner of fmt.Println.
 func Debug(args ...interface{}) {
 	GetDefaultLogger().Debug(args...)
 }
@@ -144,7 +144,7 @@ func Debugf(format string, args ...interface{}) {
 	GetDefaultLogger().Debugf(format, args...)
 }
 
-// Info logs to INFO log. Arguments are handled in the manner of fmt.Print.
+// Info logs to INFO log. Arguments are handled in the manner of fmt.Println.
 func Info(args ...interface{}) {
 	GetDefaultLogger().Info(args...)
 }
@@ -154,7 +154,7 @@ func Infof(format string, args ...interface{}) {
 	GetDefaultLogger().Infof(format, args...)
 }
 
-// Warn logs to WARNING log. Arguments are handled in the manner of fmt.Print.
+// Warn logs to WARNING log. Arguments are handled in the manner of fmt.Println.
 func Warn(args ...interface{}) {
 	GetDefaultLogger().Warn(args...)
 }
@@ -164,7 +164,7 @@ func Warnf(format string, args ...interface{}) {
 	GetDefaultLogger().Warnf(format, args...)
 }
 
-// Error logs to ERROR log. Arguments are handled in the manner of fmt.Print.
+// Error logs to ERROR log. Arguments are handled in the manner of fmt.Println.
 func Error(args ...interface{}) {
 	GetDefaultLogger().Error(args...)
 }
@@ -174,7 +174,7 @@ func Errorf(format string, args ...interface{}) {
 	GetDefaultLogger().Errorf(format, args...)
 }
 
-// Fatal logs to ERROR log. Arguments are handled in the manner of fmt.Print.
+// Fatal logs to ERROR log. Arguments are handled in the manner of fmt.Println.
 // All Fatal logs will exit by calling os.Exit(1).
 // Implementations may also call os.Exit() with a non-zero exit code.
 func Fatal(args ...interface{}) {
@@ -211,7 +211,7 @@ func WithContextFields(ctx context.Context, fields ...string) context.Context {
 	return ctx
 }
 
-// DebugContext logs to DEBUG log. Arguments are handled in the manner of fmt.Print.
+// DebugContext logs to DEBUG log. Arguments are handled in the manner of fmt.Println.
 func DebugContext(ctx context.Context, args ...interface{}) {
 	if l, ok := codec.Message(ctx).Logger().(Logger); ok {
 		l.Debug(args...)
@@ -229,7 +229,7 @@ func DebugContextf(ctx context.Context, format string, args ...interface{}) {
 	GetDefaultLogger().Debugf(format, args...)
 }
 
-// InfoContext logs to INFO log. Arguments are handled in the manner of fmt.Print.
+// InfoContext logs to INFO log. Arguments are handled in the manner of fmt.Println.
 func InfoContext(ctx context.Context, args ...interface{}) {
 	if l, ok := codec.Message(ctx).Logger().(Logger); ok {
 		l.Info(args...)
@@ -247,7 +247,7 @@ func InfoContextf(ctx context.Context, format string, args ...interface{}) {
 	GetDefaultLogger().Infof(format, args...)
 }
 
-// WarnContext logs to WARNING log. Arguments are handled in the manner of fmt.Print.
+// WarnContext logs to WARNING log. Arguments are handled in the manner of fmt.Println.
 func WarnContext(ctx context.Context, args ...interface{}) {
 	if l, ok := codec.Message(ctx).Logger().(Logger); ok {
 		l.Warn(args...)
@@ -266,7 +266,7 @@ func WarnContextf(ctx context.Context, format string, args ...interface{}) {
 
 }
 
-// ErrorContext logs to ERROR log. Arguments are handled in the manner of fmt.Print.
+// ErrorContext logs to ERROR log. Arguments are handled in the manner of fmt.Println.
 func ErrorContext(ctx context.Context, args ...interface{}) {
 	if l, ok := codec.Message(ctx).Logger().(Logger); ok {
 		l.Error(args...)
@@ -284,7 +284,7 @@ func ErrorContextf(ctx context.Context, format string, args ...interface{}) {
 	GetDefaultLogger().Errorf(format, args...)
 }
 
-// FatalContext logs to ERROR log. Arguments are handled in the manner of fmt.Print.
+// FatalContext logs to ERROR log. Arguments are handled in the manner of fmt.Println.
 // All Fatal logs will exit by calling os.Exit(1).
 // Implementations may also call os.Exit() with a non-zero exit code.
 func FatalContext(ctx context.Context, args ...interface{}) {

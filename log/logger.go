@@ -74,27 +74,27 @@ type Field struct {
 
 // Logger is the underlying logging work for tRPC framework.
 type Logger interface {
-	// Trace logs to TRACE log. Arguments are handled in the manner of fmt.Print.
+	// Trace logs to TRACE log. Arguments are handled in the manner of fmt.Println.
 	Trace(args ...interface{})
 	// Tracef logs to TRACE log. Arguments are handled in the manner of fmt.Printf.
 	Tracef(format string, args ...interface{})
-	// Debug logs to DEBUG log. Arguments are handled in the manner of fmt.Print.
+	// Debug logs to DEBUG log. Arguments are handled in the manner of fmt.Println.
 	Debug(args ...interface{})
 	// Debugf logs to DEBUG log. Arguments are handled in the manner of fmt.Printf.
 	Debugf(format string, args ...interface{})
-	// Info logs to INFO log. Arguments are handled in the manner of fmt.Print.
+	// Info logs to INFO log. Arguments are handled in the manner of fmt.Println.
 	Info(args ...interface{})
 	// Infof logs to INFO log. Arguments are handled in the manner of fmt.Printf.
 	Infof(format string, args ...interface{})
-	// Warn logs to WARNING log. Arguments are handled in the manner of fmt.Print.
+	// Warn logs to WARNING log. Arguments are handled in the manner of fmt.Println.
 	Warn(args ...interface{})
 	// Warnf logs to WARNING log. Arguments are handled in the manner of fmt.Printf.
 	Warnf(format string, args ...interface{})
-	// Error logs to ERROR log. Arguments are handled in the manner of fmt.Print.
+	// Error logs to ERROR log. Arguments are handled in the manner of fmt.Println.
 	Error(args ...interface{})
 	// Errorf logs to ERROR log. Arguments are handled in the manner of fmt.Printf.
 	Errorf(format string, args ...interface{})
-	// Fatal logs to ERROR log. Arguments are handled in the manner of fmt.Print.
+	// Fatal logs to ERROR log. Arguments are handled in the manner of fmt.Println.
 	// All Fatal logs will exit by calling os.Exit(1).
 	// Implementations may also call os.Exit() with a non-zero exit code.
 	Fatal(args ...interface{})
