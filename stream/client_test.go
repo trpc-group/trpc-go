@@ -41,6 +41,8 @@ var ctx = context.Background()
 
 type fakeTransport struct {
 	expectChan chan recvExpect
+	send       func() error
+	close      func()
 }
 
 // RoundTrip Mock RoundTrip method.
@@ -51,9 +53,8 @@ func (c *fakeTransport) RoundTrip(ctx context.Context, req []byte,
 
 // Send Mock Send method.
 func (c *fakeTransport) Send(ctx context.Context, req []byte, opts ...transport.RoundTripOption) error {
-	err, ok := ctx.Value("send-error").(string)
-	if ok {
-		return errors.New(err)
+	if c.send != nil {
+		return c.send()
 	}
 	return nil
 }
@@ -80,7 +81,9 @@ func (c *fakeTransport) Init(ctx context.Context, opts ...transport.RoundTripOpt
 
 // Close Mock Close method.
 func (c *fakeTransport) Close(ctx context.Context) {
-	return
+	if c.close != nil {
+		c.close()
+	}
 }
 
 type fakeCodec struct {
@@ -687,7 +690,8 @@ func TestClientStreamReturn(t *testing.T) {
 
 	rsp := getBytes(dataLen)
 	err = clientStream.RecvMsg(rsp)
-	assert.EqualValues(t, int32(101), err.(*errs.Error).Code)
+
+	assert.EqualValues(t, int32(101), errs.Code(err.(*errs.Error).Unwrap()))
 }
 
 // TestClientSendFailWhenServerUnavailable test when the client blocks
@@ -745,4 +749,43 @@ func TestClientReceiveErrorWhenServerUnavailable(t *testing.T) {
 	err = cs.RecvMsg(nil)
 	assert.NotEqual(t, io.EOF, err)
 	assert.ErrorIs(t, err, io.EOF)
+}
+
+func TestClientNewStreamFail(t *testing.T) {
+	codec.Register("mock", nil, &fakeCodec{})
+	t.Run("Close Transport when Send Fail", func(t *testing.T) {
+		var isClosed bool
+		tp := &fakeTransport{expectChan: make(chan recvExpect, 1)}
+		tp.send = func() error {
+			return errors.New("client error")
+		}
+		tp.close = func() {
+			isClosed = true
+		}
+		_, err := stream.NewStreamClient().NewStream(ctx, &client.ClientStreamDesc{}, "",
+			client.WithProtocol("mock"),
+			client.WithTarget("ip://127.0.0.1:8000"),
+			client.WithStreamTransport(tp),
+		)
+		assert.NotNil(t, err)
+		assert.True(t, isClosed)
+	})
+	t.Run("Close Transport when Recv Fail", func(t *testing.T) {
+		var isClosed bool
+		tp := &fakeTransport{expectChan: make(chan recvExpect, 1)}
+		tp.expectChan <- func(fh *trpc.FrameHead, m codec.Msg) ([]byte, error) {
+			m.WithClientRspErr(errors.New("server error"))
+			return nil, nil
+		}
+		tp.close = func() {
+			isClosed = true
+		}
+		_, err := stream.NewStreamClient().NewStream(ctx, &client.ClientStreamDesc{}, "",
+			client.WithProtocol("mock"),
+			client.WithTarget("ip://127.0.0.1:8000"),
+			client.WithStreamTransport(tp),
+		)
+		assert.NotNil(t, err)
+		assert.True(t, isClosed)
+	})
 }

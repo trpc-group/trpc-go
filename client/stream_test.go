@@ -15,6 +15,7 @@ package client_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -37,85 +38,123 @@ func TestStream(t *testing.T) {
 
 	// calling without error
 	streamCli := client.NewStream()
-	require.NotNil(t, streamCli)
-	opts, err := streamCli.Init(ctx, client.WithTarget("ip://127.0.0.1:8000"),
-		client.WithTimeout(time.Second), client.WithSerializationType(codec.SerializationTypeNoop),
-		client.WithStreamTransport(&fakeTransport{}), client.WithProtocol("fake"))
-	require.Nil(t, err)
-	require.NotNil(t, opts)
-	err = streamCli.Invoke(ctx)
-	require.Nil(t, err)
-	err = streamCli.Send(ctx, reqBody)
-	require.Nil(t, err)
-	rsp, err := streamCli.Recv(ctx)
-	require.Nil(t, err)
-	require.Equal(t, []byte("body"), rsp)
-	err = streamCli.Close(ctx)
-	require.Nil(t, err)
+	t.Run("calling without error", func(t *testing.T) {
+		require.NotNil(t, streamCli)
+		opts, err := streamCli.Init(ctx,
+			client.WithTarget("ip://127.0.0.1:8000"),
+			client.WithTimeout(time.Second),
+			client.WithSerializationType(codec.SerializationTypeNoop),
+			client.WithStreamTransport(&fakeTransport{}),
+			client.WithProtocol("fake"),
+		)
+		require.Nil(t, err)
+		require.NotNil(t, opts)
+		err = streamCli.Invoke(ctx)
+		require.Nil(t, err)
+		err = streamCli.Send(ctx, reqBody)
+		require.Nil(t, err)
+		rsp, err := streamCli.Recv(ctx)
+		require.Nil(t, err)
+		require.Equal(t, []byte("body"), rsp)
+		err = streamCli.Close(ctx)
+		require.Nil(t, err)
+	})
 
-	// test nil Codec
-	opts, err = streamCli.Init(ctx,
-		client.WithTarget("ip://127.0.0.1:8080"),
-		client.WithTimeout(time.Second),
-		client.WithProtocol("fake-nil"),
-		client.WithSerializationType(codec.SerializationTypeNoop),
-		client.WithStreamTransport(&fakeTransport{}))
-	require.NotNil(t, err)
-	require.Nil(t, opts)
-	err = streamCli.Invoke(ctx)
-	require.Nil(t, err)
+	t.Run("test nil Codec", func(t *testing.T) {
+		opts, err := streamCli.Init(ctx,
+			client.WithTarget("ip://127.0.0.1:8080"),
+			client.WithTimeout(time.Second),
+			client.WithProtocol("fake-nil"),
+			client.WithSerializationType(codec.SerializationTypeNoop),
+			client.WithStreamTransport(&fakeTransport{}))
+		require.NotNil(t, err)
+		require.Nil(t, opts)
+		err = streamCli.Invoke(ctx)
+		require.Nil(t, err)
+	})
 
-	// test selectNode with error
-	opts, err = streamCli.Init(ctx, client.WithTarget("ip/:/127.0.0.1:8080"),
-		client.WithProtocol("fake"))
-	require.NotNil(t, err)
-	require.Contains(t, err.Error(), "invalid")
-	require.Nil(t, opts)
+	t.Run("test selectNode with error", func(t *testing.T) {
+		opts, err := streamCli.Init(ctx,
+			client.WithTarget("ip/:/127.0.0.1:8080"),
+			client.WithProtocol("fake"),
+		)
+		require.NotNil(t, err)
+		require.Contains(t, err.Error(), "invalid")
+		require.Nil(t, opts)
+	})
 
-	// test stream recv failure
-	ctx = context.WithValue(ctx, "recv-error", "recv failed")
-	opts, err = streamCli.Init(ctx, client.WithTarget("ip://127.0.0.1:8000"),
-		client.WithTimeout(time.Second), client.WithSerializationType(codec.SerializationTypeNoop),
-		client.WithStreamTransport(&fakeTransport{}), client.WithProtocol("fake"))
-	require.Nil(t, err)
-	require.NotNil(t, opts)
-	err = streamCli.Invoke(ctx)
-	require.Nil(t, err)
-	rsp, err = streamCli.Recv(ctx)
-	require.Nil(t, rsp)
-	require.NotNil(t, err)
+	t.Run("test stream recv failure", func(t *testing.T) {
+		opts, err := streamCli.Init(ctx,
+			client.WithTarget("ip://127.0.0.1:8000"),
+			client.WithTimeout(time.Second),
+			client.WithSerializationType(codec.SerializationTypeNoop),
+			client.WithStreamTransport(&fakeTransport{
+				recv: func() ([]byte, error) {
+					return nil, errors.New("recv failed")
+				},
+			}),
+			client.WithProtocol("fake"),
+		)
+		require.Nil(t, err)
+		require.NotNil(t, opts)
+		err = streamCli.Invoke(ctx)
+		require.Nil(t, err)
+		rsp, err := streamCli.Recv(ctx)
+		require.Nil(t, rsp)
+		require.NotNil(t, err)
+	})
 
-	// test decode failure
-	ctx = context.WithValue(ctx, "recv-decode-error", "businessfail")
-	rsp, err = streamCli.Recv(ctx)
-	require.Nil(t, rsp)
-	require.NotNil(t, err)
+	t.Run("test decode failure", func(t *testing.T) {
+		_, err := streamCli.Init(ctx,
+			client.WithTarget("ip://127.0.0.1:8000"),
+			client.WithTimeout(time.Second),
+			client.WithSerializationType(codec.SerializationTypeNoop),
+			client.WithStreamTransport(&fakeTransport{
+				recv: func() ([]byte, error) {
+					return []byte("businessfail"), nil
+				},
+			}),
+			client.WithProtocol("fake"),
+		)
+		require.Nil(t, err)
+		rsp, err := streamCli.Recv(ctx)
+		require.Nil(t, rsp)
+		require.NotNil(t, err)
+	})
 
-	// test compress failure
-	ctx = context.Background()
-	opts, err = streamCli.Init(ctx, client.WithTarget("ip://127.0.0.1:8000"),
-		client.WithTimeout(time.Second), client.WithSerializationType(codec.SerializationTypeNoop),
-		client.WithStreamTransport(&fakeTransport{}), client.WithCurrentCompressType(codec.CompressTypeGzip),
-		client.WithProtocol("fake"))
-	require.Nil(t, err)
-	require.NotNil(t, opts)
-	err = streamCli.Invoke(ctx)
-	require.Nil(t, err)
-	_, err = streamCli.Recv(ctx)
-	require.NotNil(t, err)
+	t.Run("test compress failure", func(t *testing.T) {
+		opts, err := streamCli.Init(context.Background(),
+			client.WithTarget("ip://127.0.0.1:8000"),
+			client.WithTimeout(time.Second),
+			client.WithSerializationType(codec.SerializationTypeNoop),
+			client.WithStreamTransport(&fakeTransport{}),
+			client.WithCurrentCompressType(codec.CompressTypeGzip),
+			client.WithProtocol("fake"))
+		require.Nil(t, err)
+		require.NotNil(t, opts)
+		err = streamCli.Invoke(ctx)
+		require.Nil(t, err)
+		_, err = streamCli.Recv(ctx)
+		require.NotNil(t, err)
+	})
 
-	// test compress without error
-	opts, err = streamCli.Init(ctx, client.WithTarget("ip://127.0.0.1:8000"),
-		client.WithTimeout(time.Second), client.WithSerializationType(codec.SerializationTypeNoop),
-		client.WithStreamTransport(&fakeTransport{}), client.WithCurrentCompressType(codec.CompressTypeNoop),
-		client.WithProtocol("fake"))
-	require.Nil(t, err)
-	require.NotNil(t, opts)
-	err = streamCli.Invoke(ctx)
-	require.Nil(t, err)
-	rsp, err = streamCli.Recv(ctx)
-	require.Nil(t, err)
-	require.NotNil(t, rsp)
+	t.Run("test compress without error", func(t *testing.T) {
+		opts, err := streamCli.Init(ctx,
+			client.WithTarget("ip://127.0.0.1:8000"),
+			client.WithTimeout(time.Second),
+			client.WithSerializationType(codec.SerializationTypeNoop),
+			client.WithStreamTransport(&fakeTransport{}),
+			client.WithCurrentCompressType(codec.CompressTypeNoop),
+			client.WithProtocol("fake"),
+		)
+		require.Nil(t, err)
+		require.NotNil(t, opts)
+		err = streamCli.Invoke(ctx)
+		require.Nil(t, err)
+		rsp, err := streamCli.Recv(ctx)
+		require.Nil(t, err)
+		require.NotNil(t, rsp)
+	})
 }
 
 func TestGetStreamFilter(t *testing.T) {
@@ -150,4 +189,47 @@ func TestStreamGetAddress(t *testing.T) {
 	require.Equal(t, addr, node.Address)
 	require.NotNil(t, msg.RemoteAddr())
 	require.Equal(t, addr, msg.RemoteAddr().String())
+}
+
+func TestStreamCloseTransport(t *testing.T) {
+	codec.Register("fake", nil, &fakeCodec{})
+	t.Run("close transport when send fail", func(t *testing.T) {
+		var isClose bool
+		streamCli := client.NewStream()
+		_, err := streamCli.Init(context.Background(),
+			client.WithTarget("ip://127.0.0.1:8000"),
+			client.WithStreamTransport(&fakeTransport{
+				send: func() error {
+					return errors.New("expected error")
+				},
+				close: func() {
+					isClose = true
+				},
+			}),
+			client.WithProtocol("fake"),
+		)
+		require.Nil(t, err)
+		require.NotNil(t, streamCli.Send(context.Background(), nil))
+		require.True(t, isClose)
+	})
+	t.Run("close transport when recv fail", func(t *testing.T) {
+		var isClose bool
+		streamCli := client.NewStream()
+		_, err := streamCli.Init(context.Background(),
+			client.WithTarget("ip://127.0.0.1:8000"),
+			client.WithStreamTransport(&fakeTransport{
+				recv: func() ([]byte, error) {
+					return nil, errors.New("expected error")
+				},
+				close: func() {
+					isClose = true
+				},
+			}),
+			client.WithProtocol("fake"),
+		)
+		require.Nil(t, err)
+		_, err = streamCli.Recv(context.Background())
+		require.NotNil(t, err)
+		require.True(t, isClose)
+	})
 }
