@@ -521,24 +521,50 @@ func (ct *ClientTransport) RoundTrip(
 		return nil, errs.NewFrameError(errs.RetClientNetErr,
 			"http client transport RoundTrip: "+err.Error())
 	}
-	rspHeader.Response.Body = &responseBodyWithCancel{body: rspHeader.Response.Body, cancel: cancel}
+	decorateWithCancel(rspHeader, cancel)
 	return emptyBuf, nil
+}
+
+func decorateWithCancel(rspHeader *ClientRspHeader, cancel context.CancelFunc) {
+	// Quoted from: https://github.com/golang/go/blob/go1.21.4/src/net/http/response.go#L69
+	//
+	// "As of Go 1.12, the Body will also implement io.Writer on a successful "101 Switching Protocols" response,
+	// as used by WebSockets and HTTP/2's "h2c" mode."
+	//
+	// Therefore, we require an extra check to ensure io.Writer's conformity,
+	// which will then expose the corresponding method.
+	//
+	// It's important to note that an embedded body may not be capable of exposing all the attached interfaces.
+	// Consequently, we perform an explicit interface assertion here.
+	if body, ok := rspHeader.Response.Body.(io.ReadWriteCloser); ok {
+		rspHeader.Response.Body = &writableResponseBodyWithCancel{ReadWriteCloser: body, cancel: cancel}
+	} else {
+		rspHeader.Response.Body = &responseBodyWithCancel{ReadCloser: rspHeader.Response.Body, cancel: cancel}
+	}
+}
+
+// writableResponseBodyWithCancel implements io.ReadWriteCloser.
+// It wraps response body and cancel function.
+type writableResponseBodyWithCancel struct {
+	io.ReadWriteCloser
+	cancel context.CancelFunc
+}
+
+func (b *writableResponseBodyWithCancel) Close() error {
+	b.cancel()
+	return b.ReadWriteCloser.Close()
 }
 
 // responseBodyWithCancel implements io.ReadCloser.
 // It wraps response body and cancel function.
 type responseBodyWithCancel struct {
-	body   io.ReadCloser
+	io.ReadCloser
 	cancel context.CancelFunc
-}
-
-func (b *responseBodyWithCancel) Read(p []byte) (int, error) {
-	return b.body.Read(p)
 }
 
 func (b *responseBodyWithCancel) Close() error {
 	b.cancel()
-	return b.body.Close()
+	return b.ReadCloser.Close()
 }
 
 func (ct *ClientTransport) getStdHTTPClient(caFile, certFile,
