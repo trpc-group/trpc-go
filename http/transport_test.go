@@ -1405,6 +1405,7 @@ func TestHTTPSendAndReceiveSSE(t *testing.T) {
 			client.WithCurrentCompressType(codec.CompressTypeNoop),
 			client.WithReqHead(reqHeader),
 			client.WithRspHead(rspHead),
+			client.WithTimeout(time.Minute),
 		))
 	body := rspHead.Response.Body // Do stream reads directly from rspHead.Response.Body.
 	defer body.Close()            // Do remember to close the body.
