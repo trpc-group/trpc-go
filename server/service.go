@@ -102,13 +102,13 @@ type Stream interface {
 
 // service is an implementation of Service
 type service struct {
+	activeCount    int64              // active requests count for graceful close if set MaxCloseWaitTime
 	ctx            context.Context    // context of this service
 	cancel         context.CancelFunc // function that cancels this service
 	opts           *Options           // options of this service
 	handlers       map[string]Handler // rpcname => handler
 	streamHandlers map[string]StreamHandler
 	streamInfo     map[string]*StreamServerInfo
-	activeCount    int64 // active requests count for graceful close if set MaxCloseWaitTime
 }
 
 // New creates a service.
