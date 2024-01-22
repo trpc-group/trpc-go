@@ -16,6 +16,8 @@ package config
 import (
 	"errors"
 	"fmt"
+	"os"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -121,9 +123,10 @@ func Test_search(t *testing.T) {
 
 func TestTrpcConfig_Load(t *testing.T) {
 	t.Run("parse failed", func(t *testing.T) {
-		c, _ := newTrpcConfig("../testdata/trpc_go.yaml")
+		c, err := newTrpcConfig("../testdata/trpc_go.yaml")
+		require.Nil(t, err)
 		c.decoder = &TomlCodec{}
-		err := c.Load()
+		err = c.Load()
 		require.Contains(t, errs.Msg(err), "failed to parse")
 	})
 }
@@ -153,6 +156,14 @@ password: ${pwd}
 
 	require.Equal(t, t.Name(), cfg.GetString("password", ""))
 	require.Contains(t, string(cfg.Bytes()), fmt.Sprintf("password: %s", t.Name()))
+}
+
+func TestCodecUnmarshalDstMustBeMap(t *testing.T) {
+	filePath := t.TempDir() + "/conf.map"
+	require.Nil(t, os.WriteFile(filePath, []byte{}, 0644))
+	RegisterCodec(dstMustBeMapCodec{})
+	_, err := DefaultConfigLoader.Load(filePath, WithCodec(dstMustBeMapCodec{}.Name()))
+	require.Nil(t, err)
 }
 
 func NewEnvProvider(name string, data []byte) *EnvProvider {
@@ -277,4 +288,22 @@ func (m *manualTriggerWatchProvider) Set(key string, v []byte) {
 	for _, callback := range m.callbacks {
 		callback(key, v)
 	}
+}
+
+type dstMustBeMapCodec struct{}
+
+func (c dstMustBeMapCodec) Name() string {
+	return "map"
+}
+
+func (c dstMustBeMapCodec) Unmarshal(bts []byte, dst interface{}) error {
+	rv := reflect.ValueOf(dst)
+	if rv.Kind() != reflect.Ptr ||
+		rv.Elem().Kind() != reflect.Interface ||
+		rv.Elem().Elem().Kind() != reflect.Map ||
+		rv.Elem().Elem().Type().Key().Kind() != reflect.String ||
+		rv.Elem().Elem().Type().Elem().Kind() != reflect.Interface {
+		return errors.New("the dst of codec.Unmarshal must be a map")
+	}
+	return nil
 }
