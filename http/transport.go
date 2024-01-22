@@ -473,9 +473,8 @@ func (ct *ClientTransport) RoundTrip(
 		return nil, err
 	}
 	trace := &httptrace.ClientTrace{
-		ConnectStart: func(network, addr string) {
-			tcpAddr, _ := net.ResolveTCPAddr(network, addr)
-			msg.WithRemoteAddr(tcpAddr)
+		GotConn: func(info httptrace.GotConnInfo) {
+			msg.WithRemoteAddr(info.Conn.RemoteAddr())
 		},
 	}
 	reqCtx := ctx
