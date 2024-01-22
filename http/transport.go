@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	stdhttp "net/http"
 	"net/http/httptrace"
 	"net/url"
@@ -139,8 +140,9 @@ func (t *ServerTransport) listenAndServeHTTP(ctx context.Context, opts *transpor
 		if err != nil {
 			span.SetAttribute(rpcz.TRPCAttributeError, err)
 			log.Errorf("http server transport handle fail:%v", err)
-			if err == ErrEncodeMissingHeader {
-				w.WriteHeader(500)
+			if err == ErrEncodeMissingHeader || errors.Is(err, errs.ErrServerNoResponse) {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(fmt.Sprintf("http server handle error: %+v", err)))
 			}
 			return
 		}
