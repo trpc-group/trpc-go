@@ -106,7 +106,27 @@ func TestFormSerializer(t *testing.T) {
 		buf, _ := formSerializer.Marshal(&query)
 		require.Equal(string(buf), expectedQueries[i], "x should be equal")
 	}
+}
 
+func TestFromSerializerURLValues(t *testing.T) {
+	in := make(url.Values)
+	const (
+		key = "key"
+		val = "val"
+	)
+	in.Add(key, val)
+	bs, err := codec.Marshal(codec.SerializationTypeForm, in)
+	require.Nil(t, err)
+	out := make(url.Values)
+	require.Nil(t, codec.Unmarshal(codec.SerializationTypeForm, bs, out))
+	require.Equal(t, val, out.Get(key))
+
+	out2 := make(url.Values)
+	require.Nil(t, codec.Unmarshal(codec.SerializationTypeForm, bs, &out2))
+	require.Equal(t, val, out2.Get(key))
+
+	var out3 url.Values
+	require.NotNil(t, codec.Unmarshal(codec.SerializationTypeForm, bs, out3))
 }
 
 func TestUnmarshal(t *testing.T) {

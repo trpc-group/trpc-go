@@ -61,7 +61,8 @@ func (j *FormSerialization) Unmarshal(in []byte, body interface{}) error {
 	}
 	switch body.(type) {
 	// go-playground/form does not support map structure.
-	case map[string]interface{}, *map[string]interface{}, map[string]string, *map[string]string:
+	case map[string]interface{}, *map[string]interface{}, map[string]string, *map[string]string,
+		url.Values, *url.Values: // Essentially, the underlying type of 'url.Values' is also a map.
 		return unmarshalValues(j.tagname, values, body)
 	default:
 	}
@@ -80,6 +81,13 @@ func (j *FormSerialization) Unmarshal(in []byte, body interface{}) error {
 
 // unmarshalValues parses the corresponding fields in values according to tagname.
 func unmarshalValues(tagname string, values url.Values, body interface{}) error {
+	// To handle the scenario where the underlying type of 'body' is 'url.Values'.
+	if b, ok := body.(url.Values); ok && b != nil {
+		for k, v := range values {
+			b[k] = v
+		}
+		return nil
+	}
 	params := map[string]interface{}{}
 	for k, v := range values {
 		if len(v) == 1 {
