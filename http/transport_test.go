@@ -1481,6 +1481,25 @@ func TestHTTPClientReqRspDifferentContentType(t *testing.T) {
 	require.Equal(t, hello+t.Name(), rsp.Message)
 }
 
+func TestHTTPGotConnectionRemoteAddr(t *testing.T) {
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		proxy := thttp.NewClientProxy(t.Name(), client.WithTarget("dns://new.qq.com/"))
+		rsp := &codec.Body{}
+		require.Nil(t, proxy.Get(ctx, "/", rsp,
+			client.WithSerializationType(codec.SerializationTypeNoop),
+			client.WithFilter(
+				func(ctx context.Context, req, rsp interface{}, next filter.ClientHandleFunc) error {
+					err := next(ctx, req, rsp)
+					msg := codec.Message(ctx)
+					addr := msg.RemoteAddr()
+					require.NotNil(t, addr, "expect to get remote addr from msg in connection reuse case")
+					t.Logf("addr = %+v\n", addr)
+					return err
+				})))
+	}
+}
+
 type h struct{}
 
 func (*h) Handle(ctx context.Context, reqBuf []byte) (rsp []byte, err error) {
