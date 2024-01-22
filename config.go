@@ -714,11 +714,17 @@ func RepairConfig(cfg *Config) error {
 
 // repairServiceIPWithNic repairs the Config when service ip is empty according to the nic.
 func repairServiceIPWithNic(cfg *Config) error {
+	// Set empty ip to "0.0.0.0" to prevent malformed key matching
+	// for passed listeners during hot restart.
+	const defaultIP = "0.0.0.0"
 	for index, item := range cfg.Server.Service {
 		if item.IP == "" {
 			ip := getIP(item.Nic)
-			if ip == "" && item.Nic != "" {
-				return fmt.Errorf("can't find service IP by the NIC: %s", item.Nic)
+			if ip == "" {
+				if item.Nic != "" {
+					return fmt.Errorf("can't find service IP by the NIC: %s", item.Nic)
+				}
+				ip = defaultIP
 			}
 			cfg.Server.Service[index].IP = ip
 		}
@@ -727,8 +733,11 @@ func repairServiceIPWithNic(cfg *Config) error {
 
 	if cfg.Server.Admin.IP == "" {
 		ip := getIP(cfg.Server.Admin.Nic)
-		if ip == "" && cfg.Server.Admin.Nic != "" {
-			return fmt.Errorf("can't find admin IP by the NIC: %s", cfg.Server.Admin.Nic)
+		if ip == "" {
+			if cfg.Server.Admin.Nic != "" {
+				return fmt.Errorf("can't find admin IP by the NIC: %s", cfg.Server.Admin.Nic)
+			}
+			ip = defaultIP
 		}
 		cfg.Server.Admin.IP = ip
 	}
