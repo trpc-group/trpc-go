@@ -109,6 +109,7 @@ type service struct {
 	handlers       map[string]Handler // rpcname => handler
 	streamHandlers map[string]StreamHandler
 	streamInfo     map[string]*StreamServerInfo
+	stopListening  chan<- struct{}
 }
 
 // New creates a service.

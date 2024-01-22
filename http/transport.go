@@ -198,6 +198,10 @@ func (t *ServerTransport) serve(ctx context.Context, s *stdhttp.Server, opts *tr
 			_ = s.Shutdown(context.TODO())
 		}()
 	}
+	go func() {
+		<-opts.StopListening
+		ln.Close()
+	}()
 	return nil
 }
 

@@ -160,12 +160,20 @@ func (st *RESTServerTransport) ListenAndServe(ctx context.Context, opt ...transp
 		ln = tls.NewListener(ln, tlsConf)
 	}
 
+	go func() {
+		<-opts.StopListening
+		ln.Close()
+	}()
+
 	return st.serve(ctx, ln, opts)
 }
 
 // serve starts service.
-func (st *RESTServerTransport) serve(ctx context.Context, ln net.Listener,
-	opts *transport.ListenServeOptions) error {
+func (st *RESTServerTransport) serve(
+	ctx context.Context,
+	ln net.Listener,
+	opts *transport.ListenServeOptions,
+) error {
 	// Get router.
 	router := restful.GetRouter(opts.ServiceName)
 	if router == nil {

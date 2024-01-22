@@ -43,6 +43,9 @@ type ListenServeOptions struct {
 	// This used for rpc transport layer like http, it's unrelated to
 	// the TCP keep-alives.
 	DisableKeepAlives bool
+
+	// StopListening is used to instruct the server transport to stop listening.
+	StopListening <-chan struct{}
 }
 
 // ListenServeOption modifies the ListenServeOptions.
@@ -147,5 +150,12 @@ func WithDisableKeepAlives(disable bool) ListenServeOption {
 func WithServerIdleTimeout(timeout time.Duration) ListenServeOption {
 	return func(options *ListenServeOptions) {
 		options.IdleTimeout = timeout
+	}
+}
+
+// WithStopListening returns a ListenServeOption which notifies the transport to stop listening.
+func WithStopListening(ch <-chan struct{}) ListenServeOption {
+	return func(options *ListenServeOptions) {
+		options.StopListening = ch
 	}
 }
