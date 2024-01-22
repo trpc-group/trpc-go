@@ -162,6 +162,7 @@ type TrpcConfig struct {
 	path             string
 	decoder          Codec
 	rawData          []byte
+	expandEnv        func([]byte) []byte
 }
 
 func newTrpcConfig(path string) *TrpcConfig {
@@ -170,6 +171,7 @@ func newTrpcConfig(path string) *TrpcConfig {
 		unmarshalledData: make(map[string]interface{}),
 		path:             path,
 		decoder:          &YamlCodec{},
+		expandEnv:        func(bytes []byte) []byte { return bytes },
 	}
 }
 
@@ -189,7 +191,7 @@ func (c *TrpcConfig) Load() error {
 		return fmt.Errorf("trpc/config: failed to load %s: %s", c.path, err.Error())
 	}
 
-	c.rawData = data
+	c.rawData = c.expandEnv(data)
 	if err := c.decoder.Unmarshal(c.rawData, &c.unmarshalledData); err != nil {
 		return fmt.Errorf("trpc/config: failed to parse %s: %s", c.path, err.Error())
 	}
@@ -208,8 +210,8 @@ func (c *TrpcConfig) Reload() {
 		return
 	}
 
-	c.rawData = data
-	if err := c.decoder.Unmarshal(data, &c.unmarshalledData); err != nil {
+	c.rawData = c.expandEnv(data)
+	if err := c.decoder.Unmarshal(c.rawData, &c.unmarshalledData); err != nil {
 		log.Tracef("trpc/config: failed to parse %s: %v", c.path, err)
 		return
 	}
