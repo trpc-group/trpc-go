@@ -117,6 +117,17 @@ func (w *AsyncRollWriter) batchWriteLog() {
 				buffer.Reset()
 			}
 		case data := <-w.logQueue:
+			if len(data) >= w.opts.WriteLogSize {
+				// If the length of the current data exceeds the expected maximum value,
+				// we directly write it to the underlying logger instead of placing it into the buffer.
+				// This prevents the buffer from being overwhelmed by excessively large data,
+				// which could lead to memory leaks.
+				// Prior to that, we need to write the existing data in the buffer to the underlying logger.
+				_, _ = w.logger.Write(buffer.Bytes())
+				buffer.Reset()
+				_, _ = w.logger.Write(data)
+				continue
+			}
 			buffer.Write(data)
 			if buffer.Len() >= w.opts.WriteLogSize {
 				_, err := w.logger.Write(buffer.Bytes())
