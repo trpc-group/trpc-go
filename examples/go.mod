@@ -6,7 +6,6 @@ replace trpc.group/trpc-go/trpc-go => ../
 
 require (
 	github.com/golang/protobuf v1.5.2
-	github.com/stretchr/testify v1.8.0
 	google.golang.org/protobuf v1.30.0
 	trpc.group/trpc-go/trpc-go v0.0.0-00010101000000-000000000000
 	trpc.group/trpc/trpc-protocol/pb/go/trpc v1.0.0
@@ -15,7 +14,6 @@ require (
 require (
 	github.com/BurntSushi/toml v0.3.1 // indirect
 	github.com/andybalholm/brotli v1.0.4 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/go-playground/form/v4 v4.2.0 // indirect
 	github.com/golang/mock v1.4.4 // indirect
@@ -31,7 +29,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/panjf2000/ants/v2 v2.4.6 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/cast v1.3.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.43.0 // indirect

@@ -42,6 +42,9 @@ func (s *TestSuite) TestServerGracefulRestart() {
 	s.Run("SendNonGracefulRestartSignal", func() {
 		s.testSendNonGracefulRestartSignal()
 	})
+	s.Run("GracefulRestartForEmptyIP", func() {
+		s.testGracefulRestartForEmptyIP()
+	})
 }
 
 func (s *TestSuite) testServerGracefulRestartIsIdempotent() {
@@ -248,6 +251,37 @@ func (s *TestSuite) testSendNonGracefulRestartSignal() {
 		}
 		require.Nil(s.T(), sp.Kill())
 	})
+}
+
+func (s *TestSuite) testGracefulRestartForEmptyIP() {
+	const (
+		binaryFile = "./gracefulrestart/trpc/server.o"
+		sourceFile = "./gracefulrestart/trpc/server.go"
+		configFile = "./gracefulrestart/trpc/trpc_go_emptyip.yaml"
+	)
+
+	cmd, err := startServerFromBash(
+		sourceFile,
+		configFile,
+		binaryFile,
+	)
+	require.Nil(s.T(), err)
+	defer func() {
+		require.Nil(s.T(), exec.Command("rm", binaryFile).Run())
+		require.Nil(s.T(), cmd.Process.Kill())
+	}()
+
+	const target = "ip://127.0.0.1:17777"
+	sp, err := getServerProcessByEmptyCall(target)
+	require.Nil(s.T(), err)
+	pid := sp.Pid
+	require.Nil(s.T(), sp.Signal(server.DefaultServerGracefulSIG))
+	time.Sleep(1 * time.Second)
+	sp, err = getServerProcessByEmptyCall(target)
+	require.Nil(s.T(), err)
+	require.NotEqual(s.T(), pid, sp.Pid)
+	pid = sp.Pid
+	require.Nil(s.T(), sp.Kill())
 }
 
 func startServerFromBash(sourceFile, configFile, targetFile string) (*exec.Cmd, error) {

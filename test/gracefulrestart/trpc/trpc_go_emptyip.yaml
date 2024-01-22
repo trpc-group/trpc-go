@@ -1,0 +1,13 @@
+global:
+  namespace: Development
+  env_name: test
+server:
+  app: testing
+  server: end2end
+  admin:
+    port: 19999
+  service:
+    - name: trpc.testing.end2end.TestTRPC
+      protocol: trpc
+      network: tcp
+      port: 17777
