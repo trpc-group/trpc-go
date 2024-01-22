@@ -15,7 +15,6 @@ package http
 
 import (
 	"errors"
-	"net/url"
 
 	"trpc.group/trpc-go/trpc-go/codec"
 )
@@ -26,24 +25,20 @@ func init() {
 
 // NewGetSerialization initializes the get serialized object.
 func NewGetSerialization(tag string) codec.Serializer {
-
+	formSerializer := NewFormSerialization(tag)
 	return &GetSerialization{
-		tagname: tag,
+		formSerializer: formSerializer.(*FormSerialization),
 	}
 }
 
 // GetSerialization packages kv structure of the http get request.
 type GetSerialization struct {
-	tagname string
+	formSerializer *FormSerialization
 }
 
 // Unmarshal unpacks kv structure.
 func (s *GetSerialization) Unmarshal(in []byte, body interface{}) error {
-	values, err := url.ParseQuery(string(in))
-	if err != nil {
-		return err
-	}
-	return unmarshalValues(s.tagname, values, body)
+	return s.formSerializer.Unmarshal(in, body)
 }
 
 // Marshal packages kv structure.
