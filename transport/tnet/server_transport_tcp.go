@@ -154,6 +154,10 @@ func (s *serverTransport) startService(
 	pool *ants.PoolWithFunc,
 	opts *transport.ListenServeOptions,
 ) error {
+	go func() {
+		<-opts.StopListening
+		listener.Close()
+	}()
 	tnetOpts := []tnet.Option{
 		tnet.WithOnTCPOpened(func(conn tnet.Conn) error {
 			tc := s.onConnOpened(conn, pool, opts)

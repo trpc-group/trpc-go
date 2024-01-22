@@ -79,16 +79,6 @@ func createRoutinePool(size int) *ants.PoolWithFunc {
 }
 
 func (s *serverTransport) serveTCP(ctx context.Context, ln net.Listener, opts *ListenServeOptions) error {
-	var once sync.Once
-	closeListener := func() { ln.Close() }
-	defer once.Do(closeListener)
-	// Create a goroutine to watch ctx.Done() channel.
-	// Once Server.Close(), TCP listener should be closed immediately and won't accept any new connection.
-	go func() {
-		<-ctx.Done()
-		log.Tracef("recv server close event")
-		once.Do(closeListener)
-	}()
 	// Create a goroutine pool if ServerAsync enabled.
 	var pool *ants.PoolWithFunc
 	if opts.ServerAsync {

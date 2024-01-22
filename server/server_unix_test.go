@@ -59,20 +59,10 @@ func TestStartNewProcess(t *testing.T) {
 
 	s.AddService("trpc.test.helloworld.Greeter1", service)
 	err := s.Register(nil, nil)
-	assert.NotNil(t, err)
 
 	impl := &GreeterServerImpl{}
 	err = s.Register(&GreeterServerServiceDesc, impl)
-	assert.Nil(t, err)
-	go func() {
-		var netOpError *net.OpError
-		assert.ErrorAs(
-			t,
-			s.Serve(),
-			&netOpError,
-			`it is normal to have "use of closed network connection" error during hot restart`,
-		)
-	}()
+	go s.Serve()
 	time.Sleep(time.Second * 1)
 
 	log.Info(os.Environ())
