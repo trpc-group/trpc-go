@@ -41,4 +41,26 @@ func main() {
 		return
 	}
 	fmt.Printf("Get msg: %s\n", rsp.GetMsg())
+	// print
+	//
+	// Get msg: trpc-go-server response: Hello trpc-go-client
+	// load once config: number_1
+	// start watch config:number_1
+
+	req = &pb.HelloRequest{
+		Msg: "change config", // target config change
+	}
+
+	// Send request.
+	rsp, err = clientProxy.SayHello(ctx, req)
+	if err != nil {
+		fmt.Println("Say hi err:%v", err)
+		return
+	}
+	fmt.Printf("Get msg: %s\n", rsp.GetMsg())
+	// print
+	//
+	// Get msg: trpc-go-server response: Hello trpc-go-client
+	// load once config: number_1
+	// start watch config:number_2
 }

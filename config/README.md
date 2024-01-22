@@ -31,7 +31,7 @@ For managing business configuration, we recommend the best practice of using a c
 
 ## What is Multiple Data Sources?
 
-A data source is the source from which configuration is retrieved and where it is stored. Common data sources include: file, etcd, configmap, etc. The tRPC framework supports setting different data sources for different business configurations. The framework uses a plugin-based approach to extend support for more data sources. In the implementation principle section later, we will describe in detail how the framework supports multiple data sources.
+A data source is the source from which configuration is retrieved and where it is stored. Common data sources include: file, etcd, configmap, env, etc. The tRPC framework supports setting different data sources for different business configurations. The framework uses a plugin-based approach to extend support for more data sources. In the implementation principle section later, we will describe in detail how the framework supports multiple data sources.
 
 ## What is Codec?
 
