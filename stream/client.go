@@ -189,6 +189,7 @@ func (cs *clientStream) SendMsg(m interface{}) error {
 	msg.WithStreamID(cs.streamID)
 	msg.WithClientRPCName(cs.method)
 	msg.WithCalleeMethod(icodec.MethodFromRPCName(cs.method))
+	msg.WithCompressType(codec.Message(cs.ctx).CompressType())
 	return cs.stream.Send(ctx, m)
 }
 
@@ -240,6 +241,7 @@ func (cs *clientStream) invoke(ctx context.Context, _ *client.ClientStreamDesc) 
 	newMsg.WithClientRPCName(cs.method)
 	newMsg.WithCalleeMethod(icodec.MethodFromRPCName(cs.method))
 	newMsg.WithStreamID(cs.streamID)
+	newMsg.WithCompressType(codec.Message(cs.ctx).CompressType())
 	newMsg.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{
 		RequestMeta:    &trpcpb.TrpcStreamInitRequestMeta{},
 		InitWindowSize: w,
@@ -338,6 +340,7 @@ func (cs *clientStream) dispatch() {
 	}()
 	for {
 		ctx, msg := codec.WithCloneContextAndMessage(cs.ctx)
+		msg.WithCompressType(codec.Message(cs.ctx).CompressType())
 		msg.WithStreamID(cs.streamID)
 		respData, err := cs.stream.Recv(ctx)
 		if err != nil {

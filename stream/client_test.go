@@ -801,3 +801,40 @@ func TestClientNewStreamFail(t *testing.T) {
 		assert.True(t, isClosed)
 	})
 }
+
+func TestClientServerCompress(t *testing.T) {
+	var (
+		dataLen      = 1024
+		compressType = codec.CompressTypeSnappy
+	)
+	svrOpts := []server.Option{
+		server.WithAddress("127.0.0.1:30211"),
+	}
+	handle := func(s server.Stream) error {
+		assert.Equal(t, compressType, codec.Message(s.Context()).CompressType())
+		req := getBytes(dataLen)
+		s.RecvMsg(req)
+		rsp := req
+		s.SendMsg(rsp)
+		return nil
+	}
+	svr := startStreamServer(handle, svrOpts)
+	defer closeStreamServer(svr)
+
+	cliOpts := []client.Option{
+		client.WithTarget("ip://127.0.0.1:30211"),
+		client.WithCompressType(compressType),
+	}
+
+	clientStream, err := getClientStream(context.Background(), clientDesc, cliOpts)
+	assert.Nil(t, err)
+	req := getBytes(dataLen)
+	rand.Read(req.Data)
+	err = clientStream.SendMsg(req)
+	assert.Nil(t, err)
+
+	rsp := getBytes(dataLen)
+	err = clientStream.RecvMsg(rsp)
+	assert.Equal(t, rsp.Data, req.Data)
+	assert.Nil(t, err)
+}
