@@ -280,6 +280,12 @@ type entity struct {
 	data interface{} // unmarshal type to use point type, save latest no error data
 }
 
+func newEntity() *entity {
+	return &entity{
+		data: make(map[string]interface{}),
+	}
+}
+
 func newTrpcConfig(path string, opts ...LoadOption) (*TrpcConfig, error) {
 	c := &TrpcConfig{
 		path:    path,
@@ -317,7 +323,7 @@ func (c *TrpcConfig) get() *entity {
 	if c.value != nil {
 		return c.value
 	}
-	return &entity{}
+	return newEntity()
 }
 
 // init return config entity error when entity is empty and load run loads config once
@@ -351,7 +357,8 @@ func (c *TrpcConfig) set(data []byte) error {
 		data = expandenv.ExpandEnv(data)
 	}
 
-	e := &entity{raw: data}
+	e := newEntity()
+	e.raw = data
 	err := c.decoder.Unmarshal(data, &e.data)
 	if err != nil {
 		return fmt.Errorf("trpc/config: failed to parse:%w, id:%s", err, c.id)
