@@ -665,19 +665,6 @@ func loadOrStoreDefaultUnaryFrameHead(msg codec.Msg) *FrameHead {
 	return frameHead
 }
 
-func copyRspHead(dst, src *trpcpb.ResponseProtocol) {
-	dst.Version = src.Version
-	dst.CallType = src.CallType
-	dst.RequestId = src.RequestId
-	dst.Ret = src.Ret
-	dst.FuncRet = src.FuncRet
-	dst.ErrorMsg = src.ErrorMsg
-	dst.MessageType = src.MessageType
-	dst.TransInfo = src.TransInfo
-	dst.ContentType = src.ContentType
-	dst.ContentEncoding = src.ContentEncoding
-}
-
 func updateMsg(msg codec.Msg, frameHead *FrameHead, rsp *trpcpb.ResponseProtocol, attm []byte) error {
 	msg.WithFrameHead(frameHead)
 	msg.WithCompressType(int(rsp.GetContentEncoding()))
