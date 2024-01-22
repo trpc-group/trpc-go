@@ -252,9 +252,6 @@ func (cs *clientStream) invoke(ctx context.Context, _ *client.ClientStreamDesc) 
 	if _, err := cs.stream.Recv(newCtx); err != nil {
 		return nil, err
 	}
-	if newMsg.ClientRspErr() != nil {
-		return nil, newMsg.ClientRspErr()
-	}
 
 	initWindowSize := defaultInitWindowSize
 	if initRspMeta, ok := newMsg.StreamFrame().(*trpcpb.TrpcStreamInitMeta); ok {
@@ -344,7 +341,7 @@ func (cs *clientStream) dispatch() {
 		if err != nil {
 			// return to client on error.
 			cs.recvQueue.Put(&response{
-				err: errs.Wrap(err, errs.RetClientStreamReadEnd, streamClosed),
+				err: errs.WrapFrameError(err, errs.RetClientStreamReadEnd, streamClosed),
 			})
 			return
 		}
