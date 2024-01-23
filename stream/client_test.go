@@ -16,11 +16,11 @@ package stream_test
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"testing"
 	"time"
 
