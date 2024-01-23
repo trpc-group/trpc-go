@@ -496,7 +496,7 @@ func testSetMethodNameUsingRPCName(t *testing.T, msg codec.Msg, msgWithRPCName f
 		{"invalid trpc rpc name (method name is empty)", "", "trpc.app.server.service", "trpc.app.server.service"},
 		{"invalid trpc rpc name (method name is not mepty)", "/v1/subject/info/get", "trpc.app.server.service", "/v1/subject/info/get"},
 		{"valid trpc rpc name will override existing method name", "/v1/subject/info/get", "/trpc.app.server.service/method", "method"},
-		{"invalid trpc rpc will not override exising method name", "/v1/subject/info/get", "/trpc.app.server.service", "/v1/subject/info/get"},
+		{"invalid trpc rpc will not override existing method name", "/v1/subject/info/get", "/trpc.app.server.service", "/v1/subject/info/get"},
 	}
 
 	for _, tt := range cases {

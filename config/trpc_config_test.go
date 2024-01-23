@@ -160,7 +160,7 @@ password: ${pwd}
 
 func TestCodecUnmarshalDstMustBeMap(t *testing.T) {
 	filePath := t.TempDir() + "/conf.map"
-	require.Nil(t, os.WriteFile(filePath, []byte{}, 0644))
+	require.Nil(t, os.WriteFile(filePath, []byte{}, 0600))
 	RegisterCodec(dstMustBeMapCodec{})
 	_, err := DefaultConfigLoader.Load(filePath, WithCodec(dstMustBeMapCodec{}.Name()))
 	require.Nil(t, err)
