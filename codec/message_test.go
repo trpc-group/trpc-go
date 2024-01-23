@@ -477,3 +477,44 @@ func TestEnsureMessage(t *testing.T) {
 	require.Equal(t, ctx, newCtx)
 	require.Equal(t, msg, newMsg)
 }
+
+func TestSetMethodNameUsingRPCName(t *testing.T) {
+	msg := codec.Message(context.Background())
+	testSetMethodNameUsingRPCName(t, msg, msg.WithServerRPCName)
+	testSetMethodNameUsingRPCName(t, msg, msg.WithClientRPCName)
+}
+
+func testSetMethodNameUsingRPCName(t *testing.T, msg codec.Msg, msgWithRPCName func(string)) {
+	var cases = []struct {
+		name           string
+		originalMethod string
+		rpcName        string
+		expectMethod   string
+	}{
+		{"normal trpc rpc name", "", "/trpc.app.server.service/method", "method"},
+		{"normal http url path", "", "/v1/subject/info/get", "/v1/subject/info/get"},
+		{"invalid trpc rpc name (method name is empty)", "", "trpc.app.server.service", "trpc.app.server.service"},
+		{"invalid trpc rpc name (method name is not mepty)", "/v1/subject/info/get", "trpc.app.server.service", "/v1/subject/info/get"},
+		{"valid trpc rpc name will override existing method name", "/v1/subject/info/get", "/trpc.app.server.service/method", "method"},
+		{"invalid trpc rpc will not override exising method name", "/v1/subject/info/get", "/trpc.app.server.service", "/v1/subject/info/get"},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			resetMsgRPCNameAndMethodName(msg)
+			msg.WithCalleeMethod(tt.originalMethod)
+			msgWithRPCName(tt.rpcName)
+			method := msg.CalleeMethod()
+			if method != tt.expectMethod {
+				t.Errorf("given original method %s and rpc name %s, expect new method name %s, got %s",
+					tt.originalMethod, tt.rpcName, tt.expectMethod, method)
+			}
+		})
+	}
+}
+
+func resetMsgRPCNameAndMethodName(msg codec.Msg) {
+	msg.WithCalleeMethod("")
+	msg.WithClientRPCName("")
+	msg.WithServerRPCName("")
+}
