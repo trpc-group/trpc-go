@@ -29,7 +29,9 @@ var Marshaler = protojson.MarshalOptions{EmitUnpopulated: true, UseProtoNames: t
 var Unmarshaler = protojson.UnmarshalOptions{DiscardUnknown: false}
 
 // JSONPBSerialization provides jsonpb serialization mode. It is based on
-// protobuf/jsonpb.
+// protobuf/jsonpb. This serializer will firstly try jsonpb's serialization. If
+// object does not conform to protobuf proto.Message interface, json-iterator
+// will be used.
 type JSONPBSerialization struct{}
 
 // Unmarshal deserialize the in bytes into body.
