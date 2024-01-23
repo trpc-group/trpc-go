@@ -207,3 +207,17 @@ func TestUnmarshalNested(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("err: %+v", err))
 	require.Equal(t, "hhh", q.Nest.Msg)
 }
+
+func TestDecoderPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("Test panicked: %v", r)
+		}
+	}()
+	s := codec.GetSerializer(codec.SerializationTypeForm)
+	type msg struct {
+		Words []string
+	}
+	req := &msg{}
+	require.Nil(t, s.Unmarshal([]byte("xx]"), req))
+}

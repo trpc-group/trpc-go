@@ -41,16 +41,16 @@ func NewFormSerialization(tag string) codec.Serializer {
 	decoder.SetTagName(tag)
 	return &FormSerialization{
 		tagname: tag,
-		encoder: encoder,
-		decoder: decoder,
+		encode:  encoder.Encode,
+		decode:  wrapDecodeWithRecovery(decoder.Decode),
 	}
 }
 
 // FormSerialization packages the kv structure of http get request.
 type FormSerialization struct {
 	tagname string
-	encoder *form.Encoder
-	decoder *form.Decoder
+	encode  func(interface{}) (url.Values, error)
+	decode  func(interface{}, url.Values) error
 }
 
 // Unmarshal unpacks kv structure.
@@ -68,7 +68,7 @@ func (j *FormSerialization) Unmarshal(in []byte, body interface{}) error {
 	}
 	// First try using go-playground/form, it can handle nested struct.
 	// But it cannot handle Chinese characters in byte slice.
-	err = j.decoder.Decode(body, values)
+	err = j.decode(body, values)
 	if err == nil {
 		return nil
 	}
@@ -77,6 +77,29 @@ func (j *FormSerialization) Unmarshal(in []byte, body interface{}) error {
 		return fmt.Errorf("unmarshal error: first try err = %+v, second try err = %w", err, e)
 	}
 	return nil
+}
+
+// wrapDecodeWithRecovery wraps the decode function, adding panic recovery to handle
+// panics as errors. This function is designed to prevent malformed query parameters
+// from causing a panic, which is the default behavior of the go-playground/form decoder
+// implementation. This is because, in certain cases, it's more acceptable to receive
+// a degraded result rather than experiencing a direct server crash.
+// Besides, the behavior of not panicking also ensures backward compatibility (<v0.16.0).
+// The original go-playground/form has an issue with introducing 'strict' behavior
+// into its underlying implementation to replace hard panic. However, a promising
+// outcome cannot be foreseen.
+// Refer to: https://github.com/go-playground/form/issues/28.
+func wrapDecodeWithRecovery(
+	f func(interface{}, url.Values) error,
+) func(interface{}, url.Values) error {
+	return func(v interface{}, values url.Values) (err error) {
+		defer func() {
+			if e := recover(); e != nil {
+				err = fmt.Errorf("panic: %+v", e)
+			}
+		}()
+		return f(v, values)
+	}
 }
 
 // unmarshalValues parses the corresponding fields in values according to tagname.
@@ -109,7 +132,7 @@ func (j *FormSerialization) Marshal(body interface{}) ([]byte, error) {
 	if req, ok := body.(url.Values); ok { // Used to send form urlencode post request to backend.
 		return []byte(req.Encode()), nil
 	}
-	val, err := j.encoder.Encode(body)
+	val, err := j.encode(body)
 	if err != nil {
 		return nil, err
 	}
