@@ -374,6 +374,11 @@ func RegisterConfig(conf map[string]*BackendConfig) error {
 
 // RegisterClientConfig is called to replace backend config of single callee service by name.
 func RegisterClientConfig(callee string, conf *BackendConfig) error {
+	if callee == "*" {
+		// Reset the callee and service name to enable wildcard matching.
+		conf.Callee = ""
+		conf.ServiceName = ""
+	}
 	opts, err := conf.genOptions()
 	if err != nil {
 		return err
