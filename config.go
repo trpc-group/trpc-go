@@ -25,6 +25,7 @@ import (
 	"time"
 
 	yaml "gopkg.in/yaml.v3"
+	"trpc.group/trpc-go/trpc-go/internal/expandenv"
 	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	"trpc.group/trpc-go/trpc-go/client"
@@ -608,11 +609,8 @@ func parseConfigFromFile(configPath string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	// expand environment variables
-	buf = []byte(expandEnv(string(buf)))
-
 	cfg := defaultConfig()
-	if err := yaml.Unmarshal(buf, cfg); err != nil {
+	if err := yaml.Unmarshal(expandenv.ExpandEnv(buf), cfg); err != nil {
 		return nil, err
 	}
 	return cfg, nil
@@ -677,6 +675,17 @@ func RepairConfig(cfg *Config) error {
 		cfg.Global.ReadBufferSize = &readerSize
 	}
 	codec.SetReaderSize(*cfg.Global.ReadBufferSize)
+
+	// nic -> ip
+	if err := repairServiceIPWithNic(cfg); err != nil {
+		return err
+	}
+
+	// Set empty ip to "0.0.0.0" to prevent malformed key matching
+	// for passed listeners during hot restart.
+	const defaultIP = "0.0.0.0"
+	setDefault(&cfg.Global.LocalIP, defaultIP)
+	setDefault(&cfg.Server.Admin.IP, cfg.Global.LocalIP)
 
 	// protocol network ip empty
 	for _, serviceCfg := range cfg.Server.Service {

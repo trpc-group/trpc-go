@@ -16,11 +16,11 @@ package stream_test
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -41,6 +41,8 @@ var ctx = context.Background()
 
 type fakeTransport struct {
 	expectChan chan recvExpect
+	send       func() error
+	close      func()
 }
 
 // RoundTrip Mock RoundTrip method.
@@ -51,9 +53,8 @@ func (c *fakeTransport) RoundTrip(ctx context.Context, req []byte,
 
 // Send Mock Send method.
 func (c *fakeTransport) Send(ctx context.Context, req []byte, opts ...transport.RoundTripOption) error {
-	err, ok := ctx.Value("send-error").(string)
-	if ok {
-		return errors.New(err)
+	if c.send != nil {
+		return c.send()
 	}
 	return nil
 }
@@ -80,7 +81,9 @@ func (c *fakeTransport) Init(ctx context.Context, opts ...transport.RoundTripOpt
 
 // Close Mock Close method.
 func (c *fakeTransport) Close(ctx context.Context) {
-	return
+	if c.close != nil {
+		c.close()
+	}
 }
 
 type fakeCodec struct {
@@ -330,6 +333,18 @@ func TestClientError(t *testing.T) {
 	assert.Nil(t, cs)
 	assert.NotNil(t, err)
 
+	// receive unexpected stream frame type
+	f = func(fh *trpc.FrameHead, msg codec.Msg) ([]byte, error) {
+		msg.WithStreamFrame(int(1))
+		return nil, nil
+	}
+	ft.expectChan <- f
+	cs, err = cli.NewStream(ctx, bidiDesc, "/trpc.test.helloworld.Greeter/SayHello",
+		client.WithTarget("ip://127.0.0.1:8000"),
+		client.WithProtocol("fake"), client.WithSerializationType(codec.SerializationTypeNoop),
+		client.WithStreamTransport(ft), client.WithClientStreamQueueSize(100000))
+	assert.Nil(t, cs)
+	assert.Contains(t, err.Error(), "unexpected frame type")
 }
 
 // TestClientContext tests the case of streaming client context cancel and timeout.
@@ -687,7 +702,8 @@ func TestClientStreamReturn(t *testing.T) {
 
 	rsp := getBytes(dataLen)
 	err = clientStream.RecvMsg(rsp)
-	assert.EqualValues(t, int32(101), err.(*errs.Error).Code)
+
+	assert.EqualValues(t, int32(101), errs.Code(err.(*errs.Error).Unwrap()))
 }
 
 // TestClientSendFailWhenServerUnavailable test when the client blocks
@@ -745,4 +761,80 @@ func TestClientReceiveErrorWhenServerUnavailable(t *testing.T) {
 	err = cs.RecvMsg(nil)
 	assert.NotEqual(t, io.EOF, err)
 	assert.ErrorIs(t, err, io.EOF)
+}
+
+func TestClientNewStreamFail(t *testing.T) {
+	codec.Register("mock", nil, &fakeCodec{})
+	t.Run("Close Transport when Send Fail", func(t *testing.T) {
+		var isClosed bool
+		tp := &fakeTransport{expectChan: make(chan recvExpect, 1)}
+		tp.send = func() error {
+			return errors.New("client error")
+		}
+		tp.close = func() {
+			isClosed = true
+		}
+		_, err := stream.NewStreamClient().NewStream(ctx, &client.ClientStreamDesc{}, "",
+			client.WithProtocol("mock"),
+			client.WithTarget("ip://127.0.0.1:8000"),
+			client.WithStreamTransport(tp),
+		)
+		assert.NotNil(t, err)
+		assert.True(t, isClosed)
+	})
+	t.Run("Close Transport when Recv Fail", func(t *testing.T) {
+		var isClosed bool
+		tp := &fakeTransport{expectChan: make(chan recvExpect, 1)}
+		tp.expectChan <- func(fh *trpc.FrameHead, m codec.Msg) ([]byte, error) {
+			m.WithClientRspErr(errors.New("server error"))
+			return nil, nil
+		}
+		tp.close = func() {
+			isClosed = true
+		}
+		_, err := stream.NewStreamClient().NewStream(ctx, &client.ClientStreamDesc{}, "",
+			client.WithProtocol("mock"),
+			client.WithTarget("ip://127.0.0.1:8000"),
+			client.WithStreamTransport(tp),
+		)
+		assert.NotNil(t, err)
+		assert.True(t, isClosed)
+	})
+}
+
+func TestClientServerCompress(t *testing.T) {
+	var (
+		dataLen      = 1024
+		compressType = codec.CompressTypeSnappy
+	)
+	svrOpts := []server.Option{
+		server.WithAddress("127.0.0.1:30211"),
+	}
+	handle := func(s server.Stream) error {
+		assert.Equal(t, compressType, codec.Message(s.Context()).CompressType())
+		req := getBytes(dataLen)
+		s.RecvMsg(req)
+		rsp := req
+		s.SendMsg(rsp)
+		return nil
+	}
+	svr := startStreamServer(handle, svrOpts)
+	defer closeStreamServer(svr)
+
+	cliOpts := []client.Option{
+		client.WithTarget("ip://127.0.0.1:30211"),
+		client.WithCompressType(compressType),
+	}
+
+	clientStream, err := getClientStream(context.Background(), clientDesc, cliOpts)
+	assert.Nil(t, err)
+	req := getBytes(dataLen)
+	rand.Read(req.Data)
+	err = clientStream.SendMsg(req)
+	assert.Nil(t, err)
+
+	rsp := getBytes(dataLen)
+	err = clientStream.RecvMsg(rsp)
+	assert.Equal(t, rsp.Data, req.Data)
+	assert.Nil(t, err)
 }

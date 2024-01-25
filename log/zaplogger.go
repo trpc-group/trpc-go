@@ -282,7 +282,8 @@ func (l *zapLog) With(fields ...Field) Logger {
 }
 
 func getLogMsg(args ...interface{}) string {
-	msg := fmt.Sprint(args...)
+	msg := fmt.Sprintln(args...)
+	msg = msg[:len(msg)-1]
 	report.LogWriteSize.IncrBy(float64(len(msg)))
 	return msg
 }
@@ -293,7 +294,7 @@ func getLogMsgf(format string, args ...interface{}) string {
 	return msg
 }
 
-// Trace logs to TRACE log. Arguments are handled in the manner of fmt.Print.
+// Trace logs to TRACE log. Arguments are handled in the manner of fmt.Println.
 func (l *zapLog) Trace(args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.DebugLevel) {
 		l.logger.Debug(getLogMsg(args...))
@@ -307,7 +308,7 @@ func (l *zapLog) Tracef(format string, args ...interface{}) {
 	}
 }
 
-// Debug logs to DEBUG log. Arguments are handled in the manner of fmt.Print.
+// Debug logs to DEBUG log. Arguments are handled in the manner of fmt.Println.
 func (l *zapLog) Debug(args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.DebugLevel) {
 		l.logger.Debug(getLogMsg(args...))
@@ -321,7 +322,7 @@ func (l *zapLog) Debugf(format string, args ...interface{}) {
 	}
 }
 
-// Info logs to INFO log. Arguments are handled in the manner of fmt.Print.
+// Info logs to INFO log. Arguments are handled in the manner of fmt.Println.
 func (l *zapLog) Info(args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.InfoLevel) {
 		l.logger.Info(getLogMsg(args...))
@@ -335,7 +336,7 @@ func (l *zapLog) Infof(format string, args ...interface{}) {
 	}
 }
 
-// Warn logs to WARNING log. Arguments are handled in the manner of fmt.Print.
+// Warn logs to WARNING log. Arguments are handled in the manner of fmt.Println.
 func (l *zapLog) Warn(args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.WarnLevel) {
 		l.logger.Warn(getLogMsg(args...))
@@ -349,7 +350,7 @@ func (l *zapLog) Warnf(format string, args ...interface{}) {
 	}
 }
 
-// Error logs to ERROR log. Arguments are handled in the manner of fmt.Print.
+// Error logs to ERROR log. Arguments are handled in the manner of fmt.Println.
 func (l *zapLog) Error(args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.ErrorLevel) {
 		l.logger.Error(getLogMsg(args...))
@@ -363,7 +364,7 @@ func (l *zapLog) Errorf(format string, args ...interface{}) {
 	}
 }
 
-// Fatal logs to FATAL log. Arguments are handled in the manner of fmt.Print.
+// Fatal logs to FATAL log. Arguments are handled in the manner of fmt.Println.
 func (l *zapLog) Fatal(args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.FatalLevel) {
 		l.logger.Fatal(getLogMsg(args...))

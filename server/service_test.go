@@ -306,55 +306,84 @@ func TestServiceUDP(t *testing.T) {
 	require.Nil(t, err)
 }
 
-func TestServiceCloseWait(t *testing.T) {
-	const waitChildTime = 300 * time.Millisecond
-	const schTime = 10 * time.Millisecond
-	cases := []struct {
-		closeWaitTime    time.Duration
-		maxCloseWaitTime time.Duration
-		waitTime         time.Duration
-	}{
-		{
-			waitTime: waitChildTime,
-		},
-		{
-			closeWaitTime: 50 * time.Millisecond,
-			waitTime:      waitChildTime + 50*time.Millisecond,
-		},
-		{
-			closeWaitTime:    50 * time.Millisecond,
-			maxCloseWaitTime: 30 * time.Millisecond,
-			waitTime:         waitChildTime + 50*time.Millisecond,
-		},
-		{
-			closeWaitTime:    50 * time.Millisecond,
-			maxCloseWaitTime: 100 * time.Millisecond,
-			waitTime:         waitChildTime + 50*time.Millisecond,
-		},
+func TestCloseWaitTime(t *testing.T) {
+	startService := func(opts ...server.Option) (chan struct{}, func()) {
+		received, done := make(chan struct{}), make(chan struct{})
+		addr, stop := startService(t, &Greeter{}, append([]server.Option{server.WithFilter(
+			func(ctx context.Context, req interface{}, next filter.ServerHandleFunc) (rsp interface{}, err error) {
+				received <- struct{}{}
+				<-done
+				return nil, errors.New("must fail")
+			})}, opts...)...)
+		go func() {
+			_, _ = pb.NewGreeterClientProxy(client.WithTarget("ip://"+addr)).
+				SayHello(context.Background(), &pb.HelloRequest{})
+		}()
+		<-received
+		return done, stop
 	}
-	for _, c := range cases {
-		service := server.New(
-			server.WithRegistry(&fakeRegistry{}),
-			server.WithCloseWaitTime(c.closeWaitTime),
-			server.WithMaxCloseWaitTime(c.maxCloseWaitTime),
-		)
+	t.Run("active requests feature is not enabled on missing MaxCloseWaitTime", func(t *testing.T) {
+		done, stop := startService()
+		defer close(done)
 		start := time.Now()
-		err := service.Close(nil)
-		assert.Nil(t, err)
-		cost := time.Since(start)
-		assert.GreaterOrEqual(t, cost, c.waitTime)
-		assert.LessOrEqual(t, cost, c.waitTime+schTime)
-	}
+		stop()
+		require.Less(t, time.Since(start), time.Millisecond*100)
+	})
+	t.Run("total wait time should not significantly greater than MaxCloseWaitTime", func(t *testing.T) {
+		const closeWaitTime, maxCloseWaitTime = time.Millisecond * 500, time.Second
+		done, stop := startService(
+			server.WithMaxCloseWaitTime(maxCloseWaitTime),
+			server.WithCloseWaitTime(closeWaitTime))
+		defer close(done)
+		start := time.Now()
+		stop()
+		require.WithinRange(t, time.Now(),
+			// 300ms comes from the internal implementation when close service
+			start.Add(maxCloseWaitTime).Add(time.Millisecond*300),
+			start.Add(maxCloseWaitTime).Add(time.Millisecond*500))
+	})
+	t.Run("total wait time is at least CloseWaitTime", func(t *testing.T) {
+		const closeWaitTime, maxCloseWaitTime = time.Millisecond * 500, time.Second
+		done, stop := startService(
+			server.WithMaxCloseWaitTime(maxCloseWaitTime),
+			server.WithCloseWaitTime(closeWaitTime))
+		start := time.Now()
+		time.AfterFunc(closeWaitTime/2, func() { close(done) })
+		stop()
+		require.WithinRange(t, time.Now(), start.Add(closeWaitTime), start.Add(closeWaitTime+time.Millisecond*100))
+	})
+	t.Run("no active request before MaxCloseWaitTime", func(t *testing.T) {
+		const closeWaitTime, maxCloseWaitTime = time.Millisecond * 500, time.Second
+		done, stop := startService(
+			server.WithMaxCloseWaitTime(maxCloseWaitTime),
+			server.WithCloseWaitTime(closeWaitTime))
+		start := time.Now()
+		time.AfterFunc((closeWaitTime+maxCloseWaitTime)/2, func() { close(done) })
+		stop()
+		require.WithinRange(t, time.Now(), start.Add(closeWaitTime), start.Add(maxCloseWaitTime))
+	})
+	t.Run("no active request before service timeout", func(t *testing.T) {
+		const closeWaitTime, maxCloseWaitTime, timeout = time.Millisecond * 500, time.Second, time.Second
+		done, stop := startService(
+			server.WithMaxCloseWaitTime(maxCloseWaitTime),
+			server.WithCloseWaitTime(closeWaitTime),
+			server.WithTimeout(timeout))
+		start := time.Now()
+		time.AfterFunc(maxCloseWaitTime+time.Millisecond*100, func() { close(done) })
+		stop()
+		require.WithinRange(t, time.Now(), start.Add(maxCloseWaitTime+time.Millisecond*100), start.Add(maxCloseWaitTime+timeout))
+	})
 }
 
 func startService(t *testing.T, gs GreeterServer, opts ...server.Option) (addr string, stop func()) {
 	l, err := net.Listen("tcp", "0.0.0.0:0")
 	require.Nil(t, err)
 
-	s := server.New(append(append([]server.Option{
-		server.WithNetwork("tcp"),
-		server.WithProtocol("trpc"),
-	}, opts...),
+	s := server.New(append(append(
+		[]server.Option{
+			server.WithNetwork("tcp"),
+			server.WithProtocol("trpc"),
+		}, opts...),
 		server.WithListener(l),
 	)...)
 	require.Nil(t, s.Register(&GreeterServerServiceDesc, gs))

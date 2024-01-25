@@ -151,6 +151,34 @@ func (s *TestSuite) testSendHTTPSRequestToHTTPServer(e *httpRPCEnv) {
 	require.Contains(s.T(), errs.Msg(err), "codec empty")
 }
 
+func (s *TestSuite) TestHandleErrServerNoResponse() {
+	for _, e := range allHTTPRPCEnvs {
+		if e.client.multiplexed {
+			continue
+		}
+		s.Run(e.String(), func() { s.testHandleErrServerNoResponse(e) })
+	}
+}
+func (s *TestSuite) testHandleErrServerNoResponse(e *httpRPCEnv) {
+	s.startServer(&testHTTPService{TRPCService: TRPCService{UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		return nil, errs.ErrServerNoResponse
+	}}}, server.WithServerAsync(e.server.async))
+
+	s.T().Cleanup(func() { s.closeServer(nil) })
+
+	bts, err := proto.Marshal(s.defaultSimpleRequest)
+	require.Nil(s.T(), err)
+
+	c := thttp.NewStdHTTPClient("http-client")
+	rsp, err := c.Post(s.unaryCallCustomURL(), "application/pb", bytes.NewReader(bts))
+	require.Nil(s.T(), err)
+	require.Equal(s.T(), http.StatusInternalServerError, rsp.StatusCode)
+
+	bts, err = io.ReadAll(rsp.Body)
+	require.Nil(s.T(), err)
+	require.Containsf(s.T(), string(bts), "http server handle error: type:framework, code:0, msg:server no response", "full err: %+v", err)
+}
+
 func (s *TestSuite) TestStatusBadRequestDueToServerValidateFail() {
 	for _, e := range allHTTPRPCEnvs {
 		if e.client.multiplexed {

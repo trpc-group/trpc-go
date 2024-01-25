@@ -23,7 +23,6 @@ import (
 	"sync"
 
 	"github.com/BurntSushi/toml"
-
 	yaml "gopkg.in/yaml.v3"
 )
 

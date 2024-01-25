@@ -259,6 +259,10 @@ func (m *msg) WithClientRPCName(s string) {
 }
 
 func (m *msg) updateMethodNameUsingRPCName(s string) {
+	if rpcNameIsTRPCForm(s) {
+		m.WithCalleeMethod(methodFromRPCName(s))
+		return
+	}
 	if m.CalleeMethod() == "" {
 		m.WithCalleeMethod(s)
 	}
@@ -616,6 +620,9 @@ func WithCloneContextAndMessage(ctx context.Context) (context.Context, Msg) {
 
 // copyCommonMessage copy common data of message.
 func copyCommonMessage(m *msg, newMsg *msg) {
+	// Do not copy compress type here, as it will cause subsequence RPC calls to inherit the upstream
+	// compress type which is not the expected behavior. Compress type should not be propagated along
+	// the entire RPC invocation chain.
 	newMsg.frameHead = m.frameHead
 	newMsg.requestTimeout = m.requestTimeout
 	newMsg.serializationType = m.serializationType
@@ -728,4 +735,49 @@ func getAppServerService(s string) (app, server, service string) {
 	// service
 	service = s[j:]
 	return
+}
+
+// methodFromRPCName returns the method parsed from rpc string.
+func methodFromRPCName(s string) string {
+	return s[strings.LastIndex(s, "/")+1:]
+}
+
+// rpcNameIsTRPCForm checks whether the given string is of trpc form.
+// It is equivalent to:
+//
+//	var r = regexp.MustCompile(`^/[^/.]+\.[^/]+/[^/.]+$`)
+//
+//	func rpcNameIsTRPCForm(s string) bool {
+//		return r.MatchString(s)
+//	}
+//
+// But regexp is much slower than the current version.
+// Refer to BenchmarkRPCNameIsTRPCForm in message_bench_test.go.
+func rpcNameIsTRPCForm(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	if s[0] != '/' { // ^/
+		return false
+	}
+	const start = 1
+	firstDot := strings.Index(s[start:], ".")
+	if firstDot == -1 || firstDot == 0 { // [^.]+\.
+		return false
+	}
+	if strings.Contains(s[start:start+firstDot], "/") { // [^/]+\.
+		return false
+	}
+	secondSlash := strings.Index(s[start+firstDot:], "/")
+	if secondSlash == -1 || secondSlash == 1 { // [^/]+/
+		return false
+	}
+	if start+firstDot+secondSlash == len(s)-1 { // The second slash should not be the last character.
+		return false
+	}
+	const offset = 1
+	if strings.ContainsAny(s[start+firstDot+secondSlash+offset:], "/.") { // [^/.]+$
+		return false
+	}
+	return true
 }
