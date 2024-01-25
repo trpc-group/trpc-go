@@ -31,12 +31,23 @@ func init() {
 
 // JSONPBSerializer is used for content-Type: application/json.
 // It's based on google.golang.org/protobuf/encoding/protojson.
+//
+// This serializer will firstly try jsonpb's serialization. If object does not
+// conform to protobuf proto.Message interface, the serialization will switch to
+// json-iterator.
 type JSONPBSerializer struct {
 	AllowUnmarshalNil bool // allow unmarshalling nil body
 }
 
 // JSONAPI is a copy of jsoniter.ConfigCompatibleWithStandardLibrary.
 // github.com/json-iterator/go is faster than Go's standard json library.
+//
+// Deprecated: This global variable is exportable due to backward comparability issue but
+// should not be modified. If users want to change the default behavior of
+// internal JSON serialization, please use register your customized serializer
+// function like:
+//
+//	restful.RegisterSerializer(yourOwnJSONSerializer)
 var JSONAPI = jsoniter.ConfigCompatibleWithStandardLibrary
 
 // Marshaller is a configurable protojson marshaler.
