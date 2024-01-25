@@ -376,6 +376,16 @@ func TestAsyncRollWriterSyncTwice(t *testing.T) {
 	require.Nil(t, w.Close())
 }
 
+func TestAsyncRollWriterDirectWrite(t *testing.T) {
+	logSize := 1
+	w := NewAsyncRollWriter(&noopWriteCloser{}, WithWriteLogSize(logSize))
+	_, _ = w.Write([]byte("hello"))
+	time.Sleep(time.Millisecond)
+	require.Nil(t, w.Sync())
+	require.Nil(t, w.Sync())
+	require.Nil(t, w.Close())
+}
+
 func TestRollWriterError(t *testing.T) {
 	logDir := t.TempDir()
 	t.Run("reopen file", func(t *testing.T) {

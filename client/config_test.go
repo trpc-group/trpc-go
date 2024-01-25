@@ -312,3 +312,25 @@ func TestConfig(t *testing.T) {
 	}
 	require.Nil(t, client.RegisterClientConfig("trpc.test.helloworld3", backconfig))
 }
+
+func TestRegisterWildcardClient(t *testing.T) {
+	cfg := client.Config("*")
+	t.Cleanup(func() {
+		client.RegisterClientConfig("*", cfg)
+	})
+	client.RegisterClientConfig("*", &client.BackendConfig{
+		DisableServiceRouter: true,
+	})
+
+	ch := make(chan *client.Options, 1)
+	c := client.New()
+	ctx, _ := codec.EnsureMessage(context.Background())
+	require.Nil(t, c.Invoke(ctx, nil, nil, client.WithFilter(
+		func(ctx context.Context, _, _ interface{}, _ filter.ClientHandleFunc) error {
+			ch <- client.OptionsFromContext(ctx)
+			// Skip next.
+			return nil
+		})))
+	opts := <-ch
+	require.True(t, opts.DisableServiceRouter)
+}

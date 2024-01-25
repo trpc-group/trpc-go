@@ -17,6 +17,7 @@ package stream
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -187,7 +188,7 @@ func (cs *clientStream) SendMsg(m interface{}) error {
 	msg.WithFrameHead(newFrameHead(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA, cs.streamID))
 	msg.WithStreamID(cs.streamID)
 	msg.WithClientRPCName(cs.method)
-	msg.WithCalleeMethod(icodec.MethodFromRPCName(cs.method))
+	msg.WithCompressType(codec.Message(cs.ctx).CompressType())
 	return cs.stream.Send(ctx, m)
 }
 
@@ -215,7 +216,6 @@ func (cs *clientStream) CloseSend() error {
 func (cs *clientStream) prepare(opt ...client.Option) error {
 	msg := codec.Message(cs.ctx)
 	msg.WithClientRPCName(cs.method)
-	msg.WithCalleeMethod(icodec.MethodFromRPCName(cs.method))
 	msg.WithStreamID(cs.streamID)
 
 	opt = append([]client.Option{client.WithStreamTransport(transport.DefaultClientStreamTransport)}, opt...)
@@ -237,8 +237,8 @@ func (cs *clientStream) invoke(ctx context.Context, _ *client.ClientStreamDesc) 
 	copyMetaData(newMsg, codec.Message(cs.ctx))
 	newMsg.WithFrameHead(newFrameHead(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT, cs.streamID))
 	newMsg.WithClientRPCName(cs.method)
-	newMsg.WithCalleeMethod(icodec.MethodFromRPCName(cs.method))
 	newMsg.WithStreamID(cs.streamID)
+	newMsg.WithCompressType(codec.Message(cs.ctx).CompressType())
 	newMsg.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{
 		RequestMeta:    &trpcpb.TrpcStreamInitRequestMeta{},
 		InitWindowSize: w,
@@ -252,15 +252,13 @@ func (cs *clientStream) invoke(ctx context.Context, _ *client.ClientStreamDesc) 
 	if _, err := cs.stream.Recv(newCtx); err != nil {
 		return nil, err
 	}
-	if newMsg.ClientRspErr() != nil {
-		return nil, newMsg.ClientRspErr()
+	initRspMeta, ok := newMsg.StreamFrame().(*trpcpb.TrpcStreamInitMeta)
+	if !ok {
+		return nil, fmt.Errorf("client stream (method = %s, streamID = %d) recv "+
+			"unexpected frame type: %T, expected: %T",
+			cs.method, cs.streamID, newMsg.StreamFrame(), (*trpcpb.TrpcStreamInitMeta)(nil))
 	}
-
-	initWindowSize := defaultInitWindowSize
-	if initRspMeta, ok := newMsg.StreamFrame().(*trpcpb.TrpcStreamInitMeta); ok {
-		// If the server has feedback, use the server's window, if not, use the default window.
-		initWindowSize = initRspMeta.GetInitWindowSize()
-	}
+	initWindowSize := initRspMeta.GetInitWindowSize()
 	cs.configSendControl(initWindowSize)
 
 	// Start the dispatch goroutine loop to send packets.
@@ -286,7 +284,6 @@ func (cs *clientStream) feedback(i uint32) error {
 	msg.WithFrameHead(newFrameHead(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK, cs.streamID))
 	msg.WithStreamID(cs.streamID)
 	msg.WithClientRPCName(cs.method)
-	msg.WithCalleeMethod(icodec.MethodFromRPCName(cs.method))
 	msg.WithStreamFrame(&trpcpb.TrpcStreamFeedBackMeta{WindowSizeIncrement: i})
 	return cs.stream.Send(ctx, nil)
 }
@@ -339,12 +336,13 @@ func (cs *clientStream) dispatch() {
 	}()
 	for {
 		ctx, msg := codec.WithCloneContextAndMessage(cs.ctx)
+		msg.WithCompressType(codec.Message(cs.ctx).CompressType())
 		msg.WithStreamID(cs.streamID)
 		respData, err := cs.stream.Recv(ctx)
 		if err != nil {
 			// return to client on error.
 			cs.recvQueue.Put(&response{
-				err: errs.Wrap(err, errs.RetClientStreamReadEnd, streamClosed),
+				err: errs.WrapFrameError(err, errs.RetClientStreamReadEnd, streamClosed),
 			})
 			return
 		}

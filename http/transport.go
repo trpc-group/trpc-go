@@ -23,7 +23,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	stdhttp "net/http"
 	"net/http/httptrace"
 	"net/url"
@@ -35,6 +37,7 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
+	icontext "trpc.group/trpc-go/trpc-go/internal/context"
 	"trpc.group/trpc-go/trpc-go/internal/reuseport"
 	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
@@ -139,8 +142,9 @@ func (t *ServerTransport) listenAndServeHTTP(ctx context.Context, opts *transpor
 		if err != nil {
 			span.SetAttribute(rpcz.TRPCAttributeError, err)
 			log.Errorf("http server transport handle fail:%v", err)
-			if err == ErrEncodeMissingHeader {
-				w.WriteHeader(500)
+			if err == ErrEncodeMissingHeader || errors.Is(err, errs.ErrServerNoResponse) {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(fmt.Sprintf("http server handle error: %+v", err)))
 			}
 			return
 		}
@@ -194,6 +198,10 @@ func (t *ServerTransport) serve(ctx context.Context, s *stdhttp.Server, opts *tr
 			_ = s.Shutdown(context.TODO())
 		}()
 	}
+	go func() {
+		<-opts.StopListening
+		ln.Close()
+	}()
 	return nil
 }
 
@@ -469,12 +477,28 @@ func (ct *ClientTransport) RoundTrip(
 		return nil, err
 	}
 	trace := &httptrace.ClientTrace{
-		ConnectStart: func(network, addr string) {
-			tcpAddr, _ := net.ResolveTCPAddr(network, addr)
-			msg.WithRemoteAddr(tcpAddr)
+		GotConn: func(info httptrace.GotConnInfo) {
+			msg.WithRemoteAddr(info.Conn.RemoteAddr())
 		},
 	}
-	request := req.WithContext(httptrace.WithClientTrace(ctx, trace))
+	reqCtx := ctx
+	cancel := context.CancelFunc(func() {})
+	if rspHeader.ManualReadBody {
+		// In the scenario of Manual Read body, the lifecycle of rsp body is different
+		// from that of invoke ctx, and is independently controlled by body.Close().
+		// Therefore, the timeout/cancel function in the original context needs to be replaced.
+		controlCtx := context.Background()
+		if deadline, ok := ctx.Deadline(); ok {
+			controlCtx, cancel = context.WithDeadline(context.Background(), deadline)
+		}
+		reqCtx = icontext.NewContextWithValues(controlCtx, ctx)
+	}
+	defer func() {
+		if err != nil {
+			cancel()
+		}
+	}()
+	request := req.WithContext(httptrace.WithClientTrace(reqCtx, trace))
 
 	client, err := ct.getStdHTTPClient(opts.CACertFile, opts.TLSCertFile,
 		opts.TLSKeyFile, opts.TLSServerName)
@@ -497,7 +521,50 @@ func (ct *ClientTransport) RoundTrip(
 		return nil, errs.NewFrameError(errs.RetClientNetErr,
 			"http client transport RoundTrip: "+err.Error())
 	}
+	decorateWithCancel(rspHeader, cancel)
 	return emptyBuf, nil
+}
+
+func decorateWithCancel(rspHeader *ClientRspHeader, cancel context.CancelFunc) {
+	// Quoted from: https://github.com/golang/go/blob/go1.21.4/src/net/http/response.go#L69
+	//
+	// "As of Go 1.12, the Body will also implement io.Writer on a successful "101 Switching Protocols" response,
+	// as used by WebSockets and HTTP/2's "h2c" mode."
+	//
+	// Therefore, we require an extra check to ensure io.Writer's conformity,
+	// which will then expose the corresponding method.
+	//
+	// It's important to note that an embedded body may not be capable of exposing all the attached interfaces.
+	// Consequently, we perform an explicit interface assertion here.
+	if body, ok := rspHeader.Response.Body.(io.ReadWriteCloser); ok {
+		rspHeader.Response.Body = &writableResponseBodyWithCancel{ReadWriteCloser: body, cancel: cancel}
+	} else {
+		rspHeader.Response.Body = &responseBodyWithCancel{ReadCloser: rspHeader.Response.Body, cancel: cancel}
+	}
+}
+
+// writableResponseBodyWithCancel implements io.ReadWriteCloser.
+// It wraps response body and cancel function.
+type writableResponseBodyWithCancel struct {
+	io.ReadWriteCloser
+	cancel context.CancelFunc
+}
+
+func (b *writableResponseBodyWithCancel) Close() error {
+	b.cancel()
+	return b.ReadWriteCloser.Close()
+}
+
+// responseBodyWithCancel implements io.ReadCloser.
+// It wraps response body and cancel function.
+type responseBodyWithCancel struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (b *responseBodyWithCancel) Close() error {
+	b.cancel()
+	return b.ReadCloser.Close()
 }
 
 func (ct *ClientTransport) getStdHTTPClient(caFile, certFile,

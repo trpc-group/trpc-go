@@ -15,6 +15,7 @@ package test
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -189,6 +190,9 @@ func (s *TestSuite) TestStreamServerFilter() {
 	s1.Send(&testpb.StreamingInputCallRequest{})
 	require.Nil(s.T(), err)
 	_, err = s1.CloseAndRecv()
+	require.Equal(s.T(), errs.RetClientStreamReadEnd, errs.Code(err))
+
+	err = errors.Unwrap(err)
 	require.Equal(s.T(), errs.Code(filterTestError), errs.Code(err))
 	require.Equal(s.T(), errs.Msg(filterTestError), errs.Msg(err))
 

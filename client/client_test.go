@@ -423,7 +423,11 @@ func (t *multiplexedTransport) RoundTrip(
 	return t.fakeTransport.RoundTrip(ctx, req, opts...)
 }
 
-type fakeTransport struct{}
+type fakeTransport struct {
+	send  func() error
+	recv  func() ([]byte, error)
+	close func()
+}
 
 func (c *fakeTransport) RoundTrip(ctx context.Context, req []byte,
 	roundTripOpts ...transport.RoundTripOption) (rsp []byte, err error) {
@@ -447,18 +451,15 @@ func (c *fakeTransport) RoundTrip(ctx context.Context, req []byte,
 }
 
 func (c *fakeTransport) Send(ctx context.Context, req []byte, opts ...transport.RoundTripOption) error {
+	if c.send != nil {
+		return c.send()
+	}
 	return nil
 }
 
 func (c *fakeTransport) Recv(ctx context.Context, opts ...transport.RoundTripOption) ([]byte, error) {
-	body, ok := ctx.Value("recv-decode-error").(string)
-	if ok {
-		return []byte(body), nil
-	}
-
-	err, ok := ctx.Value("recv-error").(string)
-	if ok {
-		return nil, errors.New(err)
+	if c.recv != nil {
+		return c.recv()
 	}
 	return []byte("body"), nil
 }
@@ -467,7 +468,9 @@ func (c *fakeTransport) Init(ctx context.Context, opts ...transport.RoundTripOpt
 	return nil
 }
 func (c *fakeTransport) Close(ctx context.Context) {
-	return
+	if c.close != nil {
+		c.close()
+	}
 }
 
 type fakeCodec struct {
