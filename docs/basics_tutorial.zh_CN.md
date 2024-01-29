@@ -39,7 +39,7 @@ message HelloRsp {
 
 ### 编写客户端和服务端代码
 
-protobuf 给出的是一个语言无关的服务定义，我们还要用 [trpc 命令行工具](https://github.com/trpc-group/trpc-cmdline)将它翻译成对应语言的桩代码。你可以通过 `$ tprc create -h` 查看它支持的各种选项。你可以参考快速开始的 [helloworld](/examples/helloworld/pb/Makefile) 项目来快速创建你自己的桩代码。
+protobuf 给出的是一个语言无关的服务定义，我们还要用 [trpc 命令行工具](https://github.com/trpc-group/trpc-cmdline)将它翻译成对应语言的桩代码。你可以通过 `$ trpc create -h` 查看它支持的各种选项。你可以参考快速开始的 [helloworld](/examples/helloworld/pb/Makefile) 项目来快速创建你自己的桩代码。
 
 桩代码主要分为 client 和 server 两部分。  
 下面是生成的部分 client 代码。在[快速开始](./quick_start.zh_CN.md)中，我们通过 `NewGreeterClientProxy` 来创建一个 client 实例，并调用了它的 `Hello` 方法：
