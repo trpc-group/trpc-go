@@ -288,4 +288,4 @@ tRPC-Go allows businesses to define and register serialization and deserializati
 
 ## Setting the maximum number of service coroutines
 
-tRPC-Go supports service-level synchronous/asynchronous packet processing modes. For asynchronous mode, a coroutine pool is used to improve coroutine usage efficiency and performance. Users can set the maximum number of service coroutines through framework configuration and Option configuration. For details, please refer to the service configuration in the [tPRC-Go Framework Configuration](/docs/user_guide/framework_conf.md) section.
+tRPC-Go supports service-level synchronous/asynchronous packet processing modes. For asynchronous mode, a coroutine pool is used to improve coroutine usage efficiency and performance. Users can set the maximum number of service coroutines through framework configuration and Option configuration. For details, please refer to the service configuration in the [tRPC-Go Framework Configuration](/docs/user_guide/framework_conf.md) section.

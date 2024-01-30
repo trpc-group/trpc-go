@@ -322,7 +322,7 @@ func main() {
 - 接收端每消费 1/4 的初始窗口大小进行 feedback，发送一个 feedback 帧，携带增量的 window size，发送端接收到这个增量 window size 之后加到本地可发送的 window 大小
 - 帧分优先级，对于 feedback 的帧不做流控，优先级高于 Data 帧，防止因为优先级问题导致 feedback 帧发生阻塞
 
-tPRC-Go 默认启用流控，目前默认窗口大小为 65535，如果连续发送超过 65535 大小的数据（序列化和压缩后），接收方没调用 Recv，则发送方会 block
+tRPC-Go 默认启用流控，目前默认窗口大小为 65535，如果连续发送超过 65535 大小的数据（序列化和压缩后），接收方没调用 Recv，则发送方会 block
 如果要设置客户端接收窗口大小，使用 client option `WithMaxWindowSize`
 
 ```go

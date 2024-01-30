@@ -39,7 +39,7 @@ Note that `Method` has a `{}` at the end, which can also have content. We will s
 
 ### Write Client and Server Code
 
-What protobuf gives is a language-independent service definition, and we need to use [trpc command line tool](https://github.com/trpc-group/trpc-cmdline) to translate it into a corresponding language stub code. You can see the various options it supports with `$ tprc create -h`. You can refer to the quick start [helloworld](/examples/helloworld/pb/Makefile) project to quickly create your own stub code.
+What protobuf gives is a language-independent service definition, and we need to use [trpc command line tool](https://github.com/trpc-group/trpc-cmdline) to translate it into a corresponding language stub code. You can see the various options it supports with `$ trpc create -h`. You can refer to the quick start [helloworld](/examples/helloworld/pb/Makefile) project to quickly create your own stub code.
 
 The stub code is mainly divided into two parts: client and server.  
 Below is part of the generated client code. In [Quick Start](./quick_start.md), we use `NewGreeterClientProxy` to create a client instance and call its `Hello` method:

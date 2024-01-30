@@ -288,4 +288,4 @@ tRPC-Go 自定义 RPC 消息体的序列化、反序列化方式，业务可以�
 
 ## 设置服务最大协程数
 
-tRPC-Go 支持服务级别的同/异步包处理模式，对于异步模式采用协程池来提升协程使用效率和性能。用户可以通过框架配置和 Option 配置两种方式来设置服务的最大协程数，具体请参考 [tPRC-Go 框架配置](/docs/user_guide/framework_conf.zh_CN.md) 章节的 service 配置。
+tRPC-Go 支持服务级别的同/异步包处理模式，对于异步模式采用协程池来提升协程使用效率和性能。用户可以通过框架配置和 Option 配置两种方式来设置服务的最大协程数，具体请参考 [tRPC-Go 框架配置](/docs/user_guide/framework_conf.zh_CN.md) 章节的 service 配置。
