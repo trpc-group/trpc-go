@@ -126,7 +126,47 @@ if err != nil {
 log.Info("req:%v, rsp:%v, err:%v", req, rsp, err)
 ```
 
-###连接多路复用
+#### 设置空闲连接超时
+
+对于客户端的连接池模式来说，框架会设置一个默认的 50s 的空闲超时时间。
+
+* 对于 `go-net` 而言，连接池中会维持一个空闲连接列表，空闲超时时间只会对空闲连接列表中的连接生效，并且只会在下次获取的时候触发空闲连接触发空闲超时的关闭
+* 对于 `tnet` 而言，空闲超时通过在每个连接上维护定时器来实现，即使该连接被用于客户端发起调用，假如下游未在空闲连接超时时间内返回结果的话，该连接仍然会被触发空闲超时并强制被关闭
+
+更改空闲超时时间的方式如下：
+
+* `go-net`
+
+```go
+import "trpc.group/trpc-go/trpc-go/pool/connpool"
+
+func init() {
+	connpool.DefaultConnectionPool = connpool.NewConnectionPool(
+		connpool.WithIdleTimeout(0), // 设置为 0 是禁用
+	)
+}
+```
+
+* `tnet`
+
+```go
+import (
+	"trpc.group/trpc-go/trpc-go/pool/connpool"
+	tnettrans "trpc.group/trpc-go/trpc-go/transport/tnet"
+)
+
+func init() {
+	tnettrans.DefaultConnPool = connpool.NewConnectionPool(
+	      connpool.WithDialFunc(tnettrans.Dial),
+	      connpool.WithIdleTimeout(0), // 设置为 0 是禁用
+	      connpool.WithHealthChecker(tnettrans.HealthChecker),
+      )
+}
+```
+
+**注**：服务端默认也有一个空闲超时时间，为 60s，该时间设计得比 50s 打，从而在默认情况下是客户端主动触发空闲连接超时以主动关闭连接，而非服务端触发强制清理。服务端空闲超时的更改方法见服务端使用文档。
+
+### 连接多路复用
 
 ```go
 opts := []client.Option{
