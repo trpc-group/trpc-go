@@ -53,7 +53,7 @@ func TestRemoteEOF(t *testing.T) {
 	require.Nil(t, pc.Close())
 }
 
-func TestUnexceptedRead(t *testing.T) {
+func TestUnexpectedRead(t *testing.T) {
 	var s server
 	require.Nil(t, s.init())
 
