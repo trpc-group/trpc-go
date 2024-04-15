@@ -60,7 +60,7 @@ func TestDial(t *testing.T) {
 			},
 			want: nil,
 			wantErr: func(t assert.TestingT, err error, msg ...interface{}) bool {
-				return assert.Contains(t, err.Error(), "delay time is too short")
+				return assert.NoError(t, err, "idletimeout of -1 means no idle timeout, the error should be nil")
 			},
 		},
 		{
