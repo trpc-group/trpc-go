@@ -268,6 +268,19 @@ tRPC-Go provides three timeout mechanisms for RPC calls: link timeout, message t
 
 This feature requires protocol support (the protocol needs to carry timeout metadata downstream). The tRPC protocol, generic HTTP RPC protocol all support timeout control.
 
+## Idle Timeout
+
+The server has a default idle timeout of 60 seconds to prevent excessive idle connections from consuming server-side resources. This value can be modified through the `idletimeout` setting in the framework configuration:
+
+```yaml
+server:
+  service:
+    - name: trpc.server.service.Method
+      network: tcp
+      protocol: trpc
+      idletime: 60000 # The unit is milliseconds. Setting it to -1 means there is no idle timeout (setting it to 0 will still default to the 60s by the framework)
+```
+
 ## Link transmission
 
 The tRPC-Go framework provides a mechanism for passing fields between the client and server and passing them down the entire call chain. For the mechanism and usage of link transmission, please refer to [tRPC-Go Link Transmission](/docs/user_guide/metadata_transmission.md).
