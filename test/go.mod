@@ -10,7 +10,7 @@ require (
 	go.uber.org/zap v1.26.0
 	golang.org/x/net v0.17.0
 	golang.org/x/sync v0.4.0
-	google.golang.org/protobuf v1.31.0
+	google.golang.org/protobuf v1.33.0
 	gopkg.in/yaml.v3 v3.0.1
 	trpc.group/trpc-go/trpc-go v0.0.0-00010101000000-000000000000
 	trpc.group/trpc/trpc-protocol/pb/go/trpc v1.0.0
