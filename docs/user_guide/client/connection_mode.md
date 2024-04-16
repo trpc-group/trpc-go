@@ -128,6 +128,48 @@ if err != nil {
 log.Info("req:%v, rsp:%v, err:%v", req, rsp, err)
 ```
 
+
+#### Setting Idle Connection Timeout
+
+For the client's connection pool mode, the framework sets a default idle timeout of 50 seconds.
+
+* For `go-net`, the connection pool maintains a list of idle connections. The idle timeout only affects the connections in this idle list and is only triggered when the connection is retrieved next time, causing idle connections to be closed due to the idle timeout.
+* For `tnet`, the idle timeout is implemented by maintaining a timer on each connection. Even if a connection is being used for a client's call, if the downstream does not return a result within the idle timeout period, the connection will still be triggered by the idle timeout and forcibly closed.
+
+The methods to change the idle timeout are as follows:
+
+* `go-net`
+
+```go
+import "trpc.group/trpc-go/trpc-go/pool/connpool"
+
+func init() {
+	connpool.DefaultConnectionPool = connpool.NewConnectionPool(
+		connpool.WithIdleTimeout(0), // Setting to 0 disables it.
+	)
+}
+```
+
+tnet
+
+```go
+import (
+	"trpc.group/trpc-go/trpc-go/pool/connpool"
+	tnettrans "trpc.group/trpc-go/trpc-go/transport/tnet"
+)
+
+func init() {
+	tnettrans.DefaultConnPool = connpool.NewConnectionPool(
+	      connpool.WithDialFunc(tnettrans.Dial),
+	      connpool.WithIdleTimeout(0), // Setting to 0 disables it.
+	      connpool.WithHealthChecker(tnettrans.HealthChecker),
+      )
+}
+```
+
+**Note**: The server also has a default idle timeout, which is 60 seconds. This time is designed to be longer than the 50 seconds, so that under default conditions, it is the client that triggers the idle connection timeout to actively close the connection, rather than the server triggering a forced cleanup. For methods to change the server's idle timeout, see the server usage documentation.
+
+
 ### I/O multiplexing
 
 ```go
