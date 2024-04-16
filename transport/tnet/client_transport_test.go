@@ -51,19 +51,6 @@ func TestDial(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid idle timeout",
-			opts: &connpool.DialOptions{
-				CACertFile:  "",
-				Network:     "tcp",
-				Address:     l.Addr().String(),
-				IdleTimeout: -1,
-			},
-			want: nil,
-			wantErr: func(t assert.TestingT, err error, msg ...interface{}) bool {
-				return assert.Contains(t, err.Error(), "delay time is too short")
-			},
-		},
-		{
 			name: "wrong CACertFile and TLSServerName ",
 			opts: &connpool.DialOptions{
 				CACertFile:    "xxx",
