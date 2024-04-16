@@ -6,7 +6,7 @@ replace trpc.group/trpc-go/trpc-go => ../
 
 require (
 	github.com/golang/protobuf v1.5.2
-	google.golang.org/protobuf v1.30.0
+	google.golang.org/protobuf v1.33.0
 	trpc.group/trpc-go/trpc-go v0.0.0-00010101000000-000000000000
 	trpc.group/trpc/trpc-protocol/pb/go/trpc v1.0.0
 )
