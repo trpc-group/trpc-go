@@ -809,6 +809,9 @@ func TestCheckRedirect(t *testing.T) {
 		return nil
 	}
 	thttp.DefaultClientTransport.(*thttp.ClientTransport).CheckRedirect = checkRedirect
+	defer func() {
+		thttp.DefaultClientTransport.(*thttp.ClientTransport).CheckRedirect = nil
+	}()
 	proxy := thttp.NewClientProxy("trpc.test.helloworld.Greeter",
 		client.WithTarget("ip://"+ln.Addr().String()),
 		client.WithSerializationType(codec.SerializationTypeNoop),

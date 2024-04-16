@@ -266,7 +266,20 @@ tRPC-Go 从设计之初就考虑了框架的易测性，在通过 pb 生成桩�
 
 tRPC-Go 为 RPC 调用提供了 3 种超时机制控制：链路超时，消息超时和调用超时。关于这 3 种超时机制的原理介绍和相关配置，请参考 [tRPC-Go 超时控制](/docs/user_guide/timeout_control.zh_CN.md)。
 
-此功能需要协议的支持（协议需要携带 timeout 元数据到下游），tRPC 协议，泛 HTTP RPC 协议均支持超时控制功能。其
+此功能需要协议的支持（协议需要携带 timeout 元数据到下游），tRPC 协议，泛 HTTP RPC 协议均支持超时控制功能。
+
+## 空闲超时
+
+服务默认存在一个 60s 的空闲超时时间，以防止过多空闲连接消耗服务侧的资源，这个值可以通过框架配置中的 `idletimeout` 来进行修改：
+
+```yaml
+server:
+  service:
+    - name: trpc.server.service.Method
+      network: tcp
+      protocol: trpc
+      idletime: 60000 # 单位是毫秒, 设置为 -1 的时候表示没有空闲超时(这里设置为 0 时框架仍会自动转为默认的 60s)
+```
 
 ## 链路透传
 
