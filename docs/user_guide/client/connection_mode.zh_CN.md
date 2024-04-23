@@ -128,12 +128,12 @@ log.Info("req:%v, rsp:%v, err:%v", req, rsp, err)
 
 #### 设置空闲连接超时
 
-对于客户端的连接池模式来说，框架会设置一个默认的 50s 的空闲超时时间。
+在客户端的连接池模式中，框架默认会设置一个 50 秒的空闲超时时间。
 
-* 对于 `go-net` 而言，连接池中会维持一个空闲连接列表，空闲超时时间只会对空闲连接列表中的连接生效，并且只会在下次获取的时候触发空闲连接触发空闲超时的关闭
-* 对于 `tnet` 而言，空闲超时通过在每个连接上维护定时器来实现，即使该连接被用于客户端发起调用，假如下游未在空闲连接超时时间内返回结果的话，该连接仍然会被触发空闲超时并强制被关闭
+* 对于 `go-net` 来说，连接池会维护一个空闲连接列表。空闲超时时间仅对列表中的空闲连接有效，并且只有在下一次尝试获取连接时，才会触发检查并关闭超时的空闲连接。
+* 对于 `tnet`，则是通过在每个连接上设置定时器来实现空闲超时。即便连接正在被用于客户端的调用，如果下游服务在空闲超时时间内没有返回结果，该连接仍然会因为空闲超时而被强制关闭。
 
-更改空闲超时时间的方式如下：
+可以按照以下方式更改空闲超时时间：
 
 * `go-net`
 
@@ -142,7 +142,7 @@ import "trpc.group/trpc-go/trpc-go/pool/connpool"
 
 func init() {
 	connpool.DefaultConnectionPool = connpool.NewConnectionPool(
-		connpool.WithIdleTimeout(0), // 设置为 0 是禁用
+		connpool.WithIdleTimeout(0), // 设置为 0 以禁用空闲超时
 	)
 }
 ```
@@ -158,14 +158,13 @@ import (
 func init() {
 	tnettrans.DefaultConnPool = connpool.NewConnectionPool(
 	      connpool.WithDialFunc(tnettrans.Dial),
-	      connpool.WithIdleTimeout(0), // 设置为 0 是禁用
+	      connpool.WithIdleTimeout(0), // 设置为 0 以禁用空闲超时
 	      connpool.WithHealthChecker(tnettrans.HealthChecker),
       )
 }
 ```
 
-**注**：服务端默认也有一个空闲超时时间，为 60s，该时间设计得比 50s 打，从而在默认情况下是客户端主动触发空闲连接超时以主动关闭连接，而非服务端触发强制清理。服务端空闲超时的更改方法见服务端使用文档。
-
+**注**：服务端默认也设置了一个空闲超时时间，为 60 秒。这个时间比客户端的默认时间长，以确保在大多数情况下，是客户端主动触发空闲超时并关闭连接，而不是服务端强制进行清理。服务端空闲超时时间的修改方法，请参见服务端使用文档。
 ### 连接多路复用
 
 ```go
