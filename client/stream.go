@@ -162,7 +162,7 @@ func (s *stream) Init(ctx context.Context, opt ...Option) (*Options, error) {
 		report.SelectNodeFail.Incr()
 		return nil, err
 	}
-	ensureMsgRemoteAddr(msg, findFirstNonEmpty(node.Network, opts.Network), node.Address)
+	ensureMsgRemoteAddr(msg, findFirstNonEmpty(node.Network, opts.Network), node.Address, node.ParseAddr)
 	const invalidCost = -1
 	opts.Node.set(node, node.Address, invalidCost)
 	if opts.Codec == nil {
