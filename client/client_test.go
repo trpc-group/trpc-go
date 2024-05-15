@@ -16,6 +16,8 @@ package client_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net"
 	"testing"
 	"time"
 
@@ -409,6 +411,31 @@ func TestFixTimeout(t *testing.T) {
 	})
 }
 
+func TestSelectorRemoteAddrUseUserProvidedParser(t *testing.T) {
+	selector.Register(t.Name(), &fSelector{
+		selectNode: func(s string, option ...selector.Option) (*registry.Node, error) {
+			return &registry.Node{
+				Network: t.Name(),
+				Address: t.Name(),
+				ParseAddr: func(network, address string) net.Addr {
+					return newUnresolvedAddr(network, address)
+				}}, nil
+		},
+		report: func(node *registry.Node, duration time.Duration, err error) error { return nil },
+	})
+	fake := "fake"
+	codec.Register(fake, nil, &fakeCodec{})
+	ctx := trpc.BackgroundContext()
+	require.NotNil(t, client.New().Invoke(ctx, "failbody", nil,
+		client.WithServiceName(t.Name()),
+		client.WithProtocol(fake),
+		client.WithTarget(fmt.Sprintf("%s://xxx", t.Name()))))
+	addr := trpc.Message(ctx).RemoteAddr()
+	require.NotNil(t, addr)
+	require.Equal(t, t.Name(), addr.Network())
+	require.Equal(t, t.Name(), addr.String())
+}
+
 type multiplexedTransport struct {
 	require func(context.Context, []byte, ...transport.RoundTripOption)
 	fakeTransport
@@ -526,4 +553,40 @@ func (c *fakeSelector) Select(serviceName string, opt ...selector.Option) (*regi
 
 func (c *fakeSelector) Report(node *registry.Node, cost time.Duration, err error) error {
 	return nil
+}
+
+type fSelector struct {
+	selectNode func(string, ...selector.Option) (*registry.Node, error)
+	report     func(*registry.Node, time.Duration, error) error
+}
+
+func (s *fSelector) Select(serviceName string, opts ...selector.Option) (*registry.Node, error) {
+	return s.selectNode(serviceName, opts...)
+}
+
+func (s *fSelector) Report(node *registry.Node, cost time.Duration, err error) error {
+	return s.report(node, cost, err)
+}
+
+// newUnresolvedAddr returns a new unresolvedAddr.
+func newUnresolvedAddr(network, address string) *unresolvedAddr {
+	return &unresolvedAddr{network: network, address: address}
+}
+
+var _ net.Addr = (*unresolvedAddr)(nil)
+
+// unresolvedAddr is a net.Addr which returns the original network or address.
+type unresolvedAddr struct {
+	network string
+	address string
+}
+
+// Network returns the unresolved original network.
+func (a *unresolvedAddr) Network() string {
+	return a.network
+}
+
+// String returns the unresolved original address.
+func (a *unresolvedAddr) String() string {
+	return a.address
 }
