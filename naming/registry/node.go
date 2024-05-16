@@ -15,6 +15,7 @@ package registry
 
 import (
 	"fmt"
+	"net"
 	"time"
 )
 
@@ -30,6 +31,9 @@ type Node struct {
 	CostTime      time.Duration // 当次请求耗时
 	EnvKey        string        // 透传的环境信息
 	Metadata      map[string]interface{}
+	// ParseAddr should be used to convert Node to net.Addr if it's not nil.
+	// See test case TestSelectorRemoteAddrUseUserProvidedParser in client package.
+	ParseAddr func(network, address string) net.Addr
 }
 
 // String returns an abbreviation information of node.

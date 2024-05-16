@@ -18,7 +18,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -348,6 +350,24 @@ func TestClientTransport_RoundTrip(t *testing.T) {
 	}()
 	time.Sleep(20 * time.Millisecond)
 
+	t.Run("write: message too long", func(t *testing.T) {
+		c := mustListenUDP(t)
+		t.Cleanup(func() {
+			if err := c.Close(); err != nil {
+				t.Log(err)
+			}
+		})
+		largeRequest := encodeLengthDelimited(strings.Repeat("1", math.MaxInt32/4))
+		_, err := transport.RoundTrip(context.Background(), largeRequest,
+			transport.WithClientFramerBuilder(fb),
+			transport.WithDialNetwork("udp"),
+			transport.WithDialAddress(c.LocalAddr().String()),
+			transport.WithReqType(transport.SendAndRecv),
+		)
+		require.Equal(t, errs.RetClientNetErr, errs.Code(err))
+		require.Contains(t, errs.Msg(err), "udp client transport WriteTo")
+	})
+
 	var err error
 	_, err = transport.RoundTrip(context.Background(), encodeLengthDelimited("helloworld"))
 	assert.NotNil(t, err)
@@ -489,6 +509,14 @@ func TestClientTransport_RoundTrip(t *testing.T) {
 	assert.Contains(t, err.Error(), remainingBytesError.Error())
 }
 
+func mustListenUDP(t *testing.T) net.PacketConn {
+	c, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
 // Frame a stream of bytes based on a length prefix
 // +------------+--------------------------------+
 // | len: uint8 |          frame payload         |
@@ -609,7 +637,6 @@ func TestClientTransport_MultiplexedErr(t *testing.T) {
 }
 
 func TestClientTransport_RoundTrip_PreConnected(t *testing.T) {
-
 	go func() {
 		err := transport.ListenAndServe(
 			transport.WithListenNetwork("udp"),

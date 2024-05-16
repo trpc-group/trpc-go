@@ -66,11 +66,16 @@ type RecvControl interface {
 // It serializes the message and sends it to server through stream transport.
 // It's safe to call Recv and Send in different goroutines concurrently, but calling
 // Send in different goroutines concurrently is not thread-safe.
-func (s *stream) Send(ctx context.Context, m interface{}) error {
+func (s *stream) Send(ctx context.Context, m interface{}) (err error) {
+	defer func() {
+		if err != nil {
+			s.opts.StreamTransport.Close(ctx)
+		}
+	}()
+
 	msg := codec.Message(ctx)
 	reqBodyBuf, err := serializeAndCompress(ctx, msg, m, s.opts)
 	if err != nil {
-		s.opts.StreamTransport.Close(ctx)
 		return err
 	}
 
@@ -87,7 +92,6 @@ func (s *stream) Send(ctx context.Context, m interface{}) error {
 	}
 
 	if err := s.opts.StreamTransport.Send(ctx, reqBuf); err != nil {
-		s.opts.StreamTransport.Close(ctx)
 		return err
 	}
 	return nil
@@ -97,17 +101,23 @@ func (s *stream) Send(ctx context.Context, m interface{}) error {
 // It decodes and decompresses the message and leaves serialization to upper layer.
 // It's safe to call Recv and Send in different goroutines concurrently, but calling
 // Send in different goroutines concurrently is not thread-safe.
-func (s *stream) Recv(ctx context.Context) ([]byte, error) {
+func (s *stream) Recv(ctx context.Context) (buf []byte, err error) {
+	defer func() {
+		if err != nil {
+			s.opts.StreamTransport.Close(ctx)
+		}
+	}()
 	rspBuf, err := s.opts.StreamTransport.Recv(ctx)
 	if err != nil {
-		s.opts.StreamTransport.Close(ctx)
 		return nil, err
 	}
 	msg := codec.Message(ctx)
 	rspBodyBuf, err := s.opts.Codec.Decode(msg, rspBuf)
 	if err != nil {
-		s.opts.StreamTransport.Close(ctx)
 		return nil, errs.NewFrameError(errs.RetClientDecodeFail, "client codec Decode: "+err.Error())
+	}
+	if err := msg.ClientRspErr(); err != nil {
+		return nil, err
 	}
 	if len(rspBodyBuf) > 0 {
 		compressType := msg.CompressType()
@@ -118,9 +128,7 @@ func (s *stream) Recv(ctx context.Context) ([]byte, error) {
 		if icodec.IsValidCompressType(compressType) && compressType != codec.CompressTypeNoop {
 			rspBodyBuf, err = codec.Decompress(compressType, rspBodyBuf)
 			if err != nil {
-				s.opts.StreamTransport.Close(ctx)
-				return nil,
-					errs.NewFrameError(errs.RetClientDecodeFail, "client codec Decompress: "+err.Error())
+				return nil, errs.NewFrameError(errs.RetClientDecodeFail, "client codec Decompress: "+err.Error())
 			}
 		}
 	}
@@ -154,7 +162,7 @@ func (s *stream) Init(ctx context.Context, opt ...Option) (*Options, error) {
 		report.SelectNodeFail.Incr()
 		return nil, err
 	}
-	ensureMsgRemoteAddr(msg, findFirstNonEmpty(node.Network, opts.Network), node.Address)
+	ensureMsgRemoteAddr(msg, findFirstNonEmpty(node.Network, opts.Network), node.Address, node.ParseAddr)
 	const invalidCost = -1
 	opts.Node.set(node, node.Address, invalidCost)
 	if opts.Codec == nil {

@@ -17,8 +17,15 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// JSONAPI is json packing and unpacking object, users can change
-// the internal parameter.
+// JSONAPI is used by tRPC JSON serialization when the object does
+// not conform to protobuf proto.Message interface.
+//
+// Deprecated: This global variable is exportable due to backward comparability issue but
+// should not be modified. If users want to change the default behavior of
+// internal JSON serialization, please use register your customized serializer
+// function like:
+//
+//	codec.RegisterSerializer(codec.SerializationTypeJSON, yourOwnJSONSerializer)
 var JSONAPI = jsoniter.ConfigCompatibleWithStandardLibrary
 
 // JSONSerialization provides json serialization mode.

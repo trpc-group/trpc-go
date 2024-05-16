@@ -1024,3 +1024,24 @@ func TestListenAndServeTLSFail(t *testing.T) {
 		transport.WithListener(ln),
 	))
 }
+
+func TestListenAndServeWithStopListener(t *testing.T) {
+	s := transport.NewServerTransport()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	ch := make(chan struct{})
+	require.Nil(t, s.ListenAndServe(ctx,
+		transport.WithListenNetwork("tcp"),
+		transport.WithServerFramerBuilder(&framerBuilder{}),
+		transport.WithListener(ln),
+		transport.WithStopListening(ch),
+	))
+	_, err = net.Dial("tcp", ln.Addr().String())
+	require.Nil(t, err)
+	close(ch)
+	time.Sleep(time.Millisecond)
+	_, err = net.Dial("tcp", ln.Addr().String())
+	require.NotNil(t, err)
+}

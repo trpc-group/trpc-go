@@ -18,7 +18,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"runtime"
@@ -242,6 +241,23 @@ func mayLiftToTLSListener(ln net.Listener, opts *ListenServeOptions) (net.Listen
 }
 
 func (s *serverTransport) serveStream(ctx context.Context, ln net.Listener, opts *ListenServeOptions) error {
+	var once sync.Once
+	closeListener := func() { ln.Close() }
+	defer once.Do(closeListener)
+	// Create a goroutine to watch ctx.Done() channel.
+	// Once Server.Close(), TCP listener should be closed immediately and won't accept any new connection.
+	go func() {
+		select {
+		case <-ctx.Done():
+		// ctx.Done will perform the following two actions:
+		// 1. Stop listening.
+		// 2. Cancel all currently established connections.
+		// Whereas opts.StopListening will only stop listening.
+		case <-opts.StopListening:
+		}
+		log.Tracef("recv server close event")
+		once.Do(closeListener)
+	}()
 	return s.serveTCP(ctx, ln, opts)
 }
 
@@ -386,11 +402,10 @@ func getPassedListener(network, address string) (interface{}, error) {
 
 // ListenFd is the listener fd.
 type ListenFd struct {
-	OriginalListenCloser io.Closer
-	Fd                   uintptr
-	Name                 string
-	Network              string
-	Address              string
+	Fd      uintptr
+	Name    string
+	Network string
+	Address string
 }
 
 // inheritListeners stores the listener according to start listenfd and number of listenfd passed
@@ -460,11 +475,10 @@ func getPacketConnFd(c net.PacketConn) (*ListenFd, error) {
 		return nil, fmt.Errorf("getPacketConnFd getRawFd err: %w", err)
 	}
 	return &ListenFd{
-		OriginalListenCloser: c,
-		Fd:                   lnFd,
-		Name:                 "a udp listener fd",
-		Network:              c.LocalAddr().Network(),
-		Address:              c.LocalAddr().String(),
+		Fd:      lnFd,
+		Name:    "a udp listener fd",
+		Network: c.LocalAddr().Network(),
+		Address: c.LocalAddr().String(),
 	}, nil
 }
 
@@ -478,11 +492,10 @@ func getListenerFd(ln net.Listener) (*ListenFd, error) {
 		return nil, fmt.Errorf("getListenerFd getRawFd err: %w", err)
 	}
 	return &ListenFd{
-		OriginalListenCloser: ln,
-		Fd:                   fd,
-		Name:                 "a tcp listener fd",
-		Network:              ln.Addr().Network(),
-		Address:              ln.Addr().String(),
+		Fd:      fd,
+		Name:    "a tcp listener fd",
+		Network: ln.Addr().Network(),
+		Address: ln.Addr().String(),
 	}, nil
 }
 

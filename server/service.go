@@ -102,13 +102,14 @@ type Stream interface {
 
 // service is an implementation of Service
 type service struct {
+	activeCount    int64              // active requests count for graceful close if set MaxCloseWaitTime
 	ctx            context.Context    // context of this service
 	cancel         context.CancelFunc // function that cancels this service
 	opts           *Options           // options of this service
 	handlers       map[string]Handler // rpcname => handler
 	streamHandlers map[string]StreamHandler
 	streamInfo     map[string]*StreamServerInfo
-	activeCount    int64 // active requests count for graceful close if set MaxCloseWaitTime
+	stopListening  chan<- struct{}
 }
 
 // New creates a service.
@@ -534,21 +535,28 @@ func (s *service) Close(ch chan struct{}) error {
 			}
 		}
 	}
-	s.waitBeforeClose()
+	if remains := s.waitBeforeClose(); remains > 0 {
+		log.Infof("process %d service %s remains %d requests before close",
+			os.Getpid(), s.opts.ServiceName, remains)
+	}
 
 	// this will cancel all children ctx.
 	s.cancel()
+
 	timeout := time.Millisecond * 300
 	if s.opts.Timeout > timeout { // use the larger one
 		timeout = s.opts.Timeout
 	}
-	time.Sleep(timeout)
+	if remains := s.waitInactive(timeout); remains > 0 {
+		log.Infof("process %d service %s remains %d requests after close",
+			os.Getpid(), s.opts.ServiceName, remains)
+	}
 	log.Infof("process:%d, %s service:%s, closed", pid, s.opts.protocol, s.opts.ServiceName)
 	ch <- struct{}{}
 	return nil
 }
 
-func (s *service) waitBeforeClose() {
+func (s *service) waitBeforeClose() int64 {
 	closeWaitTime := s.opts.CloseWaitTime
 	if closeWaitTime > MaxCloseWaitTime {
 		closeWaitTime = MaxCloseWaitTime
@@ -562,18 +570,17 @@ func (s *service) waitBeforeClose() {
 			os.Getpid(), s.opts.ServiceName, atomic.LoadInt64(&s.activeCount), closeWaitTime)
 		time.Sleep(closeWaitTime)
 	}
+	return s.waitInactive(s.opts.MaxCloseWaitTime - closeWaitTime)
+}
+
+func (s *service) waitInactive(maxWaitTime time.Duration) int64 {
 	const sleepTime = 100 * time.Millisecond
-	if s.opts.MaxCloseWaitTime > closeWaitTime {
-		spinCount := int((s.opts.MaxCloseWaitTime - closeWaitTime) / sleepTime)
-		for i := 0; i < spinCount; i++ {
-			if atomic.LoadInt64(&s.activeCount) <= 0 {
-				break
-			}
-			time.Sleep(sleepTime)
+	for start := time.Now(); time.Since(start) < maxWaitTime; time.Sleep(sleepTime) {
+		if atomic.LoadInt64(&s.activeCount) <= 0 {
+			return 0
 		}
-		log.Infof("process %d service %s remain %d requests when closing service",
-			os.Getpid(), s.opts.ServiceName, atomic.LoadInt64(&s.activeCount))
 	}
+	return atomic.LoadInt64(&s.activeCount)
 }
 
 func checkProcessStatus() (isGracefulRestart, isParentalProcess bool) {

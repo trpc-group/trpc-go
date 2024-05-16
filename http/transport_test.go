@@ -809,6 +809,9 @@ func TestCheckRedirect(t *testing.T) {
 		return nil
 	}
 	thttp.DefaultClientTransport.(*thttp.ClientTransport).CheckRedirect = checkRedirect
+	defer func() {
+		thttp.DefaultClientTransport.(*thttp.ClientTransport).CheckRedirect = nil
+	}()
 	proxy := thttp.NewClientProxy("trpc.test.helloworld.Greeter",
 		client.WithTarget("ip://"+ln.Addr().String()),
 		client.WithSerializationType(codec.SerializationTypeNoop),
@@ -1405,6 +1408,7 @@ func TestHTTPSendAndReceiveSSE(t *testing.T) {
 			client.WithCurrentCompressType(codec.CompressTypeNoop),
 			client.WithReqHead(reqHeader),
 			client.WithRspHead(rspHead),
+			client.WithTimeout(time.Minute),
 		))
 	body := rspHead.Response.Body // Do stream reads directly from rspHead.Response.Body.
 	defer body.Close()            // Do remember to close the body.
@@ -1478,6 +1482,25 @@ func TestHTTPClientReqRspDifferentContentType(t *testing.T) {
 			client.WithSerializationType(codec.SerializationTypeForm),
 		))
 	require.Equal(t, hello+t.Name(), rsp.Message)
+}
+
+func TestHTTPGotConnectionRemoteAddr(t *testing.T) {
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		proxy := thttp.NewClientProxy(t.Name(), client.WithTarget("dns://new.qq.com/"))
+		rsp := &codec.Body{}
+		require.Nil(t, proxy.Get(ctx, "/", rsp,
+			client.WithSerializationType(codec.SerializationTypeNoop),
+			client.WithFilter(
+				func(ctx context.Context, req, rsp interface{}, next filter.ClientHandleFunc) error {
+					err := next(ctx, req, rsp)
+					msg := codec.Message(ctx)
+					addr := msg.RemoteAddr()
+					require.NotNil(t, addr, "expect to get remote addr from msg in connection reuse case")
+					t.Logf("addr = %+v\n", addr)
+					return err
+				})))
+	}
 }
 
 type h struct{}

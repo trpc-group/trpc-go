@@ -115,9 +115,6 @@ func (s *Server) StartNewProcess(args ...string) (uintptr, error) {
 		return 0, err
 	}
 
-	for _, f := range listenersFds {
-		f.OriginalListenCloser.Close()
-	}
 	return uintptr(childPID), nil
 }
 

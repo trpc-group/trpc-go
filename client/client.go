@@ -393,7 +393,7 @@ func selectorFilter(ctx context.Context, req interface{}, rsp interface{}, next 
 	if err != nil {
 		return OptionsFromContext(ctx).fixTimeout(err)
 	}
-	ensureMsgRemoteAddr(msg, findFirstNonEmpty(node.Network, opts.Network), node.Address)
+	ensureMsgRemoteAddr(msg, findFirstNonEmpty(node.Network, opts.Network), node.Address, node.ParseAddr)
 
 	// Start to process the next filter and report.
 	begin := time.Now()
@@ -471,11 +471,21 @@ func getNode(opts *Options) (*registry.Node, error) {
 	return node, nil
 }
 
-func ensureMsgRemoteAddr(msg codec.Msg, network string, address string) {
+func ensureMsgRemoteAddr(
+	msg codec.Msg,
+	network, address string,
+	parseAddr func(network, address string) net.Addr,
+) {
 	// If RemoteAddr has already been set, just return.
 	if msg.RemoteAddr() != nil {
 		return
 	}
+
+	if parseAddr != nil {
+		msg.WithRemoteAddr(parseAddr(network, address))
+		return
+	}
+
 	switch network {
 	case "tcp", "tcp4", "tcp6", "udp", "udp4", "udp6":
 		// Check if address can be parsed as an ip.
@@ -484,7 +494,6 @@ func ensureMsgRemoteAddr(msg codec.Msg, network string, address string) {
 			return
 		}
 	}
-
 	var addr net.Addr
 	switch network {
 	case "tcp", "tcp4", "tcp6":
