@@ -574,10 +574,10 @@ func TestOptionsConfig(t *testing.T) {
 
 func httpRequest(method string, url string, body string) ([]byte, error) {
 	request, err := http.NewRequest(method, url, strings.NewReader(body))
-	request.Header.Set("content-type", "application/x-www-form-urlencoded")
 	if err != nil {
 		return nil, err
 	}
+	request.Header.Set("content-type", "application/x-www-form-urlencoded")
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
