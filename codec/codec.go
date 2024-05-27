@@ -54,7 +54,7 @@ var (
 	lock         sync.RWMutex
 )
 
-// Register defines the logic of register an codec by name. It will be
+// Register defines the logic of register a codec by name. It will be
 // called by init function defined by third package. If there is no server codec,
 // the second param serverCodec can be nil.
 func Register(name string, serverCodec Codec, clientCodec Codec) {
