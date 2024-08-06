@@ -21,6 +21,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"reflect"
 	"strings"
@@ -599,72 +600,71 @@ func panicHandle(w http.ResponseWriter, r *http.Request) {
 	panic("panic error handle")
 }
 
-func TestUnregisterHandlers(t *testing.T) {
-	_ = newDefaultAdminServer()
-	mux, err := extractServeMuxData()
-	require.Nil(t, err)
-	require.Len(t, mux.m, 0)
-	require.Len(t, mux.es, 0)
-	require.False(t, mux.hosts)
+func Test_init(t *testing.T) {
+	t.Run("reset default serve mux to remove pprof registration at admin init func", func(t *testing.T) {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		require.Nil(t, err)
+		go func() {
+			if err := http.Serve(l, nil); err != nil {
+				t.Logf("http serving: %v", err)
+			}
+		}()
+		time.Sleep(200 * time.Millisecond)
 
-	http.HandleFunc("/usercmd", userCmd)
-	http.HandleFunc("/errout", errOutput)
-	http.HandleFunc("/panicHandle", panicHandle)
-	http.HandleFunc("www.qq.com/", userCmd)
-	http.HandleFunc("anything/", userCmd)
+		r, err := http.Get(fmt.Sprintf("http://%s/debug/pprof/", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusNotFound, r.StatusCode)
 
-	l := mustListenTCP(t)
-	go func() {
-		if err := http.Serve(l, nil); err != nil {
-			t.Log(err)
-		}
-	}()
-	time.Sleep(200 * time.Millisecond)
+		r, err = http.Get(fmt.Sprintf("http://%s/debug/pprof/cmdline", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusNotFound, r.StatusCode)
 
-	mux, err = extractServeMuxData()
-	require.Nil(t, err)
-	require.Equal(t, 5, len(mux.m))
-	require.Equal(t, 2, len(mux.es))
-	require.Equal(t, true, mux.hosts)
+		r, err = http.Get(fmt.Sprintf("http://%s/debug/pprof/profile", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusNotFound, r.StatusCode)
 
-	err = unregisterHandlers(
-		[]string{
-			"/usercmd",
-			"/errout",
-			"/panicHandle",
-			"www.qq.com/",
-			"anything/",
-		},
-	)
-	require.Nil(t, err)
+		r, err = http.Get(fmt.Sprintf("http://%s/debug/pprof/symbol", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusNotFound, r.StatusCode)
 
-	mux, err = extractServeMuxData()
-	require.Nil(t, err)
-	require.Len(t, mux.m, 0)
-	require.Len(t, mux.es, 0)
-	require.False(t, mux.hosts)
+		r, err = http.Get(fmt.Sprintf("http://%s/debug/pprof/trace", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusNotFound, r.StatusCode)
+	})
+	t.Run("register pprof handler explicitly after importing the admin package", func(t *testing.T) {
+		http.DefaultServeMux.HandleFunc("/debug/pprof/", pprof.Index)
+		http.DefaultServeMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		http.DefaultServeMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		http.DefaultServeMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		http.DefaultServeMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+		t.Cleanup(func() {
+			http.DefaultServeMux = http.NewServeMux()
+		})
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		require.Nil(t, err)
+		go func() {
+			if err := http.Serve(l, nil); err != nil {
+				t.Logf("http serving: %v", err)
+			}
+		}()
+		time.Sleep(200 * time.Millisecond)
 
-	resp1, err := http.Get(fmt.Sprintf("http://%v/usercmd", l.Addr()))
-	require.Nil(t, err)
-	defer resp1.Body.Close()
-	require.Equal(t, http.StatusNotFound, resp1.StatusCode)
+		r, err := http.Get(fmt.Sprintf("http://%s/debug/pprof/", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusOK, r.StatusCode)
 
-	http.HandleFunc("/usercmd", userCmd)
-	http.HandleFunc("/errout", errOutput)
-	http.HandleFunc("/panicHandle", panicHandle)
+		r, err = http.Get(fmt.Sprintf("http://%s/debug/pprof/cmdline", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusOK, r.StatusCode)
 
-	mux, err = extractServeMuxData()
-	require.Nil(t, err)
-	require.Len(t, mux.m, 3)
-	require.Len(t, mux.es, 0)
-	require.False(t, mux.hosts)
+		r, err = http.Get(fmt.Sprintf("http://%s/debug/pprof/symbol", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusOK, r.StatusCode)
 
-	resp2, err := http.Get(fmt.Sprintf("http://%v/usercmd", l.Addr()))
-	require.Nil(t, err)
-	defer resp2.Body.Close()
-	respBody, err := io.ReadAll(resp2.Body)
-	require.Nil(t, err)
-	require.Equal(t, []byte("usercmd"), respBody)
+		r, err = http.Get(fmt.Sprintf("http://%s/debug/pprof/trace", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusOK, r.StatusCode)
+	})
 }
 func mustListenTCP(t *testing.T) *net.TCPListener {
 	l, err := net.Listen("tcp", testAddress)
