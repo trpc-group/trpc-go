@@ -96,7 +96,6 @@ func TestRouter_ServeHTTP(t *testing.T) {
 		addr := mustListenAndServe(t, r)
 		resp, err := http.Get(fmt.Sprintf("http://%v%s", addr, "/index"))
 		require.Nil(t, err)
-		require.Nil(t, err)
 		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
 
