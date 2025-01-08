@@ -128,7 +128,7 @@ server:
       timeout: Integer
       # Optional, long connection idle time, in milliseconds
       idletime: Integer
-      # Optional, which regitration center to use such as polaris
+      # Optional, which registration center to use such as polaris
       registry: String
       # Optional, list of interceptors, lower priority than server.filter
       filter: [String]
