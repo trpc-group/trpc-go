@@ -1487,7 +1487,9 @@ func TestHTTPClientReqRspDifferentContentType(t *testing.T) {
 func TestHTTPGotConnectionRemoteAddr(t *testing.T) {
 	ctx := context.Background()
 	for i := 0; i < 3; i++ {
-		proxy := thttp.NewClientProxy(t.Name(), client.WithTarget("dns://new.qq.com/"))
+		proxy := thttp.NewClientProxy(t.Name(),
+			client.WithTarget("dns://new.qq.com/"),
+			client.WithTransport(&mockTransport{}))
 		rsp := &codec.Body{}
 		require.Nil(t, proxy.Get(ctx, "/", rsp,
 			client.WithSerializationType(codec.SerializationTypeNoop),
@@ -1550,4 +1552,19 @@ type errHeaderHandler struct{}
 
 func (*errHeaderHandler) Handle(ctx context.Context, reqBuf []byte) (rsp []byte, err error) {
 	return nil, thttp.ErrEncodeMissingHeader
+}
+
+type mockTransport struct{}
+
+func (t *mockTransport) RoundTrip(ctx context.Context, req []byte, opts ...transport.RoundTripOption) (rsp []byte, err error) {
+	msg := codec.Message(ctx)
+	msg.WithClientRspHead(&thttp.ClientRspHeader{
+		Response: &http.Response{},
+	})
+	raddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:8080")
+	if err != nil {
+		return nil, err
+	}
+	msg.WithRemoteAddr(raddr)
+	return []byte("mock transport"), nil
 }
