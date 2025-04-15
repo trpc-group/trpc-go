@@ -10,7 +10,7 @@ In tRPC-Go, the `register` package defines the registration specification of the
 
 Let's first look at the design of the `naming`:
 
-![naming design](/.resources/naming/naming.png)
+![naming design](/.resources_without_git_lfs/naming/naming.png)
 
 Based on the above diagram, let's briefly introduce the approximate design and implementation.
 

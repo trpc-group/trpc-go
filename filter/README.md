@@ -15,7 +15,7 @@ Understanding the principles of filters is crucial, focusing on the `trigger tim
 
 **Sequencing**: As shown in the diagram below, filters follow a clear sequence. They execute the pre-processing logic in the order of filter registration and then execute the post-processing logic in reverse order.
 
-![The Order of Filters](/.resources/filter/filter.png)
+![The Order of Filters](/.resources_without_git_lfs/filter/filter.png)
 
 ## Examples
 

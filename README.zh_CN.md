@@ -17,7 +17,7 @@ tRPC-Go，是 [tRPC][] 的 [Go][] 语言实现，它是一个可插拔的高性�
 
 ## 整体架构
 
-![架构图](.resources/overall_zh_CN.png)
+![架构图](.resources_without_git_lfs/overall_zh_CN.png)
 
 tRPC-Go 具有以下特点：
 

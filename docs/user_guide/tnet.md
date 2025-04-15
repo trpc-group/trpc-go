@@ -15,7 +15,7 @@ We use two diagrams to illustrate the basic principles of the `Goroutine-per-Con
 
 ### Goroutine-per-Connection
 
-![goroutine_per_connection](/.resources/user_guide/tnet/goroutine_per_connection.png)
+![goroutine_per_connection](/.resources_without_git_lfs/user_guide/tnet/goroutine_per_connection.png)
 
 In the Goroutine-per-Connection model, when the server accepts a new connection, it creates a goroutine for that connection, and then reads data from the connection, processes the data, and sends data back to the connection in that goroutine.
 
@@ -25,7 +25,7 @@ For example, as shown in the above diagram, the server accepts 5 connections and
 
 ### Reactor
 
-![reactor](/.resources/user_guide/tnet/reactor.png)
+![reactor](/.resources_without_git_lfs/user_guide/tnet/reactor.png)
 
 The Reactor model refers to using multiplexing (epoll/kqueue) to listen for events such as read and write on file descriptors (FDs), and then performing corresponding operations when events are triggered.
 

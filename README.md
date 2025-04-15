@@ -17,7 +17,7 @@ For more information, please refer to the [quick start guide][quick start] and [
 
 ## Overall Architecture
 
-![Architecture](.resources/overall.png)
+![Architecture](.resources_without_git_lfs/overall.png)
 
 tRPC-Go has the following features:
 
