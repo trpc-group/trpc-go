@@ -23,7 +23,7 @@ Drawbacks:
 
 # Principle
 
-![flatbuffers](/.resources_without_git_lfs/user_guide/server/flatbuffers/flatbuffers.png)
+![flatbuffers](/.resources-without-git-lfs/user_guide/server/flatbuffers/flatbuffers.png)
 
 # Example
 Firstly, install the latest version of the [trpc-cmdline](https://github.com/trpc-group/trpc-cmdline) tool.
@@ -189,7 +189,7 @@ req.Message() // Access the message field in req.
 ```
 
 # 性能对比
-![performanceComparison](/.resources_without_git_lfs/user_guide/server/flatbuffers/performanceComparison.png)
+![performanceComparison](/.resources-without-git-lfs/user_guide/server/flatbuffers/performanceComparison.png)
 The load testing environment consisted of two machines with 8 cores, 2.5 GHz CPU, and 16 GB memory.
 - We implemented a client-side loop packet tool that can send packages serialized with either Protobuf or Flatbuffers.
 - We fixed the number of goroutines at 500 and tested for 50 seconds each time.
@@ -199,13 +199,13 @@ The load testing environment consisted of two machines with 8 cores, 2.5 GHz CPU
 - From this table, it can be seen that when there are no map fields, flatbuffers' performance is better than protobuf when the total number of fields increases.
 - The reason flatbuffers' performance is worse when there are fewer fields is that the initial builder in flatbuffers initializes the byte slice size uniformly to 1024, so even with fewer fields, this large space still needs to be allocated (protobuf does not do this), resulting in worse performance. This can be alleviated by adjusting the initial byte slice size beforehand, but this would add some burden to business. Therefore, a uniform initial size of 1024 was set during load testing.
 
-![performanceComparison2](/.resources_without_git_lfs/user_guide/server/flatbuffers/performanceComparison2.png)
+![performanceComparison2](/.resources-without-git-lfs/user_guide/server/flatbuffers/performanceComparison2.png)
 
 - Protobuf has poor performance in map serialization and deserialization, as seen in the graph.
 - Since flatbuffers does not have a map type, it uses a vector of key-value pairs as a replacement, with the key-value types consistent with the key-value types in protobuf's map.
 - As can be seen, when the number of fields increases, flatbuffers' performance improves more significantly.
 
-![performanceComparison3](/.resources_without_git_lfs/user_guide/server/flatbuffers/performanceComparison3.png)
+![performanceComparison3](/.resources-without-git-lfs/user_guide/server/flatbuffers/performanceComparison3.png)
 
 - From the graph, it can be seen that when the total number of fields is high, flatbuffers' performance is better than protobuf, especially when a map is present.
 - The horizontal axis is the number of fields without map. For the line with map, each point corresponds to a larger horizontal axis value.

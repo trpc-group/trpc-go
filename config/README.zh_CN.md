@@ -34,7 +34,7 @@
 # 实现原理
 为了更好的了解配置接口的使用，以及如何和数据源做对接，我们简单看看配置接口模块是如何实现的。下面这张图是配置模块实现的示意图（非代码实现类图）：
 
-![trpc](/.resources_without_git_lfs/user_guide/business_configuration/trpc_cn.png)
+![trpc](/.resources-without-git-lfs/user_guide/business_configuration/trpc_cn.png)
 
 图中的 config 接口为业务代码提供了获取配置项的标准接口，每种数据类型都有一个独立的接口，接口支持返回 default 值。
 

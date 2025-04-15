@@ -10,7 +10,7 @@ tRPC 框架使用 PB 定义服务，但是服务提供基于 HTTP 协议的 REST
 
 和 tRPC-Go 框架其他协议插件不同的是，RESTful 协议插件在 Transport 层就基于 tRPC HttpRule 实现了一个 tRPC 和 HTTP/JSON 的转码器，这样就不再需要走 Codec 编解码的流程，转码完成得到 PB 后直接到 trpc 工具为其专门生成的 REST Stub 中进行处理：
 
-![restful-overall-design](/.resources_without_git_lfs/user_guide/server/restful/restful-overall-design_zh_CN.png)
+![restful-overall-design](/.resources-without-git-lfs/user_guide/server/restful/restful-overall-design_zh_CN.png)
 
 ## 转码器核心：HttpRule
 

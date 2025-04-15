@@ -14,7 +14,7 @@ Timeouts are divided into three configurations to provide finer-grained control 
 
 - `Calling Timeout`: This is the maximum timeout for each RPC request when calling downstream services. For example, in the diagram, when B calls C, it sets a `Calling Timeout`. Typically, a server may involves multiple consecutive RPC calls, as shown when B calls C and then sequentially calls D and E. The `Calling Timeout` controls the timeout for each individual RPC call.
 
-![ 'timeout_control.png'](/.resources_without_git_lfs/user_guide/timeout_control/timeout_control.png)
+![ 'timeout_control.png'](/.resources-without-git-lfs/user_guide/timeout_control/timeout_control.png)
 
 When making an RPC call, framework will calculate the actual timeout for that specific call. The actual timeout is the minimum of the three timeout configurations mentioned above. The calculation process is as follows:
 

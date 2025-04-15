@@ -12,7 +12,7 @@
 - `消息超时`：当前服务配置的从收到请求消息到返回响应数据的最长消息处理时间，这是当前服务控制自身不浪费资源的手段，如下图的 B 内部的`消息超时`。
 - `调用超时`：当前服务调用下游服务设置的每一个 RPC 请求的超时时间，如下图的 B 调用 C 的`超时时间`。通常一个服务会连续调用多次 rpc，如下图 B 调完 C，继续串行调用 D 和 E，这个调用超时控制的是每个 RPC 的独立超时时间。
 
-![ 'timeout_control.png'](/.resources_without_git_lfs/user_guide/timeout_control/timeout_control_cn.png)
+![ 'timeout_control.png'](/.resources-without-git-lfs/user_guide/timeout_control/timeout_control_cn.png)
 
 发起 RPC 调用请求时，框架会计算此次 RPC 调用实际超时时间。实际超时时间是通过以上三个超时配置实时计算的最小值，计算过程如下：
 

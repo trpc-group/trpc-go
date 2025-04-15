@@ -40,7 +40,7 @@ In business configuration, Codec refers to the format of configurations retrieve
 # Implementation Principle
 To better understand the use of configuration interfaces and how to dock with data sources, let's take a brief look at how the configuration interface module is implemented. The following diagram is a schematic diagram of the configuration module implementation (not a code implementation class diagram):
 
-![trpc](/.resources_without_git_lfs/user_guide/business_configuration/trpc_en.png)
+![trpc](/.resources-without-git-lfs/user_guide/business_configuration/trpc_en.png)
 
 The config interface in the diagram provides a standard interface for business code to retrieve configuration items, and each data type has an independent interface that supports returning default values.
 

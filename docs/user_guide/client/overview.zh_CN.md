@@ -40,7 +40,7 @@ tRPC-Go 提供了对常见消息队列的生产者操作做了封装，通过以
 
 接下来让我们来看看一次完整的服务调用流程是怎么样的。下面这张图展示了客户端从发生服务调用请求到收到服务响应的全过程，图中第一行从左往右代表服务请求的流程。第二行从右往左的方向，代表客户端处理服务响应报文的流程。
 
-![call_flow](/.resources_without_git_lfs/user_guide/client/overview/call_flow_zh_CN.png)
+![call_flow](/.resources-without-git-lfs/user_guide/client/overview/call_flow_zh_CN.png)
 
 框架为每个服务都提供了一个服务调用代理 (又称为 "ClientProxy"), 它封装了服务调用的接口函数（“桩函数”），包括接口的入参，出参和错误返回码。从用户使用上来讲，桩函数的调用和本地函数的调用是一样的。
 
@@ -471,7 +471,7 @@ func main() {
 
 服务寻址包括服务发现、负载均衡、服务路由、熔断器等部分，服务发现的流程可以简化为：
 
-![server_discovery](/.resources_without_git_lfs/user_guide/client/overview/server_discovery_zh_CN.png)
+![server_discovery](/.resources-without-git-lfs/user_guide/client/overview/server_discovery_zh_CN.png)
 
 框架通过“selector”来组合这四个模块，并提供了两种插件方式来实现服务寻址：
 

@@ -37,7 +37,7 @@ Although the interfaces for calling each protocol are different, the framework a
 
 Next, let's take a look at what a complete service call process looks like. The following figure shows the entire process from when the client initiates a service call request to when it receives a service response. The first row from left to right represents the process of the service request. The second row from right to left represents the process of the client processing the service response message.
 
-![call_flow](/.resources_without_git_lfs/user_guide/client/overview/call_flow.png)
+![call_flow](/.resources-without-git-lfs/user_guide/client/overview/call_flow.png)
 
 The framework provides a service call proxy (also known as "ClientProxy") for each service, which encapsulates the interface functions ("stub functions") of the service call, including the input parameters, output parameters, and error return codes of the interface. From the user's perspective, calling the stub function is the same as calling a local function.
 
@@ -469,7 +469,7 @@ Specifies domain name addressing, which is commonly used for HTTP requests, such
 
 Service addressing includes service discovery, load balancing, service routing, circuit breakers, and other parts. The service discovery process can be simplified as follows:
 
-![server_discovery](/.resources_without_git_lfs/user_guide/client/overview/server_discovery.png)
+![server_discovery](/.resources-without-git-lfs/user_guide/client/overview/server_discovery.png)
 
 The framework combines these four modules through the "selector" and provides two plugin methods to implement service addressing:
 
