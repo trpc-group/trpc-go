@@ -10,7 +10,7 @@
 
 先来看下naming的整体设计：
 
-![naming design](/.resources/naming/naming.png)
+![naming design](/.resources-without-git-lfs/naming/naming.png)
 
 结合上图，我们来简单介绍下大致的设计、实现。
 

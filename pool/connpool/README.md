@@ -21,7 +21,7 @@ To achieve the above purposes, the connection pool needs to have the following f
 
 Its overall code structure is shown in the figure below
 
-![design implementation](/.resources/pool/connpool/design_implementation.png)
+![design implementation](/.resources-without-git-lfs/pool/connpool/design_implementation.png)
 
 ### Initialize the Connection Pool
 
@@ -175,7 +175,7 @@ The ConnectionPool periodically performs the following checks:
 
 If there is a read/write error during connection usage by the user, the connection will be closed directly. If the check for connection availability fails, the connection will also be closed directly.
 
-![connection life cycle](/.resources/pool/connpool/life_cycle.png)
+![connection life cycle](/.resources-without-git-lfs/pool/connpool/life_cycle.png)
 
 ## Idle Connection Management Policy
 

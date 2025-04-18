@@ -13,7 +13,7 @@ Golang 的 Net 库提供了简单的非阻塞调用接口，网络模型采用`�
 
 ### 一个连接一个协程
 
-![goroutine_per_connection](/.resources/user_guide/tnet/goroutine_per_connection_zh_CN.png)
+![goroutine_per_connection](/.resources-without-git-lfs/user_guide/tnet/goroutine_per_connection_zh_CN.png)
 
 一个连接一个协程的模式下，服务端 Accept 一个新的连接，就为该连接起一个协程，然后在这个协程中从连接读数据、处理数据、向连接发数据。
 
@@ -23,7 +23,7 @@ Golang 的 Net 库提供了简单的非阻塞调用接口，网络模型采用`�
 
 ### 事件驱动
 
-![reactor](/.resources/user_guide/tnet/reactor.png)
+![reactor](/.resources-without-git-lfs/user_guide/tnet/reactor.png)
 
 事件驱动模式是指利用多路复用（epoll / kqueue）监听 FD 的可读、可写等事件，当有事件触发的时候做相应的处理。
 

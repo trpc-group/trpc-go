@@ -22,7 +22,7 @@
 
 # 原理
 
-![flatbuffers](/.resources/user_guide/server/flatbuffers/flatbuffers_zh_CN.png)
+![flatbuffers](/.resources-without-git-lfs/user_guide/server/flatbuffers/flatbuffers_zh_CN.png)
 
 # 示例
 首先安装最新版本 [trpc-cmdline](https://github.com/trpc-group/trpc-cmdline) 工具
@@ -190,7 +190,7 @@ req.Message() // 访问 req 中的 message 字段
 ```
 
 # 性能对比
-![performanceComparison](/.resources/user_guide/server/flatbuffers/performanceComparison_zh_CN.png)
+![performanceComparison](/.resources-without-git-lfs/user_guide/server/flatbuffers/performanceComparison_zh_CN.png)
 压测环境是：两台 8 核，CPU 2.5G，Memory 16G 的机器
 - 实现客户端循环发包工具，可发用 protobuf 进行序列化的包，也可发用 flatbuffers 进行序列化的包
 - 固定起 goroutine 的数量是 500，每次压测时间 50s
@@ -200,13 +200,13 @@ req.Message() // 访问 req 中的 message 字段
 - 从这个表中可以看出，当没有 map 字段时，当总字段数量变多时，flatbuffers 的性能会优于 protobuf
 - 在字段数较少时之所以 flatbuffers 的性能会差是因为 flatbuffers 初始 builder 里 byte slice 大小统一初始化为 1024，因此当字段数较少时仍然需要分配这么大的空间，造成浪费（protobuf 不会这样），因此性能比 protobuf 差，这一点可以通过预先调节初始 byte slice 大小来缓解，但这对业务来说有一定的负担，因此在压测时统一设置初始大小为 1024
 
-![performanceComparison2](/.resources/user_guide/server/flatbuffers/performanceComparison2_zh_CN.png)
+![performanceComparison2](/.resources-without-git-lfs/user_guide/server/flatbuffers/performanceComparison2_zh_CN.png)
 
 - Protobuf 的 map 序列化反序列化性能很差，从图中可见一般
 - 由于 flatbuffers 中没有 map 类型，使用的是 vector of key value pair 的形式进行替代，key value 的类型保持和 protobuf 中 map 的 key value 类型一致
 - 可以看到当字段数量变多时，flatbuffers 的性能提升更加明显
 
-![performanceComparison3](/.resources/user_guide/server/flatbuffers/performanceComparison3_zh_CN.png)
+![performanceComparison3](/.resources-without-git-lfs/user_guide/server/flatbuffers/performanceComparison3_zh_CN.png)
 
 - 从图中可见总字段数较多时，flatbuffers 性能都会好于 protobuf，尤其是在 map 存在的情况下
 - 横坐标选取的是不含 map 时的字段数量，对于 with map 这条线来说，它每个点对应的横坐标要再大一点
