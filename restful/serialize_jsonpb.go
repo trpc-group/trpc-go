@@ -91,7 +91,7 @@ var typeOfProtoMessage = reflect.TypeOf((*proto.Message)(nil)).Elem()
 // marshalNonProtoField marshals none proto fields.
 // Go's standard json lib or github.com/json-iterator/go doesn't support marshaling
 // of some types of protobuf message, therefore reflection is needed to support it.
-// TODO: performance optimization.
+// TODO: performance optimization for marshalNonProtoField to reduce reflection usage.
 func marshalNonProtoField(v interface{}) ([]byte, error) {
 	if v == nil {
 		return []byte("null"), nil
