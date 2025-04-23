@@ -1,0 +1,51 @@
+{
+    "rules": {
+        "59f88967-3be3-4719-970a-179338b8aa4b": {
+            "name": "Efficient Message Management Practices  \n",
+            "rule": {
+                "type": "regex",
+                "regex": "\\bmessage\\s*:=\\s*new\\s*messageType\\b",
+                "ignoreCase": true
+            },
+            "actions": {
+                "ide": {
+                    "doc_id": "dpcjt7yw",
+                    "message": "When a dev is implementing message handling, I want them to find this document because of the efficient management techniques using `sync.Pool`."
+                }
+            }
+        },
+        "139ceae7-e701-45fb-893c-9d8a2f1a9ccc": {
+            "name": "Understanding the Msg Interface  \n",
+            "rule": {
+                "type": "regex",
+                "regex": "Msg\\\\s*\\\\(\\\\s*[^)]+\\\\s*\\\\)",
+                "ignoreCase": true
+            },
+            "actions": {
+                "ide": {
+                    "doc_id": "dpcjt7yw",
+                    "message": "When a dev is designing message operations, I want them to find this document because of the detailed explanation of the `Msg` interface."
+                }
+            }
+        },
+        "b22df546-b38d-4162-8672-f82a4d7c188c": {
+            "name": "Duplicating Messages with CopyMsg  \n",
+            "rule": {
+                "type": "regex",
+                "regex": "CopyMsg\\\\s*\\\\(.*?\\\\)",
+                "ignoreCase": true
+            },
+            "actions": {
+                "ide": {
+                    "doc_id": "dpcjt7yw",
+                    "message": "When a dev is working on message duplication, I want them to find this document because of the specific implementation of the `CopyMsg` function."
+                }
+            }
+        }
+    },
+    "view_order": [
+        "59f88967-3be3-4719-970a-179338b8aa4b",
+        "139ceae7-e701-45fb-893c-9d8a2f1a9ccc",
+        "b22df546-b38d-4162-8672-f82a4d7c188c"
+    ]
+}
