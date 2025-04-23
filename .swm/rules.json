@@ -41,11 +41,41 @@
                     "message": "When a dev is working on message duplication, I want them to find this document because of the specific implementation of the `CopyMsg` function."
                 }
             }
+        },
+        "211a0b28-9cba-490a-90bd-ea4e6edca6fe": {
+            "name": "Invoking Backend Calls Guide  \n",
+            "rule": {
+                "type": "regex",
+                "regex": "\\bbackend\\s*=\\s*Invoke\\(",
+                "ignoreCase": true
+            },
+            "actions": {
+                "ide": {
+                    "doc_id": "w5y5gd9e",
+                    "message": "When a dev is invoking backend calls, I want them to find this document because of its detailed explanation of the Invoke method and its usage."
+                }
+            }
+        },
+        "97fec84b-3d28-4d3d-b57e-f757f3f930de": {
+            "name": "Backend Service Configuration Insights  \n",
+            "rule": {
+                "type": "regex",
+                "regex": "BackendConfig\\\\s*\\\\(.*?\\\\)",
+                "ignoreCase": true
+            },
+            "actions": {
+                "ide": {
+                    "doc_id": "w5y5gd9e",
+                    "message": "When a dev is configuring backend services, I want them to find this document because of its coverage on BackendConfig and related design decisions."
+                }
+            }
         }
     },
     "view_order": [
         "59f88967-3be3-4719-970a-179338b8aa4b",
         "139ceae7-e701-45fb-893c-9d8a2f1a9ccc",
-        "b22df546-b38d-4162-8672-f82a4d7c188c"
+        "b22df546-b38d-4162-8672-f82a4d7c188c",
+        "211a0b28-9cba-490a-90bd-ea4e6edca6fe",
+        "97fec84b-3d28-4d3d-b57e-f757f3f930de"
     ]
 }
