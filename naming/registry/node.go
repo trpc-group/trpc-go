@@ -21,16 +21,26 @@ import (
 
 // Node is the information of a node.
 type Node struct {
-	ServiceName   string        // 服务名
-	ContainerName string        // 容器名
-	Address       string        // 目标地址 ip:port
-	Network       string        // 网络层协议 tcp/udp
-	Protocol      string        // 业务协议 trpc/http
-	SetName       string        // 节点 Set 名
-	Weight        int           // 权重
-	CostTime      time.Duration // 当次请求耗时
-	EnvKey        string        // 透传的环境信息
-	Metadata      map[string]interface{}
+	// ServiceName is the service name of the node.
+	ServiceName string
+	// ContainerName is the container name of the node.
+	ContainerName string
+	// Address is the target address ip:port.
+	Address string
+	// Network is the network layer protocol, such as tcp or udp.
+	Network string
+	// Protocol is the business protocol, such as trpc or http.
+	Protocol string
+	// SetName is the set name of the node.
+	SetName string
+	// Weight is the weight of the node.
+	Weight int
+	// CostTime is the request duration of the node.
+	CostTime time.Duration
+	// EnvKey is the environment information for passthrough.
+	EnvKey string
+	// Metadata is the metadata of the node.
+	Metadata map[string]interface{}
 	// ParseAddr should be used to convert Node to net.Addr if it's not nil.
 	// See test case TestSelectorRemoteAddrUseUserProvidedParser in client package.
 	ParseAddr func(network, address string) net.Addr
@@ -38,5 +48,5 @@ type Node struct {
 
 // String returns an abbreviation information of node.
 func (n *Node) String() string {
-	return fmt.Sprintf("service:%s, addr:%s, cost:%s", n.ServiceName, n.Address, n.CostTime)
+	return fmt.Sprintf("service: %s, addr: %s, cost: %s", n.ServiceName, n.Address, n.CostTime)
 }

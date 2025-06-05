@@ -15,11 +15,10 @@
 package main
 
 import (
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/log"
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 func main() {
@@ -30,7 +29,7 @@ func main() {
 
 	// Call SayHello.
 	// Client obtain server metadata by setting a response head of each protocol.
-	helloHead := &trpcpb.ResponseProtocol{}
+	helloHead := &trpc.ResponseProtocol{}
 	sayHelloOpts := []client.Option{
 		client.WithMetaData("key1", []byte("val1")),
 		client.WithMetaData("key2", []byte("val2")),
@@ -45,7 +44,7 @@ func main() {
 	log.Debugf("say hello trans info: key: say-hello-server, val: %s", string(helloHead.TransInfo["say-hello-server"]))
 
 	// Call SayHi.
-	hiHead := &trpcpb.ResponseProtocol{}
+	hiHead := &trpc.ResponseProtocol{}
 	sayHiOpts := []client.Option{
 		client.WithMetaData("key1", []byte("val1")),
 		client.WithMetaData("key2", []byte("val2")),

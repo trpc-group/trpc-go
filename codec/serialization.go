@@ -15,6 +15,8 @@ package codec
 
 import (
 	"errors"
+
+	"github.com/spf13/cast"
 )
 
 // Serializer defines body serialization interface.
@@ -27,7 +29,7 @@ type Serializer interface {
 }
 
 // SerializationType defines the code of different serializers, such as
-// protobuf, json, http-get-query and http-get-restful.
+// protobuf, jce, json, http-get-query and http-get-restful.
 //
 //   - code 0-127 is used for common modes in all language versions of trpc.
 //   - code 128-999 is used for modes in any language specific version of trpc.
@@ -36,8 +38,8 @@ type Serializer interface {
 const (
 	// SerializationTypePB is protobuf serialization code.
 	SerializationTypePB = 0
-	// 1 is reserved by Tencent for internal usage.
-	_ = 1
+	// SerializationTypeJCE is jce serialization code.
+	SerializationTypeJCE = 1
 	// SerializationTypeJSON is json serialization code.
 	SerializationTypeJSON = 2
 	// SerializationTypeFlatBuffer is flatbuffer serialization code.
@@ -46,8 +48,12 @@ const (
 	SerializationTypeNoop = 4
 	// SerializationTypeXML is xml serialization code (application/xml for http).
 	SerializationTypeXML = 5
+	// SerializationTypeThriftBinary is thrift binary protocol serialization code.
+	SerializationTypeThriftBinary = 6
+	// SerializationTypeThriftCompact is thrift compact protocol serialization code.
+	SerializationTypeThriftCompact = 7
 	// SerializationTypeTextXML is xml serialization code (text/xml for http).
-	SerializationTypeTextXML = 6
+	SerializationTypeTextXML = 8
 
 	// SerializationTypeUnsupported is unsupported serialization code.
 	SerializationTypeUnsupported = 128
@@ -56,20 +62,51 @@ const (
 	// SerializationTypeGet is used to handle http get request.
 	SerializationTypeGet = 130
 	// SerializationTypeFormData is used to handle form data.
-	SerializationTypeFormData = 131
+	SerializationTypeFormData          = 131
+	maxIndexForSerializationFastAccess = 255
 )
 
-var serializers = make(map[int]Serializer)
+var (
+	primarySerializers  [maxIndexForSerializationFastAccess + 1]Serializer
+	fallbackSerializers = make(map[int]Serializer)
+)
 
 // RegisterSerializer registers serializer, will be called by init function
 // in third package.
 func RegisterSerializer(serializationType int, s Serializer) {
-	serializers[serializationType] = s
+	if serializationType >= 0 && serializationType <= maxIndexForSerializationFastAccess {
+		primarySerializers[serializationType] = s
+		return
+	}
+	fallbackSerializers[serializationType] = s
+}
+
+// MustRegisterSerializer registers serializer, will panic if the serializer
+// has been registered.
+//
+// In most cases, the framework uses the init + RegisterSerializer method for registration. However, due to
+// the unpredictable execution order of init functions, some unknown situations may arise. For example:
+//
+// If your code uses init + MustRegisterSerializer to forcibly register a component 'xxx', while the framework
+// uses init + RegisterSerializer to register another component 'yyy', conflicts may occur. If the init function
+// for MustRegisterSerializer is executed before the conflicting init function, MustRegisterSerializer might not raise
+// an error or panic as expected.
+//
+// Therefore, it's important to be cautious when using MustRegisterSerializer and to carefully consider any
+// potential conflicts or unintended consequences that may arise from its use.
+func MustRegisterSerializer(serializationType int, s Serializer) {
+	if GetSerializer(serializationType) != nil {
+		panic("serializer already registered for type: " + cast.ToString(serializationType))
+	}
+	RegisterSerializer(serializationType, s)
 }
 
 // GetSerializer returns the serializer defined by serialization code.
 func GetSerializer(serializationType int) Serializer {
-	return serializers[serializationType]
+	if serializationType >= 0 && serializationType <= maxIndexForSerializationFastAccess {
+		return primarySerializers[serializationType]
+	}
+	return fallbackSerializers[serializationType]
 }
 
 // Unmarshal deserializes the in bytes into body. The specific serialization

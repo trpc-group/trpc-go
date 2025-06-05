@@ -14,52 +14,67 @@
 package log_test
 
 import (
+	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"trpc.group/trpc-go/trpc-go/log"
 )
 
-func TestWriterFactory(t *testing.T) {
-	f1 := &log.ConsoleWriterFactory{}
-	assert.Equal(t, "log", f1.Type())
-
-	// empty decoder
-	err := f1.Setup("default", nil)
-	assert.NotNil(t, err)
-
-	f2 := &log.FileWriterFactory{}
-	assert.Equal(t, "log", f2.Type())
-	// empty decoder
-	err = f2.Setup("default", nil)
-	assert.NotNil(t, err)
-
-	f3 := &log.ConsoleWriterFactory{}
-	assert.Equal(t, "log", f3.Type())
-	err = f3.Setup("default", &fakeDecoder{})
-	assert.NotNil(t, err)
-
-	f4 := &log.FileWriterFactory{}
-	assert.Equal(t, "log", f4.Type())
-	err = f4.Setup("default", &fakeDecoder{})
-	assert.NotNil(t, err)
-}
-
-func TestFileWriterFactory_Setup(t *testing.T) {
-	var fileCfg = []log.OutputConfig{
+func ExampleRegisterCoreLevelNewer() {
+	const name = "coreLevelNewer"
+	log.RegisterCoreLevelNewer(name, &coreLevelNewer{})
+	c := []log.OutputConfig{
 		{
-			Writer: "file",
-			WriteConfig: log.WriteConfig{
-				Filename:   "trpc_time.log",
-				MaxAge:     7,
-				MaxBackups: 10,
-				MaxSize:    100,
-				TimeUnit:   log.Day,
-				LogPath:    "log",
+			Writer: name,
+			Level:  "warn",
+			FormatConfig: log.FormatConfig{
+				MessageKey: "M",
 			},
 		},
 	}
-	logger := log.NewZapLog(fileCfg)
-	assert.NotNil(t, logger)
+	l := log.NewZapLog(c)
+
+	l.Debug("debug")
+	l.Info("info")
+	l.Warn("warn")
+	l.Error("error")
+
+	// Output:
+	// warn
+	// error
+}
+
+type coreLevelNewer struct{}
+
+func (cw *coreLevelNewer) NewCoreLevel(config log.OutputConfig) (zapcore.Core, zap.AtomicLevel, error) {
+	level := zap.NewAtomicLevelAt(log.Levels[config.Level])
+	return zapcore.NewCore(
+		zapcore.NewConsoleEncoder(zapcore.EncoderConfig{
+			TimeKey:        config.FormatConfig.TimeKey,
+			LevelKey:       config.FormatConfig.LevelKey,
+			NameKey:        config.FormatConfig.NameKey,
+			CallerKey:      config.FormatConfig.CallerKey,
+			FunctionKey:    config.FormatConfig.FunctionKey,
+			MessageKey:     config.FormatConfig.MessageKey,
+			StacktraceKey:  config.FormatConfig.StacktraceKey,
+			LineEnding:     zapcore.DefaultLineEnding,
+			EncodeLevel:    zapcore.CapitalLevelEncoder,
+			EncodeTime:     zapcore.ISO8601TimeEncoder,
+			EncodeDuration: zapcore.StringDurationEncoder,
+			EncodeCaller:   zapcore.ShortCallerEncoder,
+		}),
+		zapcore.Lock(os.Stdout),
+		&level), level, nil
+}
+
+func TestGetWriter(t *testing.T) {
+	require.Nil(t, log.GetWriter(t.Name()))
+
+	f := &log.ConsoleWriterFactory{}
+	log.RegisterWriter(t.Name(), f)
+	require.Equal(t, f, log.GetWriter(t.Name()))
 }

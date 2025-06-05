@@ -17,12 +17,12 @@ package main
 import (
 	"flag"
 
+	"trpc.group/trpc-go/trpc-go"
 	_ "trpc.group/trpc-go/trpc-go"
-	trpc "trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/log"
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 var compressTypeId = flag.String("type", "gzip", "Input Compress Type")

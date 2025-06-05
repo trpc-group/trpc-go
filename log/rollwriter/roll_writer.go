@@ -29,6 +29,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -36,6 +37,8 @@ import (
 	"time"
 
 	"github.com/lestrrat-go/strftime"
+
+	"trpc.group/trpc-go/trpc-go/log/internal/timeunit"
 )
 
 const (
@@ -43,7 +46,7 @@ const (
 	compressSuffix   = ".gz"
 )
 
-// Ensure we always implement io.WriteCloser.
+// ensure we always implement io.WriteCloser.
 var _ io.WriteCloser = (*RollWriter)(nil)
 
 // RollWriter is a file log writer which support rolling by size or datetime.
@@ -52,12 +55,14 @@ type RollWriter struct {
 	filePath string
 	opts     *Options
 
-	pattern  *strftime.Strftime
-	currDir  string
-	currPath string
-	currSize int64
-	currFile atomic.Value
-	openTime int64
+	pattern       *strftime.Strftime
+	currDir       string
+	currPath      string
+	currSize      int64
+	currFile      atomic.Value
+	openTime      int64
+	closed        uint32
+	filenameRegex *regexp.Regexp
 
 	mu         sync.Mutex
 	notifyOnce sync.Once
@@ -71,10 +76,10 @@ type RollWriter struct {
 // NewRollWriter creates a new RollWriter.
 func NewRollWriter(filePath string, opt ...Option) (*RollWriter, error) {
 	opts := &Options{
-		MaxSize:    0,     // Default no rolling by file size.
-		MaxAge:     0,     // Default no scavenging on expired logs.
-		MaxBackups: 0,     // Default no scavenging on redundant logs.
-		Compress:   false, // Default no compressing.
+		MaxSize:    0,     // default no rolling by file size
+		MaxAge:     0,     // default no scavenging on expired logs
+		MaxBackups: 0,     // default no scavenging on redundant logs
+		Compress:   false, // default no compressing
 	}
 
 	// opt has the highest priority and should overwrite the original one.
@@ -83,23 +88,48 @@ func NewRollWriter(filePath string, opt ...Option) (*RollWriter, error) {
 	}
 
 	if filePath == "" {
-		return nil, errors.New("invalid file path")
+		return nil, errors.New("empty file path is invalid")
 	}
 
-	pattern, err := strftime.New(filePath + opts.TimeFormat)
+	logFilePath := filePath
+
+	hasTimeFormatTag := timeunit.ContainsTimeFormatTag(logFilePath)
+	// Validate the filename and roll type configuration. timeFormat must not be empty when roll_type is set to time.
+	if hasTimeFormatTag && opts.TimeFormat == "" {
+		// If the filename contains a time format tag without using time-based rolling, return an error.
+		return nil, fmt.Errorf("invalid filename '%s': cannot use time format tag without RollByTime", logFilePath)
+	}
+
+	// If a time format is specified, append the time format tag to the log file name.
+	// default filename trpc.log.%Y%m%d%H%M, so set logFilePath to "trpc.log.{time_format}"
+	if !hasTimeFormatTag && opts.TimeFormat != "" {
+		logFilePath = filePath + "." + timeunit.TimeFormatTag
+	}
+
+	// Generate a regex pattern to match filenames based on the updated file path and specified time format.
+	filenameRegex, err := timeunit.GenerateTimeFormatRegex(filepath.Base(logFilePath), opts.TimeFormat)
 	if err != nil {
-		return nil, errors.New("invalid time pattern")
+		return nil, err
+	}
+
+	// Update the file name with the specified time format.
+	updatedFilePath := timeunit.UpdateFileNameWithTimeFormat(logFilePath, opts.TimeFormat)
+
+	pattern, err := strftime.New(updatedFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("creating Strftime object: %w, invalid time pattern: %s", err, logFilePath)
 	}
 
 	w := &RollWriter{
-		filePath: filePath,
-		opts:     opts,
-		pattern:  pattern,
-		currDir:  filepath.Dir(filePath),
-		os:       defaultCustomizedOS,
+		filePath:      filePath,
+		opts:          opts,
+		pattern:       pattern,
+		currDir:       filepath.Dir(filePath),
+		os:            defaultCustomizedOS,
+		filenameRegex: filenameRegex,
 	}
 
-	if err := w.os.MkdirAll(w.currDir, 0755); err != nil {
+	if err = w.os.MkdirAll(w.currDir, 0755); err != nil {
 		return nil, err
 	}
 
@@ -108,23 +138,27 @@ func NewRollWriter(filePath string, opt ...Option) (*RollWriter, error) {
 
 // Write writes logs. It implements io.Writer.
 func (w *RollWriter) Write(v []byte) (n int, err error) {
-	// Reopen file every 10 seconds.
+	if atomic.LoadUint32(&w.closed) == 1 {
+		return 0, errors.New("roll writer has been closed")
+	}
+
+	// reopen file every 10 seconds.
 	if w.getCurrFile() == nil || time.Now().Unix()-atomic.LoadInt64(&w.openTime) > 10 {
 		w.mu.Lock()
 		w.reopenFile()
 		w.mu.Unlock()
 	}
 
-	// Return when failed to open the file.
+	// return when failed to open the file.
 	if w.getCurrFile() == nil {
 		return 0, errors.New("open file fail")
 	}
 
-	// Write logs to file.
+	// write logs to file.
 	n, err = w.getCurrFile().Write(v)
 	atomic.AddInt64(&w.currSize, int64(n))
 
-	// Rolling on full.
+	// rolling on full
 	if w.opts.MaxSize > 0 && atomic.LoadInt64(&w.currSize) >= w.opts.MaxSize {
 		w.mu.Lock()
 		w.backupFile()
@@ -135,6 +169,9 @@ func (w *RollWriter) Write(v []byte) (n int, err error) {
 
 // Close closes the current log file. It implements io.Closer.
 func (w *RollWriter) Close() error {
+	if !atomic.CompareAndSwapUint32(&w.closed, 0, 1) {
+		return errors.New("closing closed roll writer")
+	}
 	if w.getCurrFile() == nil {
 		return nil
 	}
@@ -167,7 +204,7 @@ func (w *RollWriter) setCurrFile(file *os.File) {
 	w.currFile.Store(file)
 }
 
-// reopenFile reopens the file regularly. It notifies the scavenger if file path has changed.
+// reopenFile reopen the file regularly. It notifies the scavenger if file path has changed.
 func (w *RollWriter) reopenFile() {
 	if w.getCurrFile() == nil || time.Now().Unix()-atomic.LoadInt64(&w.openTime) > 10 {
 		atomic.StoreInt64(&w.openTime, time.Now().Unix())
@@ -205,7 +242,7 @@ func (w *RollWriter) runCleanFiles() {
 	}
 }
 
-// delayCloseAndRenameFile delays closing and renaming the given file.
+// delayCloseAndRenameFile delay closing and renaming the given file.
 func (w *RollWriter) delayCloseAndRenameFile(f *closeAndRenameFile) {
 	w.closeOnce.Do(func() {
 		w.closeCh = make(chan *closeAndRenameFile, 100)
@@ -214,9 +251,10 @@ func (w *RollWriter) delayCloseAndRenameFile(f *closeAndRenameFile) {
 	w.closeCh <- f
 }
 
-// runCloseFiles delays closing file in a new goroutine.
+// runCloseFiles delay closing file in a new goroutine.
 func (w *RollWriter) runCloseFiles() {
 	for f := range w.closeCh {
+		// delay 20ms
 		time.Sleep(20 * time.Millisecond)
 		if err := f.file.Close(); err != nil {
 			fmt.Printf("f.file.Close err: %+v, filename: %s\n", err, f.file.Name())
@@ -233,7 +271,7 @@ func (w *RollWriter) runCloseFiles() {
 
 // cleanFiles cleans redundant or expired (compressed) logs.
 func (w *RollWriter) cleanFiles() {
-	// Get the file list of current log.
+	// get the file list of current log.
 	files, err := w.getOldLogFiles()
 	if err != nil {
 		fmt.Printf("w.getOldLogFiles err: %+v\n", err)
@@ -243,38 +281,30 @@ func (w *RollWriter) cleanFiles() {
 		return
 	}
 
-	// Find the oldest files to scavenge.
-	var compress, remove []logInfo
-	files = filterByMaxBackups(files, &remove, w.opts.MaxBackups)
+	files, redundantInfos := partitionByMaxBackups(files, w.opts.MaxBackups)
+	files, expiredInfos := partitionByMaxAge(files, w.opts.MaxAge)
+	w.removeFiles(append(redundantInfos, expiredInfos...))
 
-	// Find the expired files by last modified time.
-	files = filterByMaxAge(files, &remove, w.opts.MaxAge)
-
-	// Find files to compress by file extension .gz.
-	filterByCompressExt(files, &compress, w.opts.Compress)
-
-	// Delete expired or redundant files.
-	w.removeFiles(remove)
-
-	// Compress log files.
-	w.compressFiles(compress)
+	if w.opts.Compress {
+		_, uncompressedFiles := partitionByCompressExt(files, compressSuffix)
+		w.compressFiles(uncompressedFiles)
+	}
 }
 
 // getOldLogFiles returns the log file list ordered by modified time.
 func (w *RollWriter) getOldLogFiles() ([]logInfo, error) {
 	entries, err := os.ReadDir(w.currDir)
 	if err != nil {
-		return nil, fmt.Errorf("can't read log file directory %s :%w", w.currDir, err)
+		return nil, fmt.Errorf("can't read log file directory %s: %w", w.currDir, err)
 	}
 
 	var logFiles []logInfo
-	filename := filepath.Base(w.filePath)
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
 		}
 
-		if modTime, err := w.matchLogFile(e.Name(), filename); err == nil {
+		if modTime, err := w.matchLogFile(e.Name()); err == nil {
 			logFiles = append(logFiles, logInfo{modTime, e})
 		}
 	}
@@ -284,22 +314,25 @@ func (w *RollWriter) getOldLogFiles() ([]logInfo, error) {
 
 // matchLogFile checks whether current log file matches all relative log files, if matched, returns
 // the modified time.
-func (w *RollWriter) matchLogFile(filename, filePrefix string) (time.Time, error) {
-	// Exclude current log file.
+func (w *RollWriter) matchLogFile(logFilename string) (time.Time, error) {
+	// exclude current log file.
 	// a.log
 	// a.log.20200712
-	if filepath.Base(w.currPath) == filename {
+	if filepath.Base(w.currPath) == logFilename {
 		return time.Time{}, errors.New("ignore current logfile")
 	}
 
-	// Match all log files with current log file.
+	// match all log files with current log file.
+	// match customized log file format.
 	// a.log -> a.log.20200712-1232/a.log.20200712-1232.gz
 	// a.log.20200712 -> a.log.20200712.20200712-1232/a.log.20200712.20200712-1232.gz
-	if !strings.HasPrefix(filename, filePrefix) {
+	// a_\\{d8}.log -> a_\\{d8}.log.20200712-1232/a_\\{d8}.log.20200712-1232.gz
+	isMatch := w.filenameRegex.MatchString(logFilename)
+	if !isMatch {
 		return time.Time{}, errors.New("mismatched prefix")
 	}
 
-	st, err := w.os.Stat(filepath.Join(w.currDir, filename))
+	st, err := w.os.Stat(filepath.Join(w.currDir, logFilename))
 	if err != nil {
 		return time.Time{}, fmt.Errorf("file stat fail: %w", err)
 	}
@@ -308,7 +341,7 @@ func (w *RollWriter) matchLogFile(filename, filePrefix string) (time.Time, error
 
 // removeFiles deletes expired or redundant log files.
 func (w *RollWriter) removeFiles(remove []logInfo) {
-	// Clean expired or redundant files.
+	// clean expired or redundant files.
 	for _, f := range remove {
 		file := filepath.Join(w.currDir, f.Name())
 		if err := w.os.Remove(file); err != nil {
@@ -319,61 +352,55 @@ func (w *RollWriter) removeFiles(remove []logInfo) {
 
 // compressFiles compresses demanded log files.
 func (w *RollWriter) compressFiles(compress []logInfo) {
-	// Compress log files.
+	// compress log files.
 	for _, f := range compress {
 		fn := filepath.Join(w.currDir, f.Name())
 		w.compressFile(fn, fn+compressSuffix)
 	}
 }
 
-// filterByMaxBackups filters redundant files that exceeded the limit.
-func filterByMaxBackups(files []logInfo, remove *[]logInfo, maxBackups int) []logInfo {
+func partitionByMaxBackups(files []logInfo, maxBackups int) (necessary, redundant []logInfo) {
 	if maxBackups == 0 || len(files) < maxBackups {
-		return files
+		return files, nil
 	}
-	var remaining []logInfo
-	preserved := make(map[string]bool)
-	for _, f := range files {
-		fn := strings.TrimSuffix(f.Name(), compressSuffix)
-		preserved[fn] = true
 
-		if len(preserved) > maxBackups {
-			*remove = append(*remove, f)
-		} else {
-			remaining = append(remaining, f)
-		}
-	}
-	return remaining
+	preserved := make(map[string]struct{})
+	return partition(files, func(f logInfo) bool {
+		fn := strings.TrimSuffix(f.Name(), compressSuffix)
+		preserved[fn] = struct{}{}
+		return len(preserved) <= maxBackups
+	})
 }
 
-// filterByMaxAge filters expired files.
-func filterByMaxAge(files []logInfo, remove *[]logInfo, maxAge int) []logInfo {
+func partitionByMaxAge(files []logInfo, maxAge int) (valid, expired []logInfo) {
 	if maxAge <= 0 {
-		return files
+		return files, nil
 	}
-	var remaining []logInfo
+
 	diff := time.Duration(int64(24*time.Hour) * int64(maxAge))
 	cutoff := time.Now().Add(-1 * diff)
-	for _, f := range files {
-		if f.timestamp.Before(cutoff) {
-			*remove = append(*remove, f)
-		} else {
-			remaining = append(remaining, f)
-		}
-	}
-	return remaining
+	return partition(files, func(f logInfo) bool {
+		return !f.timestamp.Before(cutoff)
+	})
 }
 
-// filterByCompressExt filters all compressed files.
-func filterByCompressExt(files []logInfo, compress *[]logInfo, needCompress bool) {
-	if !needCompress {
-		return
-	}
-	for _, f := range files {
-		if !strings.HasSuffix(f.Name(), compressSuffix) {
-			*compress = append(*compress, f)
+func partitionByCompressExt(files []logInfo, compressExt string) (incompressible, compressible []logInfo) {
+	return partition(files, func(info logInfo) bool {
+		return strings.HasSuffix(info.Name(), compressExt)
+	})
+}
+
+// partition partitions the infos into two parts, such that the infos satisfying match are in the matching,
+// and the elements not satisfying match are in the nonMatching.
+func partition(infos []logInfo, match func(logInfo) bool) (matching, nonMatching []logInfo) {
+	for _, info := range infos {
+		if match(info) {
+			matching = append(matching, info)
+		} else {
+			nonMatching = append(nonMatching, info)
 		}
 	}
+	return
 }
 
 // compressFile compresses file src to dst, and removes src on success.

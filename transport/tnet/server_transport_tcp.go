@@ -10,7 +10,6 @@
 // A copy of the Apache 2.0 License is included in this file.
 //
 //
-
 //go:build linux || freebsd || dragonfly || darwin
 // +build linux freebsd dragonfly darwin
 
@@ -23,22 +22,26 @@ import (
 	"math"
 	"net"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
 
+	reuseport "github.com/kavu/go_reuseport"
 	"github.com/panjf2000/ants/v2"
 	"trpc.group/trpc-go/tnet"
 	"trpc.group/trpc-go/tnet/tls"
-	"trpc.group/trpc-go/trpc-go/internal/reuseport"
-
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/addrutil"
+	ikeeporder "trpc.group/trpc-go/trpc-go/internal/keeporder"
 	"trpc.group/trpc-go/trpc-go/internal/report"
+	"trpc.group/trpc-go/trpc-go/internal/rpczenable"
 	intertls "trpc.group/trpc-go/trpc-go/internal/tls"
 	"trpc.group/trpc-go/trpc-go/log"
+	"trpc.group/trpc-go/trpc-go/rpcz"
 	"trpc.group/trpc-go/trpc-go/transport"
+	ierrs "trpc.group/trpc-go/trpc-go/transport/internal/errs"
 	"trpc.group/trpc-go/trpc-go/transport/internal/frame"
 )
 
@@ -104,23 +107,34 @@ func (s *serverTransport) getTCPListener(opts *transport.ListenServeOptions) (ne
 	// already been stored in environment variables.
 	v, _ := os.LookupEnv(transport.EnvGraceRestart)
 	ok, _ := strconv.ParseBool(v)
-	if ok {
-		pln, err := transport.GetPassedListener(opts.Network, opts.Address)
-		if err != nil {
-			return nil, err
-		}
-		listener, ok := pln.(net.Listener)
-		if !ok {
-			return nil, errors.New("invalid net.Listener")
-		}
-		return listener, nil
+	if !ok {
+		return s.listen(opts)
 	}
+	pln, err := transport.GetPassedListener(opts.Network, opts.Address)
+	if err != nil {
+		if errors.Is(err, ierrs.ErrListenerNotFound) {
+			log.Infof("listener %s:%s not found, maybe it is a new service, fallback to create a new listener",
+				opts.Network, opts.Address)
+			return s.listen(opts)
+		}
+		return nil, err
+	}
+	listener, ok := pln.(net.Listener)
+	if !ok {
+		log.Errorf("invalid net.Listener type: %T for %s:%s, want: net.Listener, fallback to create a new listener",
+			pln, opts.Network, opts.Address)
+		return s.listen(opts)
+	}
+	return listener, nil
+}
+
+func (s *serverTransport) listen(opts *transport.ListenServeOptions) (net.Listener, error) {
 	var listener net.Listener
 	if s.opts.ReusePort {
 		var err error
 		listener, err = reuseport.Listen(opts.Network, opts.Address)
 		if err != nil {
-			return nil, fmt.Errorf("%s reuseport error: %w", opts.Network, err)
+			return nil, fmt.Errorf("%s reuseport listen %s error: %w", opts.Network, opts.Address, err)
 		}
 		return listener, nil
 	}
@@ -228,11 +242,14 @@ func (s *serverTransport) startTLSService(
 func (s *serverTransport) onConnOpened(conn net.Conn, pool *ants.PoolWithFunc,
 	opts *transport.ListenServeOptions) *tcpConn {
 	tc := &tcpConn{
-		rawConn:     conn,
-		pool:        pool,
-		handler:     opts.Handler,
-		serverAsync: opts.ServerAsync,
-		framer:      opts.FramerBuilder.New(conn),
+		rawConn:                        conn,
+		pool:                           pool,
+		handler:                        opts.Handler,
+		serverAsync:                    opts.ServerAsync,
+		framer:                         opts.FramerBuilder.New(conn),
+		keepOrderPreDecodeExtractor:    opts.KeepOrderPreDecodeExtractor,
+		keepOrderPreUnmarshalExtractor: opts.KeepOrderPreUnmarshalExtractor,
+		orderedGroups:                  opts.OrderedGroups,
 	}
 	// To avoid overwriting packets, check whether we should copy packages by Framer and some other configurations.
 	tc.copyFrame = frame.ShouldCopy(opts.CopyFrame, tc.serverAsync, codec.IsSafeFramer(tc.framer))
@@ -244,15 +261,10 @@ func (s *serverTransport) onConnOpened(conn net.Conn, pool *ants.PoolWithFunc,
 // onConnClosed is triggered after the connection with the client is closed.
 func (s *serverTransport) onConnClosed(conn net.Conn, handler transport.Handler) {
 	ctx, msg := codec.WithNewMessage(context.Background())
+	defer codec.PutBackMessage(msg)
 	msg.WithLocalAddr(conn.LocalAddr())
 	msg.WithRemoteAddr(conn.RemoteAddr())
-	e := &errs.Error{
-		Type: errs.ErrorTypeFramework,
-		Code: errs.RetServerSystemErr,
-		Desc: "trpc",
-		Msg:  "Server connection closed",
-	}
-	msg.WithServerRspErr(e)
+	msg.WithServerRspErr(errs.NewFrameError(errs.RetServerSystemErr, "Server connection closed"))
 	if closeHandler, ok := handler.(transport.CloseHandler); ok {
 		if err := closeHandler.HandleClose(ctx); err != nil {
 			log.Trace("transport: notify connection close failed", err)
@@ -278,6 +290,14 @@ type tcpConn struct {
 	handler     transport.Handler
 	serverAsync bool
 	copyFrame   bool
+	// keepOrderPreDecodeExtractor specifies whether the current connection should
+	// keep order for the incoming requests with respect to the extracted key from the decoded information.
+	keepOrderPreDecodeExtractor ikeeporder.PreDecodeExtractor
+	// keepOrderPreUnmarshalExtractor specifies whether the current connection should
+	// keep order for the incoming requests with respect to the extracted key from request struct.
+	keepOrderPreUnmarshalExtractor ikeeporder.PreUnmarshalExtractor
+	// orderedGroups specifies the groups in which to keep order for incoming requests.
+	orderedGroups ikeeporder.OrderedGroups
 }
 
 // onRequest is triggered when there is incoming data on the connection with the client.
@@ -299,7 +319,19 @@ func (tc *tcpConn) onRequest() error {
 	}
 	report.TCPServerTransportReceiveSize.Set(float64(len(req)))
 
-	if !tc.serverAsync || tc.pool == nil {
+	if tc.keepOrderPreDecodeExtractor != nil {
+		if ok := tc.handleKeepOrderPreDecode(req); ok {
+			return nil
+		}
+	}
+
+	if tc.keepOrderPreUnmarshalExtractor != nil {
+		if ok := tc.handleKeepOrderPreUnmarshal(req); ok {
+			return nil
+		}
+	}
+
+	if !tc.serverAsync || tc.pool == nil || frame.ContainTRPCStreamHeader(req) {
 		tc.handleSync(req)
 		return nil
 	}
@@ -307,23 +339,47 @@ func (tc *tcpConn) onRequest() error {
 	if err := tc.pool.Invoke(newTask(req, tc.handleSync)); err != nil {
 		report.TCPServerTransportJobQueueFullFail.Incr()
 		log.Trace("transport: tcpConn serve routine pool put job queue fail ", err)
-		tc.handleWithErr(req, errs.ErrServerRoutinePoolBusy)
+		tc.handleSyncWithErr(req, errs.ErrServerRoutinePoolBusy)
 	}
 	return nil
 }
 
 func (tc *tcpConn) handleSync(req []byte) {
-	tc.handleWithErr(req, nil)
+	tc.handleSyncWithErr(req, nil)
 }
 
-func (tc *tcpConn) handleWithErr(req []byte, e error) {
+func (tc *tcpConn) handleSyncWithErr(req []byte, e error) {
 	ctx, msg := codec.WithNewMessage(context.Background())
 	defer codec.PutBackMessage(msg)
+	tc.handleSyncWithErrAndContext(ctx, msg, req, e)
+}
+
+func (tc *tcpConn) handleSyncWithErrAndContext(ctx context.Context, msg codec.Msg, req []byte, e error) {
 	msg.WithServerRspErr(e)
 	msg.WithLocalAddr(tc.rawConn.LocalAddr())
 	msg.WithRemoteAddr(tc.rawConn.RemoteAddr())
 
+	var (
+		span        rpcz.Span
+		serverEnder rpcz.Ender
+	)
+	if rpczenable.Enabled {
+		span, serverEnder, ctx = rpcz.NewSpanContext(ctx, "server")
+		span.SetAttribute(rpcz.TRPCAttributeRequestSize, len(req))
+	}
+
 	rsp, err := tc.handle(ctx, req)
+	if rpczenable.Enabled {
+		defer func(serverEnder rpcz.Ender) {
+			span.SetAttribute(rpcz.TRPCAttributeRPCName, msg.ServerRPCName())
+			if err == nil {
+				span.SetAttribute(rpcz.TRPCAttributeError, msg.ServerRspErr())
+			} else {
+				span.SetAttribute(rpcz.TRPCAttributeError, err)
+			}
+			serverEnder.End()
+		}(serverEnder)
+	}
 	if err != nil {
 		if err != errs.ErrServerNoResponse {
 			report.TCPServerTransportHandleFail.Incr()
@@ -334,7 +390,16 @@ func (tc *tcpConn) handleWithErr(req []byte, e error) {
 		return
 	}
 	report.TCPServerTransportSendSize.Set(float64(len(rsp)))
-	if _, err = tc.rawConn.Write(rsp); err != nil {
+	var sendMessageEnder rpcz.Ender
+	if rpczenable.Enabled {
+		span.SetAttribute(rpcz.TRPCAttributeResponseSize, len(rsp))
+		_, sendMessageEnder = span.NewChild("SendMessage")
+	}
+	_, err = tc.rawConn.Write(rsp)
+	if rpczenable.Enabled {
+		sendMessageEnder.End()
+	}
+	if err != nil {
 		report.TCPServerTransportWriteFail.Incr()
 		log.Trace("transport: tcpConn write fail ", err)
 		tc.close()
@@ -350,4 +415,67 @@ func (tc *tcpConn) close() {
 	if err := tc.rawConn.Close(); err != nil {
 		log.Tracef("transport: tcpConn close fail %v", err)
 	}
+}
+
+func (tc *tcpConn) handleKeepOrderPreDecode(req []byte) bool {
+	pdh, ok := tc.handler.(ikeeporder.PreDecodeHandler)
+	if !ok {
+		panic("bug: handler must implement pre-decode interface for keep-order requests")
+	}
+	ctx, msg := codec.WithNewMessage(context.Background())
+	reqBody, err := pdh.PreDecode(ctx, req)
+	if err != nil {
+		log.Warnf("pre-decode error: %+v, fallback to non-keep-order scenario", err)
+		codec.PutBackMessage(msg)
+		return false
+	}
+	keepOrderKey, ok := tc.keepOrderPreDecodeExtractor(ctx, reqBody)
+	if !ok {
+		codec.PutBackMessage(msg)
+		return false
+	}
+	ctx = ikeeporder.NewContextWithPreDecode(ctx, &ikeeporder.PreDecodeInfo{ReqBodyBuf: reqBody})
+	tc.orderedGroups.Add(keepOrderKey, func() {
+		defer func() {
+			codec.PutBackMessage(msg)
+			if err := recover(); err != nil {
+				log.ErrorContextf(ctx, "[PANIC]%v\n%s\n", err, debug.Stack())
+				report.PanicNum.Incr()
+			}
+		}()
+		tc.handleSyncWithErrAndContext(ctx, msg, req, nil)
+	})
+	return true
+}
+
+func (tc *tcpConn) handleKeepOrderPreUnmarshal(req []byte) bool {
+	puh, ok := tc.handler.(ikeeporder.PreUnmarshalHandler)
+	if !ok {
+		panic("bug: handler must implement pre-unmarshal interface for keep-order requests")
+	}
+	ctx, msg := codec.WithNewMessage(context.Background())
+	info := &ikeeporder.PreUnmarshalInfo{}
+	ctx = ikeeporder.NewContextWithPreUnmarshal(ctx, info)
+	reqBody, err := puh.PreUnmarshal(ctx, req)
+	if err != nil {
+		log.Warnf("pre-unmarshal error: %+v, fallback to non-keep-order scenario", err)
+		codec.PutBackMessage(msg)
+		return false
+	}
+	keepOrderKey, ok := tc.keepOrderPreUnmarshalExtractor(ctx, reqBody)
+	if !ok {
+		codec.PutBackMessage(msg)
+		return false
+	}
+	tc.orderedGroups.Add(keepOrderKey, func() {
+		defer func() {
+			codec.PutBackMessage(msg)
+			if err := recover(); err != nil {
+				log.ErrorContextf(ctx, "[PANIC]%v\n%s\n", err, debug.Stack())
+				report.PanicNum.Incr()
+			}
+		}()
+		tc.handleSyncWithErrAndContext(ctx, msg, req, nil)
+	})
+	return true
 }

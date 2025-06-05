@@ -54,7 +54,3 @@ type NoopServiceRouter struct {
 func (*NoopServiceRouter) Filter(serviceName string, nodes []*registry.Node, opt ...Option) ([]*registry.Node, error) {
 	return nodes, nil
 }
-
-func unregisterForTesting(name string) {
-	delete(servicerouters, name)
-}

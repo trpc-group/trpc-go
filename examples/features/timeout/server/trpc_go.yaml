@@ -8,7 +8,7 @@ server:                                            # server configuration.
   bin_path: /usr/local/trpc/bin/                   # paths to binary executables and framework configuration files.
   conf_path: /usr/local/trpc/conf/                 # paths to business configuration files.
   data_path: /usr/local/trpc/data/                 # paths to business data files.
-  service:                                         # business service configuration，can have multiple.
+  service:                                         # business service configuration, can have multiple.
     - name: trpc.test.helloworld.Greeter           # the route name of the service.
       ip: 127.0.0.1                                # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
       port: 8000                                   # the service listening port, can use the placeholder ${port}.
@@ -28,17 +28,17 @@ client:                                            # configuration for client ca
     #  timeout: 800                                # maximum request processing time in milliseconds.
 
 
-plugins:                                          # configuration for plugins.
-  log:                                            # configuration for logger.
-    default:                                      # default configuration for logger,，can be multiple.
-      - writer: console                           # console stdout, default.
-        level: debug                              # The level of standard output logging.
-      - writer: file                              # local file log.
-        level: info                               # The level of the local file rollover log.
-        formatter: json                           # Format of the standard output log.
+plugins:                                           # configuration for plugins.
+  log:                                             # configuration for logger.
+    default:                                       # default configuration for logger, can be multiple.
+      - writer: console                            # console stdout, default.
+        level: debug                               # The level of standard output logging.
+      - writer: file                               # local file log.
+        level: info                                # The level of the local file rollover log.
+        formatter: json                            # Format of the standard output log.
         writer_config:
-          filename: ./trpc.log                      # The path where the local file rolling log is stored.
-          max_size: 10                              # The size of the local file rolling log, in MB
-          max_backups: 10                           # Maximum number of log files
-          max_age: 7                                # Maximum number of days to keep logs
-          compress:  false                          # Whether the log file is compressed.
+          filename: ./trpc.log                     # The path where the local file rolling log is stored.
+          max_size: 10                             # The size of the local file rolling log, in MB
+          max_backups: 10                          # Maximum number of log files
+          max_age: 7                               # Maximum number of days to keep logs
+          compress:  false                         # Whether the log file is compressed.

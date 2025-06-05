@@ -14,10 +14,11 @@ RPCZ 可以帮助用户调试服务，它允许用户自行配置需要被记录
 
 ```go
 type Event struct {
-	Name string
-	Time time.Time
+    Name string
+    Time time.Time
 }
 ```
+
 在一个普通 RPC 调用中会发生一系列的事件，例如发送请求的 Client 端按照时间先后顺序，一般会发生如下一系列事件：
 
 1. 开始运行前置拦截器
@@ -70,7 +71,8 @@ Span[4, 5] 用来描述某段时间间隔（具有开始时间和结束时间）
 根据划分的时间间隔大小不同，一个大的 Span 可以包含多个小的 Span，就像一个函数中可能调用多个其他函数一样，会形成树结构的层次关系。
 因此一个 Span 除了包含名字、内部标识 span-id[6]，开始时间、结束时间和这段时间内发生的一系列事件（Event）外，还可能包含许多子 Span。
 
-rpcz 中存在两种类型的 Span。
+rpcz 中存在两种类型的 Span:
+
 1. client-Span：描述 client 从开始发送请求到接收到回复这段时间间隔内的操作（涵盖上一节 Event 中描述的 client 端发生一系列事件）。
 
 2. server-Span：描述 server 从开始接收请求到发送完回复这段时间间隔内的操作（涵盖上一节 Event 中描述的 server 端发生一系列事件）。
@@ -97,7 +99,8 @@ rpcz 在启动时会初始化一个全局 GlobalRPCZ，用于生成和存储 Spa
 在框架内部 Span 只可能在两个位置被构造，
 第一个位置是在 server 端的 transport 层的 handle 函数刚开始处理接收到的请求时；
 第二个位置是在 client 端的桩代码中调用 Invoke 函数开始发起 rpc 请求时。
-虽然两个位置创建的 Span 类型是不同，但是代码逻辑是相似的，都会调用 rpczNewSpanContext，该函数实际上执行了三个操作
+虽然两个位置创建的 Span 类型是不同，但是代码逻辑是相似的，都会调用 rpczNewSpanContext，该函数实际上执行了三个操作：
+
 1. 调用 SpanFromContext 函数，从 context 中获取 span。
 2. 调用 span.NewChild 方法，创建新的 child span。
 3. 调用 ContextWithSpan 函数，将新创建的 child span 设置到 context 中。
@@ -130,9 +133,9 @@ admin 模块调用 `rpcz.Query` 和 `rpcz.BatchQuery` 从 GlobalRPCZ 中读取 S
 
 "RPCZ" 这一术语最早来源于 google 内部的 RPC 框架 Stubby，在此基础上 google 在开源的 grpc 实现了类似功能的 channelz[8]，channelz 中除了包括各种 channel 的信息，也涵盖 trace 信息。
 之后，百度开源的 brpc 在 google 发表的分布式追踪系统 Dapper 论文 [9] 的基础上，实现了一个非分布式的 trace 工具，模仿 channelz 取名为 brpc-rpcz[10]。
-接着就是用户在使用 tRPC 中需要类似于 brpc-rpcz 的工具来进行调试和优化，所以 tRPC-Cpp 首先支持类似功能，仍然保留了 RPCZ 这个名字。
+接着就是用户在使用 tRPC 中需要类似于 brpc-rpcz 的工具来进行调试和优化，所以 tRPC-Cpp 首先支持类似功能 [11, 12]，仍然保留了 RPCZ 这个名字。
 
-最后就是在 tRPC-Go 支持类似 "RPCZ" 的功能，在实现过程中发现随着分布式追踪系统的发展，社区中出现了 opentracing[11] 和 opentelemetry[12] 的开源系统。
+最后就是在 tRPC-Go 支持类似 "RPCZ" 的功能，在实现过程中发现随着分布式追踪系统的发展，社区中出现了 opentracing[13] 和 opentelemetry[14] 的开源系统，公司内部也做起了天机阁 [15]。
 tRPC-Go-RPCZ 在 span 和 event 设计上部分借鉴了 opentelemetry-trace 的 go 语言实现，可以认为是 tRPC-Go 框架内部的 trace 系统。
 严格来说，tRPC-Go-RPCZ 是非分布式，因为不同服务之间没有在协议层面实现通信。
 现在看来，brpc, tRPC-Cpp 和 tRPC-Go 实现的 rpcz，取名叫 spanz 或许更符合后缀 "-z" 本来的含义。
@@ -140,6 +143,27 @@ tRPC-Go-RPCZ 在 span 和 event 设计上部分借鉴了 opentelemetry-trace 的
 ## 如何配置 rpcz
 
 rpcz 的配置包括基本配置，进阶配置和代码配置，更多配置例子见 `config_test.go`。
+
+对于自定义 transport，除了需要配置 rpcz 之外，你还需要自己注入 span。
+下面展示了在自定义 client transport 中先产生一个名为 client 的 root span，然后再从该 span 中产生一个名为 SendMessage 的子 span:
+
+```go
+type ClientTransport struct {}
+func (ct *ClientTransport) RoundTrip( ctx context.Context, reqBody []byte, callOpts ...transport.RoundTripOption) (rspBody []byte, err error)
+    span, end, ctx := rpcz.NewSpanContext(ctx, "client")
+    defer func() {
+        span.SetAttribute(rpcz.TRPCAttributeError, err)
+        end.End()
+    }()
+    
+    _, end = span.NewChild("SendMessage")
+    // Write data to connection.
+    err = c.tcpWriteFrame(ctx, conn, reqData)
+    end.End()
+    
+    ...
+}
+```
 
 ### 不同 tRPC-GO 版本的支持情况
 
@@ -169,7 +193,7 @@ server:
 
 进阶配置允许你自行过滤感兴趣的 span，在使用进阶配置之前需要先了解 rpcz 的采样机制。
 
-####  采样机制
+#### 采样机制
 
 rpcz 使用采样机制来控制性能开销和过滤你不感兴趣的 Span。
 采样可能发生在 Span 的生命周期的不同阶段，最早的采样发生在 Span 创建之前，最晚的采样发生在 Span 提交之前。
@@ -188,7 +212,7 @@ rpcz 使用采样机制来控制性能开销和过滤你不感兴趣的 Span。
 ##### 在 Span 创建之前采样
 
 只有当 Span 被采样到才会去创建 Span，否则就不需要创建 Span，也就避免了后续对 Span 的一系列操作，从而可以较大程度上减少性能开销。
-采用固定采样率 [13] 的采样策略，该策略只有一个可配置浮点参数 `rpcz.fraction`, 例如`rpcz.fraction` 为 0.0001，则表示每 10000（1/0.0001）个请求会采样一条请求。
+采用固定采样率 [16, 17] 的采样策略，该策略只有一个可配置浮点参数 `rpcz.fraction`, 例如`rpcz.fraction` 为 0.0001，则表示每 10000（1/0.0001）个请求会采样一条请求。
 当 `rpcz.fraction` 小于 0 时，会向上取 0；当 `rpcz.fraction` 大于 1 时，会向下取 1。
 
 ##### 在 Span 提交之前采样
@@ -196,7 +220,7 @@ rpcz 使用采样机制来控制性能开销和过滤你不感兴趣的 Span。
 已经创建好的 Span 会记录 rpc 中的各种信息，但是你可能只关心包含某些特定信息的 Span，例如出现 rpc 错误的 Span，高耗时的 Span 以及包含特定属性信息的 Span。
 这时，就需要在 Span 最终提交前只对你需要的 Span 进行采样。
 rpcz 提供了一个灵活的对外接口，允许你在服务在启动之前，通过配置文件设置 `rpcz.record_when` 字段来自定义 Span 提交之前采样逻辑。
-record_when 提供3种常见的布尔操作：`AND`， `OR` 和 `NOT`，7种返回值为布尔值的基本操作，`__min_request_size`, `__min_response_size`, `__error_code`, `__error_message`, `__rpc_name`, `__min_duration` 和 `__has_attribute`。
+record_when 提供 3 种常见的布尔操作：`AND`， `OR` 和 `NOT`，8 种返回值为布尔值的基本操作，`__min_request_size`， `__min_response_size`， `__error_code`， `__error_message`， `__rpc_name`， `__min_duration`， `__has_attribute` 和 `__sampling_fraction`。
 **需要注意的是 record_when 本身是一个 `AND` 操作**。
 你可以通过对这些操作进行任意组合，灵活地过滤出感兴趣的 Span。
 
@@ -227,11 +251,12 @@ server:  # server configuration.
         - __has_attribute:  (name1, value1)
         # record span that has the attribute: name2, and name2's value contains "value2".
         - __has_attribute:  (name2, value2)
+        - __sampling_fraction: 1.0 # [0, 1], default value is 1.
 ```
 
 #### 配置举例
 
-##### 对包含错误码为 1(RetServerDecodeFail)，且错误信息中包含 “unknown” 字符串，且持续时间大于 1s 的 span 进行提交
+##### 对包含错误码为 1(RetServerDecodeFail)，且错误信息中包含“unknown”字符串，且持续时间大于 1s 的 span 进行提交
 
 ```yaml
 server:
@@ -247,9 +272,9 @@ server:
         - __sampling_fraction: 1         
 ```
 
-注意: record_when 本身是一个 AND 节点，还可以有以下写法：写法1， 写法2
+注意：record_when 本身是一个 AND 节点，还可以有以下写法：写法 1，写法 2
 
-写法1:
+写法 1:
 
 ```yaml
 server:
@@ -266,7 +291,7 @@ server:
             - __sampling_fraction: 1         
 ```
 
-写法2:
+写法 2:
 
 ```yaml
 server:
@@ -284,7 +309,7 @@ server:
             - __sampling_fraction: 1         
 ```
 
-写法3:
+写法 3:
 
 ```yaml
 server:
@@ -317,9 +342,9 @@ server:
       capacity: 10000
       record_when:
         - OR:
-          - error_code: 1
-          - error_code: 21
-          - min_duration: 2s
+          - __error_code: 1
+          - __error_code: 21
+          - __min_duration: 2s
         - __sampling_fraction: 0.5      
 ```
 
@@ -334,7 +359,7 @@ server:
       fraction: 1.0
       capacity: 10000
       record_when:
-        - min_duration: 2s
+        - __min_duration: 2s
         - __rpc_name: "TDXA/Transfer"
         - NOT:
             __error_message: "pseudo" 
@@ -350,17 +375,17 @@ server:
 type ShouldRecord = func(Span) bool
 ```
 
-##### 只对包含 "SpecialAttribute" 属性的 Span 进行提交
+#### 只对包含 "SpecialAttribute" 属性的 Span 进行提交
 
 ```go
 const attributeName = "SpecialAttribute"
 rpcz.GlobalRPCZ = rpcz.NewRPCZ(&rpcz.Config{
-Fraction: 1.0,
-Capacity: 1000,
-ShouldRecord: func(s rpcz.Span) bool {
-_, ok = s.Attribute(attributeName)
-return ok
-},
+    Fraction: 1.0,
+    Capacity: 1000,
+    ShouldRecord: func(s rpcz.Span) bool {
+        _, ok = s.Attribute(attributeName)
+        return ok
+    },
 })
 ```
 
@@ -372,19 +397,19 @@ return ok
 http://ip:port/cmds/rpcz/spans?num=xxx
 ```
 
-例如执行 `curl http://ip:port/cmds/rpcz/spans?num=2` ，则会返回如下 2 个 span 的概要信息：
+例如执行 `curl "http://ip:port/cmds/rpcz/spans?num=2"` ，则会返回如下 2 个 span 的概要信息：
 
 ```html
 1:
-span: (client, 65744150616107367)
-time: (Dec  1 20:57:43.946627, Dec  1 20:57:43.946947)
-duration: (0, 319.792µs, 0)
-attributes: (RPCName, /trpc.testing.end2end.TestTRPC/EmptyCall),(Error, <nil>)
-  2:
+  span: (client, 65744150616107367)
+    time: (Dec  1 20:57:43.946627, Dec  1 20:57:43.946947)
+    duration: (0, 319.792µs, 0)
+    attributes: (RPCName, /trpc.testing.end2end.TestTRPC/EmptyCall),(Error, <nil>)
+2:
   span: (server, 1844470940819923952)
-  time: (Dec  1 20:57:43.946677, Dec  1 20:57:43.946912)
-  duration: (0, 235.5µs, 0)
-  attributes: (RequestSize, 125),(ResponseSize, 18),(RPCName, /trpc.testing.end2end.TestTRPC/EmptyCall),(Error, success)
+    time: (Dec  1 20:57:43.946677, Dec  1 20:57:43.946912)
+    duration: (0, 235.5µs, 0)
+    attributes: (RequestSize, 125),(ResponseSize, 18),(RPCName, /trpc.testing.end2end.TestTRPC/EmptyCall),(Error, success)
 ```
 
 每个 span 的概要信息和如下的模版匹配：
@@ -428,7 +453,7 @@ http://ip:port/cmds/rpcz/spans
 http://ip:port/cmds/rpcz/spans/{id}
 ```
 
-例如执行 `curl http://ip:port/cmds/rpcz/spans/6673650005084645130` 可查询 span id 为 6673650005084645130 的 span 的详细信息：
+例如执行 `curl "http://ip:port/cmds/rpcz/spans/6673650005084645130"` 可查询 span id 为 6673650005084645130 的 span 的详细信息：
 
 ```
 span: (server, 6673650005084645130)
@@ -588,18 +613,18 @@ event: (awake, Dec  2 10:43:55.398954)
 
 ```go
 type Span interface {
-// AddEvent adds a event.
-AddEvent(name string)
+    // AddEvent adds an event.
+    AddEvent(name string)
 
-// SetAttribute sets Attribute with (name, value).
-SetAttribute(name string, value interface{})
+    // SetAttribute sets Attribute with (name, value).
+    SetAttribute(name string, value interface{})
 
-// ID returns SpanID.
-ID() SpanID
+    // ID returns SpanID.
+    ID() SpanID
 
-// NewChild creates a child span from current span.
-// Ender ends this span if related operation is completed. 
-NewChild(name string) (Span, Ender)
+    // NewChild creates a child span from current span.
+    // Ender ends this span if related operation is completed. 
+    NewChild(name string) (Span, Ender)
 }
 ```
 
@@ -653,6 +678,10 @@ end.End()
 - [8] https://github.com/grpc/proposal/blob/master/A14-channelz.md
 - [9] Dapper, a Large-Scale Distributed Systems Tracing Infrastructure: http://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36356.pdf
 - [10] brpc-rpcz: https://github.com/apache/incubator-brpc/blob/master/docs/cn/rpcz.md
-- [11] opentracing: https://opentracing.io/
-- [12] opentelemetry: https://opentelemetry.io/
-- [13] open-telemetry-sdk-go-traceIDRatioSampler: https://github.com/open-telemetry/opentelemetry-go/blob/main/sdk/trace/sampling.go
+- [11] tRPC-Cpp rpcz wiki. todo
+- [12] tRPC-Cpp rpcz proposal. https://git.woa.com/trpc/trpc-proposal/blob/master/L17-cpp-rpcz.md
+- [13] opentracing: https://opentracing.io/
+- [14] opentelemetry: https://opentelemetry.io/
+- [15] https://tpstelemetry.pages.woa.com/
+- [16] 天机阁 2.0-sdk-go：https://git.woa.com/opentelemetry/opentelemetry-go-ecosystem/blob/master/sdk/trace/dyeing_sampler.go
+- [17] open-telemetry-sdk-go- traceIDRatioSampler: https://github.com/open-telemetry/opentelemetry-go/blob/main/sdk/trace/sampling.go

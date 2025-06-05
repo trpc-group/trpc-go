@@ -52,9 +52,3 @@ func Get(name string) Discovery {
 	lock.RUnlock()
 	return d
 }
-
-func unregisterForTesting(name string) {
-	lock.Lock()
-	delete(discoveries, name)
-	lock.Unlock()
-}

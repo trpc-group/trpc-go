@@ -18,11 +18,11 @@ import (
 	"errors"
 	"time"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 	"trpc.group/trpc-go/trpc-go/naming/selector"
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 var (

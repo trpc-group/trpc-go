@@ -14,9 +14,11 @@
 package plugin_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"trpc.group/trpc-go/trpc-go/plugin"
 )
@@ -40,4 +42,32 @@ func TestGet(t *testing.T) {
 
 	pNo := plugin.Get("notexist", pluginName)
 	assert.Nil(t, pNo)
+}
+
+func TestMustRegister(t *testing.T) {
+	t.Run("no registered plugin", func(t *testing.T) {
+		assert.Nil(t, plugin.Get("testMustRegister", "no registered plugin"))
+	})
+	plugin.MustRegister("testMustRegister", &mockPlugin{})
+	t.Run("registered plugin", func(t *testing.T) {
+		assert.NotNil(t, plugin.Get("mock_type", "testMustRegister"))
+	})
+	t.Run("repeat register", func(t *testing.T) {
+		assert.Panics(t, func() {
+			plugin.MustRegister("testMustRegister", &mockPlugin{})
+		})
+	})
+}
+
+func TestRegisterSetupHook(t *testing.T) {
+	const key = "a_pseudo_plugin_type-a_pseudo_plugin_name"
+	plugin.RegisterSetupHook(key, func(setup func() error) error {
+		if err := setup(); err != nil {
+			t.Logf("setup error %+v is logged and somehow handled, it is not returned up", err)
+		}
+		return nil
+	})
+	require.Nil(t, plugin.GetSetupHook(key)(func() error {
+		return errors.New("setup error")
+	}))
 }

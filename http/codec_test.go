@@ -22,24 +22,23 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	trpc "trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	thttp "trpc.group/trpc-go/trpc-go/http"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/server"
-	"trpc.group/trpc-go/trpc-go/testdata/restful/helloworld"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	helloworld "trpc.group/trpc-go/trpc-go/testdata/restful/helloworld"
 )
 
 func TestRegister(t *testing.T) {
@@ -53,6 +52,76 @@ func TestRegister(t *testing.T) {
 	require.Nil(t, req, "request empty")
 	rsp := thttp.Response(context.Background())
 	require.Nil(t, rsp, "response empty")
+}
+
+func TestMustRegisterContentType(t *testing.T) {
+	t.Run("content type already registered", func(t *testing.T) {
+		assert.Panics(t, func() {
+			thttp.MustRegisterContentType("application/json", codec.SerializationTypeJSON)
+		})
+	})
+	t.Run("serialization type already registered", func(t *testing.T) {
+		assert.Panics(t, func() {
+			thttp.MustRegisterContentType("application/test", codec.SerializationTypeJSON)
+		})
+	})
+	t.Run("ok", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			thttp.MustRegisterContentType("application/test", 300)
+		})
+	})
+}
+
+func TestMustRegisterSerializer(t *testing.T) {
+	t.Run("serialization type already registered", func(t *testing.T) {
+		assert.Panics(t, func() {
+			thttp.MustRegisterSerializer("application/test2",
+				codec.SerializationTypeJSON, &codec.JSONSerialization{})
+		})
+	})
+	t.Run("httpContent type already registered", func(t *testing.T) {
+		assert.Panics(t, func() {
+			thttp.MustRegisterSerializer("application/json",
+				200, &codec.JSONSerialization{})
+		})
+	})
+	t.Run("ok", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			thttp.MustRegisterSerializer("application/test2",
+				201, &codec.JSONSerialization{})
+		})
+	})
+}
+
+func TestMustRegisterContentEncoding(t *testing.T) {
+	t.Run("content encoding already registered", func(t *testing.T) {
+		assert.Panics(t, func() {
+			thttp.MustRegisterContentEncoding("gzip", codec.CompressTypeGzip)
+		})
+	})
+	t.Run("http content encoding already registered", func(t *testing.T) {
+		assert.Panics(t, func() {
+			thttp.MustRegisterContentEncoding("gzip", 600)
+		})
+	})
+	t.Run("ok", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			thttp.MustRegisterContentEncoding("zip", 601)
+		})
+	})
+}
+
+func TestMustRegisterStatus(t *testing.T) {
+	t.Run("status already registered", func(t *testing.T) {
+		assert.Panics(t, func() {
+			thttp.MustRegisterStatus(errs.RetServerEncodeFail, http.StatusInternalServerError)
+		})
+	})
+	t.Run("ok", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			thttp.MustRegisterStatus(600, 600)
+		})
+	})
 }
 
 func TestServerEncode(t *testing.T) {
@@ -113,7 +182,7 @@ func TestNotHead(t *testing.T) {
 
 func TestMultipartFormData(t *testing.T) {
 	require := require.New(t)
-	r, _ := http.NewRequest("POST", "http://www.qq.com/trpc.http.test.helloworld/SayHello", bytes.NewReader([]byte("")))
+	r, _ := http.NewRequest(http.MethodPost, "http://www.qq.com/trpc.http.test.helloworld/SayHello", bytes.NewReader([]byte("")))
 	r.Header.Add("Content-Type", "multipart/form-data; boundary=--------------------------487682300036072392114180")
 	body := `----------------------------487682300036072392114180
 Content-Disposition: form-data; name="competition"
@@ -208,7 +277,7 @@ Content-Type: application/json
 }
 
 func TestServerDecodeHTTPHeader(t *testing.T) {
-	r, err := http.NewRequest("POST", "http://www.qq.com/trpc.http.test.helloworld/SayHello", bytes.NewReader([]byte("")))
+	r, err := http.NewRequest(http.MethodPost, "http://www.qq.com/trpc.http.test.helloworld/SayHello", bytes.NewReader([]byte("")))
 	require.Nil(t, err)
 	r.Header.Add("Content-Encoding", "gzip")
 	r.Header.Add("Content-Type", "application/json")
@@ -219,6 +288,8 @@ func TestServerDecodeHTTPHeader(t *testing.T) {
 	r.Header.Add(thttp.TrpcTimeout, "1000")
 	r.Header.Add(thttp.TrpcCaller, "trpc.app.server.helloworld")
 	r.Header.Add(thttp.TrpcCallee, "trpc.http.test.helloworld")
+	const expectedCallerMethod = "/trpc.http.test.helloworld/v1/get"
+	r.Header.Add(thttp.TrpcCallerMethod, expectedCallerMethod)
 	// Request data must encode by base64 first.
 	// val1 -> dmFsMQ==   val2 -> dmFsMg==
 	r.Header.Add(thttp.TrpcTransInfo, `{"key1":"dmFsMQ==", "key2":"dmFsMg=="}`)
@@ -231,8 +302,9 @@ func TestServerDecodeHTTPHeader(t *testing.T) {
 
 	require.Equal(t, codec.CompressTypeGzip, msg.CompressType())
 	require.Equal(t, codec.SerializationTypeJSON, msg.SerializationType())
+	require.Equal(t, expectedCallerMethod, msg.CallerMethod())
 
-	req, ok := msg.ServerReqHead().(*trpcpb.RequestProtocol)
+	req, ok := msg.ServerReqHead().(*trpc.RequestProtocol)
 	require.True(t, ok)
 	require.NotNil(t, req, "failed to decode get trpc req head")
 	require.Equal(t, 1, int(req.GetVersion()))
@@ -262,7 +334,7 @@ func TestServerDecodeHTTPHeader(t *testing.T) {
 	ctx = thttp.WithHeader(context.Background(), h)
 	msg = codec.Message(ctx)
 	_, err = thttp.DefaultServerCodec.Decode(msg, nil)
-	req, _ = msg.ServerReqHead().(*trpcpb.RequestProtocol)
+	req, _ = msg.ServerReqHead().(*trpc.RequestProtocol)
 	require.Nil(t, err)
 	require.Equal(t, "Production", string(req.GetTransInfo()[thttp.TrpcEnv]))
 
@@ -280,18 +352,17 @@ func TestServerDecodeHTTPHeader(t *testing.T) {
 }
 
 func TestServerDecode(t *testing.T) {
-	r, _ := http.NewRequest("GET", "www.qq.com/xyz=abc", bytes.NewReader([]byte("")))
+	r, _ := http.NewRequest(http.MethodGet, "www.qq.com/xyz=abc", bytes.NewReader([]byte("")))
 	w := &httptest.ResponseRecorder{}
 	m := &thttp.Header{Request: r, Response: w}
 	ctx := thttp.WithHeader(context.Background(), m)
 	msg := codec.Message(ctx)
-	msg.WithServerRspErr(errs.ErrServerNoFunc)
 	_, err := thttp.DefaultServerCodec.Decode(msg, nil)
 	require.Nil(t, err, "failed to decode get body")
 }
 
 func TestServerPostDecode(t *testing.T) {
-	r, _ := http.NewRequest("POST", "www.qq.com", bytes.NewReader([]byte("{xyz:\"abc\"")))
+	r, _ := http.NewRequest(http.MethodPost, "www.qq.com", bytes.NewReader([]byte("{xyz:\"abc\"")))
 	w := &httptest.ResponseRecorder{}
 	m := &thttp.Header{Request: r, Response: w}
 	ctx := thttp.WithHeader(context.Background(), m)
@@ -338,11 +409,11 @@ func TestClientEncodeWithHeader(t *testing.T) {
 
 func TestClientErrDecode(t *testing.T) {
 	_, msg := codec.WithNewMessage(context.Background())
-	httprsp, err := http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[0].Raw)), &http.Request{Method: "POST"})
+	httpRsp, err := http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[0].Raw)), &http.Request{Method: http.MethodPost})
 	require.Nil(t, err)
-	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httprsp})
+	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httpRsp})
 	cc := thttp.ClientCodec{}
-	_, err = cc.Decode(msg, []byte("{\"username\":\"xyz\",\"password\":\"xyz\",\"from\":\"xyz\"}"))
+	_, err = cc.Decode(msg, nil)
 	require.Nil(t, err)
 	require.NotNil(t, msg.ClientRspHead(), "req head is nil")
 
@@ -356,95 +427,118 @@ func TestClientErrDecode(t *testing.T) {
 	// Failed to read body.
 	rp, _ := io.Pipe()
 	_ = rp.CloseWithError(errors.New("read failed"))
-	httprsp, err = http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[0].Raw)),
-		&http.Request{Method: "POST"})
+	httpRsp, err = http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[0].Raw)),
+		&http.Request{Method: http.MethodPost})
 	require.Nil(t, err)
-	httprsp.Body = rp
-	httprsp.StatusCode = http.StatusOK
+	httpRsp.Body = rp
+	httpRsp.StatusCode = http.StatusOK
 
-	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httprsp})
+	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httpRsp})
 	cc = thttp.ClientCodec{}
-	_, err = cc.Decode(msg, []byte("{\"username\":\"xyz\",\"password\":\"xyz\",\"from\":\"xyz\"}"))
+	_, err = cc.Decode(msg, nil)
 	require.NotNil(t, err)
 
 	// HTTP status code is 300 (when status code >= 300, ClientCodec.Decode should return response error).
-	httprsp, err = http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[0].Raw)),
-		&http.Request{Method: "POST"})
+	httpRsp, err = http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[0].Raw)),
+		&http.Request{Method: http.MethodPost})
 	require.Nil(t, err)
-	httprsp.StatusCode = http.StatusMultipleChoices
-	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httprsp})
+	httpRsp.StatusCode = http.StatusMultipleChoices
+	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httpRsp})
 
 	cc = thttp.ClientCodec{}
-	_, err = cc.Decode(msg, []byte("{\"username\":\"xyz\",\"password\":\"xyz\",\"from\":\"xyz\"}"))
+	_, err = cc.Decode(msg, nil)
 	require.Nil(t, err, "Failed to decode")
 	require.NotNil(t, msg.ClientRspErr(), "response error should not be nil")
 }
 
+func TestClientCompressDecode(t *testing.T) {
+	_, msg := codec.WithNewMessage(context.Background())
+	httpRsp, _ := http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[1].Raw)),
+		&http.Request{Method: http.MethodPost})
+	httpRsp.Header.Add("Content-Encoding", "gzip")
+	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httpRsp})
+	msg.WithCompressType(codec.CompressTypeSnappy)
+	_, err := thttp.DefaultClientCodec.Decode(msg, nil)
+	require.Nil(t, err, "Failed to decode")
+	require.Equal(t, codec.CompressTypeGzip, msg.CompressType())
+}
+
+func TestClientNoCompressDecode(t *testing.T) {
+	_, msg := codec.WithNewMessage(context.Background())
+	httpRsp, _ := http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[1].Raw)),
+		&http.Request{Method: http.MethodPost})
+	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httpRsp})
+	msg.WithCompressType(codec.CompressTypeSnappy)
+	_, err := thttp.DefaultClientCodec.Decode(msg, nil)
+	require.Nil(t, err, "Failed to decode")
+	require.Equal(t, codec.CompressTypeNoop, msg.CompressType())
+}
+
 func TestClientSuccessDecode(t *testing.T) {
 	_, msg := codec.WithNewMessage(context.Background())
-	httprsp, _ := http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[1].Raw)),
-		&http.Request{Method: "POST"})
-	httprsp.Header.Add("Content-Encoding", "gzip")
-	httprsp.Header.Add("trpc-trans-info", `{"key1":"val1", "key2":"val2"}`)
-	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httprsp})
+	httpRsp, _ := http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[1].Raw)),
+		&http.Request{Method: http.MethodPost})
+	httpRsp.Header.Add("Content-Encoding", "gzip")
+	httpRsp.Header.Add(thttp.TrpcTransInfo, `{"key1":"val1", "key2":"val2"}`)
+	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httpRsp})
 	body, err := thttp.DefaultClientCodec.Decode(msg, []byte("{\"username\":\"xyz\","+
 		"\"password\":\"xyz\",\"from\":\"xyz\"}"))
 	require.Nil(t, err, "Failed to decode")
 	require.NotNil(t, msg.ClientRspHead(), "req head is nil")
-	require.Equal(t, string(body), respTests[1].Body, "body is error", string(body))
+	require.Equal(t, respTests[1].Body, string(body), "body is error", string(body))
 	require.Equal(t, codec.CompressTypeGzip, msg.CompressType())
 
 	// HTTP status code 101.
-	httprsp, err = http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[2].Raw)),
-		&http.Request{Method: "POST"})
+	httpRsp, err = http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[2].Raw)),
+		&http.Request{Method: http.MethodPost})
 	require.Nil(t, err)
-	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httprsp})
+	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httpRsp})
 
-	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httprsp})
+	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httpRsp})
 	cc := thttp.ClientCodec{}
-	body, err = cc.Decode(msg, []byte("{\"username\":\"xyz\",\"password\":\"xyz\",\"from\":\"xyz\"}"))
+	body, err = cc.Decode(msg, nil)
 	require.Nil(t, err, "Failed to decode")
 	require.Empty(t, body)
 
 	// HTTP status code 201.
-	httprsp, err = http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[0].Raw)),
-		&http.Request{Method: "POST"})
+	httpRsp, err = http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[0].Raw)),
+		&http.Request{Method: http.MethodPost})
 	require.Nil(t, err)
-	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httprsp})
-	httprsp.StatusCode = http.StatusCreated
+	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httpRsp})
+	httpRsp.StatusCode = http.StatusCreated
 
-	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httprsp})
+	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httpRsp})
 	cc = thttp.ClientCodec{}
-	body, err = cc.Decode(msg, []byte("{\"username\":\"xyz\",\"password\":\"xyz\",\"from\":\"xyz\"}"))
+	body, err = cc.Decode(msg, nil)
 	require.Nil(t, err, "Failed to decode")
 	require.Equal(t, respTests[0].Body, string(body), "body is error", string(body))
 }
 
 func TestClientRetDecode(t *testing.T) {
 	_, msg := codec.WithNewMessage(context.Background())
-	httprsp, err := http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[1].Raw)), &http.Request{Method: "POST"})
+	httpRsp, err := http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[1].Raw)), &http.Request{Method: http.MethodPost})
 	require.Nil(t, err)
-	httprsp.Header.Add("trpc-ret", "1")
-	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httprsp})
+	httpRsp.Header.Add(thttp.TrpcFrameworkErrorCode, "1")
+	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httpRsp})
 	_, err = thttp.DefaultClientCodec.Decode(msg,
 		[]byte("{\"username\":\"xyz\",\"password\":\"xyz\",\"from\":\"xyz\"}"))
 	require.Nil(t, err, "Failed to decode")
 	require.NotNil(t, msg.ClientRspErr())
-	require.EqualValues(t, 1, errs.Code(msg.ClientRspErr()))
+	require.Equal(t, 1, errs.Code(msg.ClientRspErr()))
 }
 
 func TestClientFuncRetDecode(t *testing.T) {
 	_, msg := codec.WithNewMessage(context.Background())
-	httprsp, err := http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[1].Raw)), &http.Request{Method: "POST"})
+	httpRsp, err := http.ReadResponse(bufio.NewReader(strings.NewReader(respTests[1].Raw)), &http.Request{Method: http.MethodPost})
 	require.Nil(t, err)
-	httprsp.Header.Add("trpc-func-ret", "1000")
-	httprsp.Header.Add("Content-Type", "application/json")
-	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httprsp})
+	httpRsp.Header.Add(thttp.TrpcUserFuncErrorCode, "1000")
+	httpRsp.Header.Add("Content-Type", "application/json")
+	msg.WithClientRspHead(&thttp.ClientRspHeader{Response: httpRsp})
 	_, err = thttp.DefaultClientCodec.Decode(msg,
 		[]byte("{\"username\":\"xyz\",\"password\":\"xyz\",\"from\":\"xyz\"}"))
 	require.Nil(t, err, "Failed to decode")
 	require.NotNil(t, msg.ClientRspErr())
-	require.EqualValues(t, 1000, errs.Code(msg.ClientRspErr()))
+	require.Equal(t, 1000, errs.Code(msg.ClientRspErr()))
 }
 
 func TestServiceDecodeWithHeader(t *testing.T) {
@@ -504,7 +598,7 @@ func TestServerCodecDecodeTransInfo(t *testing.T) {
 }
 
 func TestDisableEncodeBase64(t *testing.T) {
-	r, err := http.NewRequest("POST", "/SayHello", bytes.NewReader([]byte("")))
+	r, err := http.NewRequest(http.MethodPost, "/SayHello", bytes.NewReader([]byte("")))
 	require.Nil(t, err)
 	w := &httptest.ResponseRecorder{}
 	h := &thttp.Header{Request: r, Response: w}
@@ -523,8 +617,7 @@ func TestDisableEncodeBase64(t *testing.T) {
 
 func TestCoexistenceOfHTTPRPCAndNoProtocol(t *testing.T) {
 	defer func() { thttp.ServiceDesc.Methods = thttp.ServiceDesc.Methods[:0] }()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	require.Nil(t, err)
+	ln := mustListen(t)
 	defer ln.Close()
 	serviceName := "trpc.test.hello.service" + t.Name()
 	s := server.New(
@@ -537,7 +630,7 @@ func TestCoexistenceOfHTTPRPCAndNoProtocol(t *testing.T) {
 		// This requires that the standard HTTP handler function can still read the
 		// request body, even if the `AutoReadBody` field in the default server
 		// codec `DefaultServerCodec` for the `http` protocol is `true`.
-		server.WithProtocol("http"),
+		server.WithProtocol(protocol.HTTP),
 	)
 	// Register standard HTTP handle.
 	thttp.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) error {
@@ -579,7 +672,7 @@ func TestCoexistenceOfHTTPRPCAndNoProtocol(t *testing.T) {
 	require.Equal(t, msg, rsp.Message)
 
 	// Send HTTP RPC request.
-	proxy := helloworld.NewGreeterClientProxy(client.WithTarget(target), client.WithProtocol("http"))
+	proxy := helloworld.NewGreeterClientProxy(client.WithTarget(target), client.WithProtocol(protocol.HTTP))
 	resp, err := proxy.SayHello(ctx, &helloworld.HelloRequest{Name: msg})
 	require.Nil(t, err)
 	require.Equal(t, msg, resp.Message)
@@ -611,28 +704,28 @@ type respTest struct {
 var respTests = []respTest{
 	// Unchunked response without Content-Length.
 	{
-		"HTTP/1.0 404 NOT FOUND\r\n" +
+		Raw: "HTTP/1.0 404 NOT FOUND\r\n" +
 			"Connection: close\r\n" +
 			"\r\n" +
 			"Body here\n",
 
-		"Body here\n",
+		Body: "Body here\n",
 	},
 
 	// Unchunked HTTP/1.1 response without Content-Length or
 	// Connection headers.
 	{
-		"HTTP/1.1 200 OK\r\n" +
+		Raw: "HTTP/1.1 200 OK\r\n" +
 			"\r\n" +
 			"{\"msg\":\"from hi\"}\n",
 
-		"{\"msg\":\"from hi\"}\n",
+		Body: "{\"msg\":\"from hi\"}\n",
 	},
 
 	// Unchunked HTTP/1.1 response without body.
 	{
-		"HTTP/1.1 101 Switching Protocols\r\n" +
+		Raw: "HTTP/1.1 101 Switching Protocols\r\n" +
 			"\r\n",
 
-		"",
+		Body: "",
 	}}

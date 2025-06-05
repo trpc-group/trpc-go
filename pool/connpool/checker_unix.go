@@ -22,6 +22,8 @@ import (
 	"net"
 	"syscall"
 
+	"golang.org/x/sys/unix"
+
 	"trpc.group/trpc-go/trpc-go/internal/report"
 )
 
@@ -44,7 +46,8 @@ func checkConnErrUnblock(conn net.Conn, buf []byte) error {
 	err = rawConn.Read(func(fd uintptr) bool {
 		// Go sets the socket to non-blocking mode by default, and calling syscall can return directly.
 		// Refer to the Go source code: sysSocket() function under src/net/sock_cloexec.go
-		n, sysErr = syscall.Read(int(fd), buf)
+
+		n, sysErr = unix.Read(int(fd), buf)
 		// Return true, the blocking and waiting encapsulated by
 		// the net library will not be executed, and return directly.
 		return true
@@ -63,7 +66,7 @@ func checkConnErrUnblock(conn net.Conn, buf []byte) error {
 		return errors.New("unexpected read from socket")
 	}
 	// Return to EAGAIN or EWOULDBLOCK if the idle connection is in normal state.
-	if sysErr == syscall.EAGAIN || sysErr == syscall.EWOULDBLOCK {
+	if sysErr == unix.EAGAIN || sysErr == unix.EWOULDBLOCK {
 		return nil
 	}
 	return sysErr

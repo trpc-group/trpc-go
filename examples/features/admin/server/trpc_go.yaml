@@ -10,7 +10,7 @@ server:                                            # server configuration.
     port: 11014                                    # the admin listening port.
     read_timeout: 3000                             # maximum time when a request is accepted and the request information is fully read, to prevent slow clients, in milliseconds.
     write_timeout: 60000                           # maximum processing time in milliseconds.
-  service:                                         # business service configuration，can have multiple.
+  service:                                         # business service configuration, can have multiple.
     - name: trpc.examples.admin.Admin              # the route name of the service.
       ip: 127.0.0.1                                # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
       port: 8000                                   # the service listening port, can use the placeholder ${port}.

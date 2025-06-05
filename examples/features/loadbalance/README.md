@@ -5,17 +5,20 @@ This example demonstrates the use of load balancing in tRPC.
 ## Usage
 
 * Start the server
+
 ```shell
-$ go run server/main.go -conf server/trpc_go.yaml
+go run server/main.go -conf server/trpc_go.yaml
 ```
 
 * Start the client
+
 ```shell
-$ go run client/main.go
+go run client/main.go
 ```
 
 The server log will be displayed as follows:
-```
+
+```log
 2023-06-19 14:17:14.077 DEBUG   maxprocs/maxprocs.go:47 maxprocs: Leaving GOMAXPROCS=10: CPU quota undefined
 2023-06-19 14:17:14.078 INFO    server/service.go:164   process:87066, trpc service:trpc.examples.loadbalance.Loadbalance launch success, tcp:127.0.0.1:8000, serving ...
 2023/06/19 14:17:18 Received msg from client : trpc-go-client 0
@@ -31,7 +34,8 @@ The server log will be displayed as follows:
 ```
 
 The client log will be displayed as follows:
-```
+
+```log
 Test Loadbalance with round_robin:
 2023/06/19 14:17:18 Received error from client 1: type:framework, code:111, msg:tcp client transport dial, cost:152.583µs, caused by dial tcp 127.0.0.1:8001: connect: connection refused
 2023/06/19 14:17:18 Received error from client 2: type:framework, code:111, msg:tcp client transport dial, cost:123.375µs, caused by dial tcp 127.0.0.1:8002: connect: connection refused
@@ -63,17 +67,14 @@ When the service discovery returns a list of server addresses instead of a singl
 
 The tRPC-Go load balancing strategy defaults to a random strategy, Users can customize the load balancing algorithm. The algorithms provided by the framework include:
 
-- random
-- round robin
-- weight round robin
-- consistent hash
+* random
+* round robin
+* weight round robin
+* consistent hash
 
-This demo uses a custom service discovery strategy, which can be referred to at [Discovery](/examples/features/discovery/README.md). In this example, testLB uses an assigned strategy with parameter `balancerName`.
+This demo uses a custom service discovery strategy, which can be referred to at [Discovery](../discovery/README.md). In this example, testLB uses an assigned strategy with parameter `balancerName`.
 
 There are two points to note:
 
-- The service is addressed through the serviceName and target cannot be set. If target is set through client.WithTarget, tRPC-go will default to using the target for service discovery and load balancing. For example, if the target is set to "ip://127.0.0.1:8000", this will directly take the IP addressing strategy.
-- It is necessary to import the corresponding load balancing strategy package, otherwise a "loadbalance not exists" error will be reported.
-
-
-
+* The service is addressed through the serviceName and target cannot be set. If target is set through client.WithTarget, tRPC-go will default to using the target for service discovery and load balancing. For example, if the target is set to "ip://127.0.0.1:8000", this will directly take the IP addressing strategy.
+* It is necessary to import the corresponding load balancing strategy package, otherwise a "loadbalance not exists" error will be reported.

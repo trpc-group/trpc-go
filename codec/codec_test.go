@@ -17,7 +17,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"trpc.group/trpc-go/trpc-go/codec"
 )
@@ -25,35 +25,50 @@ import (
 // go test -v -coverprofile=cover.out
 // go tool cover -func=cover.out
 
-// Fake is a fake codec for test
-type Fake struct {
-}
+type fakeCodec struct{}
 
-func (c *Fake) Encode(message codec.Msg, inbody []byte) (outbuf []byte, err error) {
+func (c *fakeCodec) Encode(message codec.Msg, in []byte) (out []byte, err error) {
 	return nil, nil
 }
 
-func (c *Fake) Decode(message codec.Msg, inbuf []byte) (outbody []byte, err error) {
+func (c *fakeCodec) Decode(message codec.Msg, in []byte) (out []byte, err error) {
 	return nil, nil
 }
 
 // TestCodec is unit test for the register logic of codec.
-func TestCodec(t *testing.T) {
-	f := &Fake{}
+func TestCodec_Register(t *testing.T) {
+	serverCodec, clientCodec := &fakeCodec{}, &fakeCodec{}
+	codec.Register("fakeCode", serverCodec, serverCodec)
 
-	codec.Register("fake", f, f)
+	t.Run("no registered codec", func(t *testing.T) {
+		require.Nil(t, codec.GetServer("no registered codec"))
+		require.Nil(t, codec.GetClient("no registered codec"))
+	})
+	t.Run("registered codec", func(t *testing.T) {
+		require.Equal(t, serverCodec, codec.GetServer("fakeCode"))
+		require.Equal(t, clientCodec, codec.GetClient("fakeCode"))
+	})
+}
 
-	serverCodec := codec.GetServer("NoExists")
-	assert.Nil(t, serverCodec)
+func TestCodec_MustRegister(t *testing.T) {
+	serverCodec, clientCodec := &fakeCodec{}, &fakeCodec{}
 
-	clientCodec := codec.GetClient("NoExists")
-	assert.Nil(t, clientCodec)
+	t.Run("no registered codec", func(t *testing.T) {
+		require.Nil(t, codec.GetServer("fakeCodeMustRegister"))
+		require.Nil(t, codec.GetClient("fakeCodeMustRegister"))
+	})
 
-	serverCodec = codec.GetServer("fake")
-	assert.Equal(t, f, serverCodec)
+	codec.MustRegister("fakeCodeMustRegister", serverCodec, serverCodec)
 
-	clientCodec = codec.GetClient("fake")
-	assert.Equal(t, f, clientCodec)
+	t.Run("registered codec", func(t *testing.T) {
+		require.Equal(t, serverCodec, codec.GetServer("fakeCodeMustRegister"))
+		require.Equal(t, clientCodec, codec.GetClient("fakeCodeMustRegister"))
+	})
+	t.Run("repeat register", func(t *testing.T) {
+		require.Panics(t, func() {
+			codec.MustRegister("fakeCodeMustRegister", serverCodec, serverCodec)
+		})
+	})
 }
 
 // GOMAXPROCS=1 go test -bench=WithNewMessage -benchmem -benchtime=10s

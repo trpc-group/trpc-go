@@ -1,0 +1,56 @@
+//
+//
+// Tencent is pleased to support the open source community by making tRPC available.
+//
+// Copyright (C) 2023 THL A29 Limited, a Tencent company.
+// All rights reserved.
+//
+// If you have downloaded a copy of the tRPC source code from Tencent,
+// please note that tRPC source code is licensed under the  Apache 2.0 License,
+// A copy of the Apache 2.0 License is included in this file.
+//
+//
+
+syntax = "proto3";
+
+option go_package = "trpc.group/trpc-go/trpc-go/testdata/reflection";
+
+package trpc.testdata.reflection;
+
+// generate trpc stub code: `trpc create -p search.proto --api-version 2 --rpconly -o ./ --protodir . --mock=false --nogomod`
+
+message SearchResponse {
+  message Result {
+    string url = 1;
+    string title = 2;
+    repeated string snippets = 3;
+    message Value {
+      oneof val {
+        string str = 1;
+        int64 int = 2;
+        double real = 3;
+      }
+    }
+    map<string, Value> metadata = 4;
+  }
+  enum State {
+    UNKNOWN = 0;
+    FRESH = 1;
+    STALE = 2;
+  }
+  repeated Result results = 1;
+  State state = 2;
+}
+
+message SearchRequest {
+  string query = 1;
+}
+
+// SearchService is used to test trpc server reflection.
+service Search {
+  // Search is a unary RPC.
+  rpc Search(SearchRequest) returns (SearchResponse);
+
+  // StreamingSearch is a streaming RPC.
+  rpc StreamingSearch(stream SearchRequest) returns (stream SearchResponse);
+}

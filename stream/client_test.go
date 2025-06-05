@@ -24,17 +24,16 @@ import (
 	"testing"
 	"time"
 
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
-
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/server"
-	"trpc.group/trpc-go/trpc-go/stream"
 	"trpc.group/trpc-go/trpc-go/transport"
 
 	"github.com/stretchr/testify/assert"
+
+	"trpc.group/trpc-go/trpc-go/stream"
 )
 
 var ctx = context.Background()
@@ -150,7 +149,7 @@ func TestClient(t *testing.T) {
 	assert.Nil(t, err)
 
 	f = func(fh *trpc.FrameHead, msg codec.Msg) ([]byte, error) {
-		fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
+		fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
 		return []byte("body"), nil
 	}
 	ft.expectChan <- f
@@ -161,7 +160,7 @@ func TestClient(t *testing.T) {
 	assert.Equal(t, rspBody.Data, []byte("body"))
 
 	f = func(fh *trpc.FrameHead, msg codec.Msg) ([]byte, error) {
-		fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE)
+		fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE)
 		return nil, nil
 	}
 	ft.expectChan <- f
@@ -189,7 +188,7 @@ func TestClient(t *testing.T) {
 
 	f = func(fh *trpc.FrameHead, msg codec.Msg) ([]byte, error) {
 		msg.WithClientRspErr(errors.New("close type is reset"))
-		fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE)
+		fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE)
 		return nil, nil
 	}
 	ft.expectChan <- f
@@ -219,8 +218,8 @@ func TestClientFlowControl(t *testing.T) {
 	transport.DefaultClientTransport = ft
 
 	f := func(fh *trpc.FrameHead, msg codec.Msg) ([]byte, error) {
-		fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
-		msg.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{InitWindowSize: 2000})
+		fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
+		msg.WithStreamFrame(&trpc.TrpcStreamInitMeta{InitWindowSize: 2000})
 		return nil, nil
 	}
 	ft.expectChan <- f
@@ -243,7 +242,7 @@ func TestClientFlowControl(t *testing.T) {
 
 	for i := 0; i < 20000; i++ {
 		f = func(fh *trpc.FrameHead, msg codec.Msg) ([]byte, error) {
-			fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
+			fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
 			return []byte("body"), nil
 		}
 		ft.expectChan <- f
@@ -254,7 +253,7 @@ func TestClientFlowControl(t *testing.T) {
 	}
 
 	f = func(fh *trpc.FrameHead, msg codec.Msg) ([]byte, error) {
-		fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE)
+		fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE)
 		return nil, nil
 	}
 	ft.expectChan <- f
@@ -291,6 +290,7 @@ func TestClientError(t *testing.T) {
 		client.WithStreamTransport(ft))
 	assert.Nil(t, cs)
 	assert.NotNil(t, err)
+	assert.Equal(t, errs.RetClientStreamInitErr, errs.Code(err))
 
 	// test Init error.
 	cs, err = cli.NewStream(ctx, bidiDesc, "/trpc.test.helloworld.Greeter/SayHello",
@@ -358,6 +358,7 @@ func TestClientContext(t *testing.T) {
 	cli := stream.NewStreamClient()
 	assert.Equal(t, cli, stream.DefaultStreamClient)
 
+	ctx := context.Background()
 	var ft = &fakeTransport{expectChan: make(chan recvExpect, 1)}
 	transport.DefaultClientTransport = ft
 	// test context cancel situation.
@@ -465,10 +466,6 @@ func TestClientStreamClientFilters(t *testing.T) {
 	var beginNum uint64 = 100
 
 	counts := 1000
-	svrOpts := []server.Option{
-		server.WithAddress("127.0.0.1:30211"),
-		server.WithStreamFilters(serverFilterAdd1, serverFilterAdd2),
-	}
 	handle := func(s server.Stream) error {
 		var req *codec.Body
 
@@ -495,11 +492,11 @@ func TestClientStreamClientFilters(t *testing.T) {
 		}
 		return nil
 	}
-	svr := startStreamServer(handle, svrOpts)
+	svr, lis := startStreamServer(t, handle, server.WithStreamFilters(serverFilterAdd1, serverFilterAdd2))
 	defer closeStreamServer(svr)
 
 	cliOpts := []client.Option{
-		client.WithTarget("ip://127.0.0.1:30211"),
+		client.WithTarget("ip://" + lis.Addr().String()),
 		client.WithStreamFilters(clientFilterAdd1, clientFilterAdd2),
 	}
 	cliStream, err := getClientStream(context.Background(), bidiDesc, cliOpts)
@@ -537,20 +534,16 @@ func TestClientStreamFlowControlStop(t *testing.T) {
 	windows := 102400
 	dataLen := 1024
 	maxSends := windows / dataLen
-	svrOpts := []server.Option{
-		server.WithAddress("127.0.0.1:30211"),
-		server.WithMaxWindowSize(uint32(windows)),
-	}
 	handle := func(s server.Stream) error {
 		time.Sleep(time.Hour)
 		return nil
 	}
-	svr := startStreamServer(handle, svrOpts)
+	svr, lis := startStreamServer(t, handle, server.WithMaxWindowSize(uint32(windows)))
 	defer closeStreamServer(svr)
 
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(200*time.Millisecond))
 	defer cancel()
-	cliOpts := []client.Option{client.WithTarget("ip://127.0.0.1:30211")}
+	cliOpts := []client.Option{client.WithTarget("ip://" + lis.Addr().String())}
 	cliStream, err := getClientStream(ctx, bidiDesc, cliOpts)
 	assert.Nil(t, err)
 
@@ -570,7 +563,6 @@ func TestServerStreamFlowControlStop(t *testing.T) {
 	dataLen := 1024
 	maxSends := windows / dataLen
 	waitCh := make(chan struct{}, 1)
-	svrOpts := []server.Option{server.WithAddress("127.0.0.1:30211")}
 	handle := func(s server.Stream) error {
 		rsp := getBytes(dataLen)
 		rand.Read(rsp.Data)
@@ -596,11 +588,11 @@ func TestServerStreamFlowControlStop(t *testing.T) {
 		waitCh <- struct{}{}
 		return nil
 	}
-	svr := startStreamServer(handle, svrOpts)
+	svr, lis := startStreamServer(t, handle)
 	defer closeStreamServer(svr)
 
 	cliOpts := []client.Option{
-		client.WithTarget("ip://127.0.0.1:30211"),
+		client.WithTarget("ip://" + lis.Addr().String()),
 		client.WithMaxWindowSize(uint32(windows)),
 	}
 	_, err := getClientStream(context.Background(), bidiDesc, cliOpts)
@@ -609,7 +601,6 @@ func TestServerStreamFlowControlStop(t *testing.T) {
 }
 
 func TestClientStreamSendRecvNoBlock(t *testing.T) {
-	svrOpts := []server.Option{server.WithAddress("127.0.0.1:30210")}
 	handle := func(s server.Stream) error {
 		// Must sleep, to avoid returning before receiving the first packet from the client,
 		// resulting in the processing of the first packet returns an error,
@@ -617,10 +608,10 @@ func TestClientStreamSendRecvNoBlock(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 		return errors.New("test error")
 	}
-	svr := startStreamServer(handle, svrOpts)
+	svr, lis := startStreamServer(t, handle)
 	defer closeStreamServer(svr)
 
-	cliOpts := []client.Option{client.WithTarget("ip://127.0.0.1:30210")}
+	cliOpts := []client.Option{client.WithTarget("ip://" + lis.Addr().String())}
 	cliStream, err := getClientStream(context.Background(), bidiDesc, cliOpts)
 	assert.Nil(t, err)
 
@@ -639,7 +630,6 @@ func TestClientStreamSendRecvNoBlock(t *testing.T) {
 }
 
 func TestServerStreamSendRecvNoBlock(t *testing.T) {
-	svrOpts := []server.Option{server.WithAddress("127.0.0.1:30210")}
 	SendMsgReturn := make(chan struct{}, 1)
 	RecvMsgReturn := make(chan struct{}, 1)
 	handle := func(s server.Stream) error {
@@ -659,10 +649,10 @@ func TestServerStreamSendRecvNoBlock(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 		return nil
 	}
-	svr := startStreamServer(handle, svrOpts)
+	svr, lis := startStreamServer(t, handle)
 	defer closeStreamServer(svr)
 
-	cliOpts := []client.Option{client.WithTarget("ip://127.0.0.1:30210")}
+	cliOpts := []client.Option{client.WithTarget("ip://" + lis.Addr().String())}
 	_, err := getClientStream(context.Background(), bidiDesc, cliOpts)
 	assert.Nil(t, err)
 
@@ -676,10 +666,6 @@ func TestClientStreamReturn(t *testing.T) {
 		dataLen             = 1024
 	)
 
-	svrOpts := []server.Option{
-		server.WithAddress("127.0.0.1:30211"),
-		server.WithCurrentCompressType(invalidCompressType),
-	}
 	handle := func(s server.Stream) error {
 		req := getBytes(dataLen)
 		s.RecvMsg(req)
@@ -687,11 +673,11 @@ func TestClientStreamReturn(t *testing.T) {
 		s.SendMsg(rsp)
 		return errs.NewFrameError(101, "expected error")
 	}
-	svr := startStreamServer(handle, svrOpts)
+	svr, lis := startStreamServer(t, handle, server.WithCurrentCompressType(invalidCompressType))
 	defer closeStreamServer(svr)
 
 	cliOpts := []client.Option{
-		client.WithTarget("ip://127.0.0.1:30211"),
+		client.WithTarget("ip://" + lis.Addr().String()),
 		client.WithCompressType(invalidCompressType),
 	}
 
@@ -702,8 +688,7 @@ func TestClientStreamReturn(t *testing.T) {
 
 	rsp := getBytes(dataLen)
 	err = clientStream.RecvMsg(rsp)
-
-	assert.EqualValues(t, int32(101), errs.Code(err.(*errs.Error).Unwrap()))
+	assert.Equal(t, 101, errs.Code(err.(*errs.Error)))
 }
 
 // TestClientSendFailWhenServerUnavailable test when the client blocks
@@ -807,9 +792,6 @@ func TestClientServerCompress(t *testing.T) {
 		dataLen      = 1024
 		compressType = codec.CompressTypeSnappy
 	)
-	svrOpts := []server.Option{
-		server.WithAddress("127.0.0.1:30211"),
-	}
 	handle := func(s server.Stream) error {
 		assert.Equal(t, compressType, codec.Message(s.Context()).CompressType())
 		req := getBytes(dataLen)
@@ -818,11 +800,11 @@ func TestClientServerCompress(t *testing.T) {
 		s.SendMsg(rsp)
 		return nil
 	}
-	svr := startStreamServer(handle, svrOpts)
+	svr, lis := startStreamServer(t, handle)
 	defer closeStreamServer(svr)
 
 	cliOpts := []client.Option{
-		client.WithTarget("ip://127.0.0.1:30211"),
+		client.WithTarget("ip://" + lis.Addr().String()),
 		client.WithCompressType(compressType),
 	}
 
@@ -837,4 +819,66 @@ func TestClientServerCompress(t *testing.T) {
 	err = clientStream.RecvMsg(rsp)
 	assert.Equal(t, rsp.Data, req.Data)
 	assert.Nil(t, err)
+}
+
+func TestNotifyServerWhenClientContextCanceled(t *testing.T) {
+	t.Run("Server RecvMsg Return Error", func(t *testing.T) {
+		waitServerHandle := make(chan struct{}, 1)
+		handle := func(s server.Stream) error {
+			req := getBytes(1024)
+			err := s.RecvMsg(req)
+			assert.NotNil(t, err)
+			waitServerHandle <- struct{}{}
+			return nil
+		}
+		svr, lis := startStreamServer(t, handle)
+		defer closeStreamServer(svr)
+
+		cliOpts := []client.Option{
+			client.WithTarget("ip://" + lis.Addr().String()),
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		_, err := getClientStream(ctx, clientDesc, cliOpts)
+		assert.Nil(t, err)
+		cancel()
+		select {
+		case <-waitServerHandle:
+		case <-time.After(time.Millisecond * 500):
+			assert.FailNow(t, "The server did not detect the client context cancellation.")
+		}
+	})
+
+	t.Run("Server SendMsg Return Error", func(t *testing.T) {
+		var (
+			waitClientCancel = make(chan struct{}, 1)
+			waitServerHandle = make(chan struct{}, 1)
+		)
+		handle := func(s server.Stream) error {
+			<-waitClientCancel
+			req := getBytes(1024)
+			err := s.SendMsg(req)
+			assert.NotNil(t, err)
+			waitServerHandle <- struct{}{}
+			return nil
+		}
+		svr, lis := startStreamServer(t, handle)
+		defer closeStreamServer(svr)
+
+		cliOpts := []client.Option{
+			client.WithTarget("ip://" + lis.Addr().String()),
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		_, err := getClientStream(ctx, clientDesc, cliOpts)
+		assert.Nil(t, err)
+		cancel()
+		// When the client cancels, there is a certain delay in sending the close frame because
+		// the server's SendMsg is non-blocking. Therefore, it is necessary to sleep for a period of time.
+		time.Sleep(time.Millisecond * 100)
+		waitClientCancel <- struct{}{}
+		select {
+		case <-waitServerHandle:
+		case <-time.After(time.Millisecond * 500):
+			assert.FailNow(t, "The server did not detect the client context cancellation.")
+		}
+	})
 }

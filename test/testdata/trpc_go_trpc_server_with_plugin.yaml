@@ -11,3 +11,6 @@ server:
 plugins:
   test:
     timeout:
+      key: timeout-key
+    default:
+      key: default-key

@@ -15,6 +15,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/filter"
@@ -28,6 +29,7 @@ func mayConvert2FullLinkTimeout(
 	next filter.ServerHandleFunc,
 ) (interface{}, error) {
 	rsp, err := next(ctx, req)
+	rsp, err = checkContextDeadlineExceeded(ctx, rsp, err)
 	if e, ok := err.(*errs.Error); ok &&
 		e.IsTimeout(errs.ErrorTypeFramework) &&
 		e.Code != errs.RetClientTimeout {
@@ -44,10 +46,21 @@ func mayConvert2NormalTimeout(
 	next filter.ServerHandleFunc,
 ) (interface{}, error) {
 	rsp, err := next(ctx, req)
+	rsp, err = checkContextDeadlineExceeded(ctx, rsp, err)
 	if e, ok := err.(*errs.Error); ok &&
 		e.IsTimeout(errs.ErrorTypeFramework) &&
 		e.Code != errs.RetClientTimeout {
 		e.Code = errs.RetServerTimeout
+	}
+	return rsp, err
+}
+
+func checkContextDeadlineExceeded(ctx context.Context, rsp interface{}, err error) (interface{}, error) {
+	if err == nil && ctx.Err() == context.DeadlineExceeded {
+		return nil, errs.NewFrameError(
+			errs.RetServerTimeout,
+			fmt.Sprintf("server context deadline exceeded, original rsp: %+v", rsp),
+		)
 	}
 	return rsp, err
 }

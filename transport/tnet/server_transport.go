@@ -10,11 +10,11 @@
 // A copy of the Apache 2.0 License is included in this file.
 //
 //
+// Package tnet provides tRPC-Go transport implementation for tnet networking framework.
 
 //go:build linux || freebsd || dragonfly || darwin
 // +build linux freebsd dragonfly darwin
 
-// Package tnet provides tRPC-Go transport implementation for tnet networking framework.
 package tnet
 
 import (
@@ -25,15 +25,16 @@ import (
 	"sync"
 
 	"trpc.group/trpc-go/tnet"
-
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/addrutil"
+	"trpc.group/trpc-go/trpc-go/internal/keeporder/actor"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/transport"
 )
 
-const transportName = "tnet"
+const transportName = protocol.TNET
 
 func init() {
 	transport.RegisterServerTransport(transportName, DefaultServerTransport)
@@ -63,13 +64,11 @@ func (s *serverTransport) ListenAndServe(ctx context.Context, opts ...transport.
 	if err != nil {
 		return err
 	}
-	log.Infof("service:%s is using tnet transport, current number of pollers: %d",
-		lsOpts.ServiceName, tnet.NumPollers())
 	networks := strings.Split(lsOpts.Network, ",")
 	for _, network := range networks {
 		lsOpts.Network = network
 		if err := s.switchNetworkToServe(ctx, lsOpts); err != nil {
-			log.Error("switch to gonet default transport, ", err)
+			log.Info("switch to gonet default transport, ", err)
 			opts = append(opts, transport.WithListenNetwork(network))
 			return transport.DefaultServerTransport.ListenAndServe(ctx, opts...)
 		}
@@ -108,9 +107,17 @@ func (s *serverTransport) Close(ctx context.Context) {
 
 func (s *serverTransport) switchNetworkToServe(ctx context.Context, opts *transport.ListenServeOptions) error {
 	switch opts.Network {
-	case "tcp", "tcp4", "tcp6":
+	case protocol.TCP, protocol.TCP4, protocol.TCP6:
+		log.Infof("service: %s is using tnet tcp transport, current number of pollers: %d",
+			opts.ServiceName, tnet.NumPollers())
 		if err := s.listenAndServeTCP(ctx, opts); err != nil {
-			return err
+			return fmt.Errorf("tnet: listen and serve tcp: %w", err)
+		}
+	case protocol.UDP, protocol.UDP4, protocol.UDP6:
+		log.Infof("service: %s is using tnet udp transport, current number of pollers: %d",
+			opts.ServiceName, tnet.NumPollers())
+		if err := s.listenAndServeUDP(ctx, opts); err != nil {
+			return fmt.Errorf("tnet: listen and serve udp: %w", err)
 		}
 	default:
 		return fmt.Errorf("tnet server transport doesn't support network type [%s]", opts.Network)
@@ -141,6 +148,10 @@ func buildListenServeOptions(opts ...transport.ListenServeOption) (*transport.Li
 	lsOpts := &transport.ListenServeOptions{}
 	for _, o := range opts {
 		o(lsOpts)
+	}
+	if lsOpts.OrderedGroups == nil {
+		// Use actor.Default as the default implementation for ordered groups.
+		lsOpts.OrderedGroups = actor.Default
 	}
 	if lsOpts.FramerBuilder == nil {
 		return nil, errors.New("transport FramerBuilder empty")

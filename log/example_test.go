@@ -31,7 +31,7 @@ func Example() {
 		log.Register(defaultLoggerName, oldDefaultLogger)
 	}()
 
-	l = log.With(log.Field{Key: "tRPC-Go", Value: "log"})
+	l = l.With(log.Field{Key: "tRPC-Go", Value: "log"})
 	l.Trace("hello world")
 	l.Debug("hello world")
 	l.Info("hello world")
@@ -44,14 +44,14 @@ func Example() {
 	l.Errorf("hello world")
 
 	// Output:
-	// xxx	DEBUG	log/example_test.go:35	hello world	{"tRPC-Go": "log"}
-	// xxx	DEBUG	log/example_test.go:36	hello world	{"tRPC-Go": "log"}
-	// xxx	INFO	log/example_test.go:37	hello world	{"tRPC-Go": "log"}
-	// xxx	WARN	log/example_test.go:38	hello world	{"tRPC-Go": "log"}
-	// xxx	ERROR	log/example_test.go:39	hello world	{"tRPC-Go": "log"}
-	// xxx	DEBUG	log/example_test.go:40	hello world	{"tRPC-Go": "log"}
-	// xxx	DEBUG	log/example_test.go:41	hello world	{"tRPC-Go": "log"}
-	// xxx	INFO	log/example_test.go:42	hello world	{"tRPC-Go": "log"}
-	// xxx	WARN	log/example_test.go:43	hello world	{"tRPC-Go": "log"}
-	// xxx	ERROR	log/example_test.go:44	hello world	{"tRPC-Go": "log"}
+	// xxx	DEBUG	log/example_test.go:22	hello world	{"tRPC-Go": "log"}
+	// xxx	DEBUG	log/example_test.go:23	hello world	{"tRPC-Go": "log"}
+	// xxx	INFO	log/example_test.go:24	hello world	{"tRPC-Go": "log"}
+	// xxx	WARN	log/example_test.go:25	hello world	{"tRPC-Go": "log"}
+	// xxx	ERROR	log/example_test.go:26	hello world	{"tRPC-Go": "log"}
+	// xxx	DEBUG	log/example_test.go:27	hello world	{"tRPC-Go": "log"}
+	// xxx	DEBUG	log/example_test.go:28	hello world	{"tRPC-Go": "log"}
+	// xxx	INFO	log/example_test.go:29	hello world	{"tRPC-Go": "log"}
+	// xxx	WARN	log/example_test.go:30	hello world	{"tRPC-Go": "log"}
+	// xxx	ERROR	log/example_test.go:31	hello world	{"tRPC-Go": "log"}
 }

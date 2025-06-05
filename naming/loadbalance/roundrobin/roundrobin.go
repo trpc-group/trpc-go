@@ -39,7 +39,7 @@ func NewRoundRobin(interval time.Duration) *RoundRobin {
 	}
 }
 
-// RoundRobin defines the roundbin.
+// RoundRobin defines the round-robin.
 type RoundRobin struct {
 	pickers  *sync.Map
 	interval time.Duration
@@ -67,7 +67,7 @@ func (rr *RoundRobin) Select(serviceName string, list []*registry.Node,
 	return v.(*rrPicker).Pick(list, opts)
 }
 
-// rrPicker is a picker based on roundrobin algorithm.
+// rrPicker is a picker based on round-robin algorithm.
 type rrPicker struct {
 	list     []*registry.Node
 	updated  time.Time
@@ -89,6 +89,8 @@ func (p *rrPicker) Pick(list []*registry.Node, opts *loadbalance.Options) (*regi
 	return node, nil
 }
 
+// For efficiency considerations, comparisons are approximated by length,
+// and updates may not be immediate.
 func (p *rrPicker) updateState(list []*registry.Node) {
 	if len(p.list) == 0 ||
 		len(p.list) != len(list) ||

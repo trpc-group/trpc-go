@@ -27,6 +27,6 @@ func TestNodeString(t *testing.T) {
 		Address:     "127.0.0.1:8080",
 		CostTime:    time.Second,
 	}
-	assert.Equal(t, n.String(), fmt.Sprintf("service:%s, addr:%s, cost:%s",
+	assert.Equal(t, n.String(), fmt.Sprintf("service: %s, addr: %s, cost: %s",
 		n.ServiceName, n.Address, n.CostTime))
 }

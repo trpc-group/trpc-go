@@ -16,45 +16,65 @@ package loadbalance
 import (
 	"testing"
 
-	"trpc.group/trpc-go/trpc-go/naming/registry"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"trpc.group/trpc-go/trpc-go/naming/registry"
 )
 
-var testNode *registry.Node = &registry.Node{
+var testNode = &registry.Node{
 	ServiceName: "testservice",
 	Address:     "loadbalance.ip.1:16721",
 	Network:     "tcp",
 }
 
-type testLoadbalance struct{}
+type testLoadBalance struct{}
 
 // Select acquires a node.
-func (tlb *testLoadbalance) Select(serviceName string, list []*registry.Node, opt ...Option) (*registry.Node, error) {
+func (tlb *testLoadBalance) Select(serviceName string, list []*registry.Node, opt ...Option) (*registry.Node, error) {
 	return testNode, nil
 }
 
-func TestLoadbalanceRegister(t *testing.T) {
-	Register("tlb", &testLoadbalance{})
-	assert.NotNil(t, Get("tlb"))
+func TestLoadBalanceRegister(t *testing.T) {
+	want := &testLoadBalance{}
+	Register("tlb", want)
+	t.Cleanup(func() {
+		unregister(t, "tlb")
+	})
+	require.Equal(t, want, Get("tlb"))
 }
 
-func TestLoadbalanceGet(t *testing.T) {
-	Register("tlb", &testLoadbalance{})
-	assert.NotNil(t, Get("tlb"))
-	assert.Nil(t, Get("not_exist"))
+func TestLoadBalanceGet(t *testing.T) {
+	want := &testLoadBalance{}
+	Register("tlb", &testLoadBalance{})
+	t.Cleanup(func() {
+		unregister(t, "tlb")
+	})
+	require.Equal(t, want, Get("tlb"))
+	require.Nil(t, Get("not_exist"))
 }
 
-func TestLoadbalanceSelect(t *testing.T) {
-	Register("tlb", &testLoadbalance{})
+func TestLoadBalanceSelect(t *testing.T) {
+	Register("tlb", &testLoadBalance{})
+	t.Cleanup(func() {
+		unregister(t, "tlb")
+	})
 	lb := Get("tlb")
-	n, err := lb.Select("test-service", nil, nil)
+	node, err := lb.Select("test-service", nil, nil)
 	assert.Nil(t, err)
-	assert.Equal(t, n, testNode)
+	assert.Equal(t, testNode, node)
 }
 
 func TestSetDefaultLoadBalancer(t *testing.T) {
-	noop := &testLoadbalance{}
+	noop := &testLoadBalance{}
 	SetDefaultLoadBalancer(noop)
 	assert.Equal(t, DefaultLoadBalancer, noop)
+}
+
+func unregister(t *testing.T, name string) {
+	t.Helper()
+
+	lock.Lock()
+	delete(loadbalancers, name)
+	lock.Unlock()
 }

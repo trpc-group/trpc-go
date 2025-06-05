@@ -15,12 +15,12 @@ package admin
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"reflect"
 	"strings"
@@ -40,47 +40,44 @@ import (
 )
 
 const (
+	testAddress    = "127.0.0.1:0"
 	testVersion    = "v0.2.0-alpha"
-	testAddress    = "localhost:0"
 	testConfigPath = "../testdata/trpc_go.yaml"
 )
 
-func newDefaultAdminServer() *Server {
-	s := NewServer(
-		WithVersion(testVersion),
-		WithAddr(testAddress),
-		WithTLS(false),
-		WithReadTimeout(defaultReadTimeout),
-		WithWriteTimeout(defaultWriteTimeout),
-		WithConfigPath(testConfigPath),
-	)
+var baseURL = fmt.Sprintf("http://%s", defaultListenAddr)
 
-	s.HandleFunc("/usercmd", userCmd)
-	s.HandleFunc("/errout", errOutput)
-	s.HandleFunc("/panicHandle", panicHandle)
+var adminServer = NewTrpcAdminServer(
 
-	return s
+	WithVersion(testVersion),
+	WithAddr(defaultListenAddr),
+	WithTLS(false),
+	WithReadTimeout(defaultReadTimeout),
+	WithWriteTimeout(defaultWriteTimeout),
+	WithConfigPath(testConfigPath),
+)
+
+func TestMain(m *testing.M) {
+	HandleFunc("/usercmd", userCmd)
+	HandleFunc("/errout", errOutput)
+	HandleFunc("/panicHandle", panicHandle)
+	startAdminServer()
+	exitCode := m.Run()
+	adminServer.Close(nil)
+	os.Exit(exitCode)
 }
 
-func mustStartAdminServer(t *testing.T, s *Server) {
-	t.Helper()
-
+func startAdminServer() {
 	go func() {
-		if err := s.Serve(); err != nil {
-			t.Log(err)
+		err := adminServer.Serve()
+		if err != nil {
+			log.Errorf("serve error: %s", err)
 		}
 	}()
 	time.Sleep(200 * time.Millisecond)
 }
 
 func TestRPCZFailed(t *testing.T) {
-	s := newDefaultAdminServer()
-	mustStartAdminServer(t, s)
-	t.Cleanup(func() {
-		if err := s.Close(nil); err != nil {
-			t.Log(err)
-		}
-	})
 	tests := []struct {
 		name      string
 		url       string
@@ -90,36 +87,36 @@ func TestRPCZFailed(t *testing.T) {
 	}{
 		{
 			name:      "handleSpans failed because query parameter isn't a number",
-			url:       fmt.Sprintf("http://%s", s.server.Addr) + patternRPCZSpansList + "?num=xxx",
-			errorCode: errCodeServer,
+			url:       baseURL + patternRPCZSpansList + "?num=xxx",
+			errorCode: ErrCodeServer,
 			message:   "must be a integer",
 			content:   "",
 		},
 		{
 			name:      "handleSpans failed because query parameter isn't a positive integer",
-			url:       fmt.Sprintf("http://%s", s.server.Addr) + patternRPCZSpansList + "?num=-1",
-			errorCode: errCodeServer,
+			url:       baseURL + patternRPCZSpansList + "?num=-1",
+			errorCode: ErrCodeServer,
 			message:   "must be a non-negative integer",
 			content:   nil,
 		},
 		{
 			name:      "handleSpan failed because can't find span_id",
-			url:       fmt.Sprintf("http://%s", s.server.Addr) + patternRPCZSpanGet + "1",
-			errorCode: errCodeServer,
+			url:       baseURL + patternRPCZSpanGet + "1",
+			errorCode: ErrCodeServer,
 			message:   "cannot find span-id",
 			content:   nil,
 		},
 		{
 			name:      "handleSpan failed because query parameter span_id is empty",
-			url:       fmt.Sprintf("http://%s", s.server.Addr) + patternRPCZSpanGet + "",
-			errorCode: errCodeServer,
+			url:       baseURL + patternRPCZSpanGet + "",
+			errorCode: ErrCodeServer,
 			message:   "undefined command",
 			content:   nil,
 		},
 		{
 			name:      "handleSpan failed because query parameter span_id is negative",
-			url:       fmt.Sprintf("http://%s", s.server.Addr) + patternRPCZSpanGet + "-1",
-			errorCode: errCodeServer,
+			url:       baseURL + patternRPCZSpanGet + "-1",
+			errorCode: ErrCodeServer,
 			message:   "can not be negative",
 			content:   nil,
 		},
@@ -132,9 +129,14 @@ func TestRPCZFailed(t *testing.T) {
 		})
 	}
 	t.Run("url query doesn't match rpcz", func(t *testing.T) {
-		r, err := httpRequest(http.MethodGet, fmt.Sprintf("http://%s", s.server.Addr)+"/cmd/rpcz", "")
+		r, err := httpRequest(http.MethodGet, baseURL+"/cmd/rpcz", "")
 		require.Nil(t, err)
 		require.Contains(t, string(r), "404 page not found")
+	})
+	t.Run("method not allowed", func(t *testing.T) {
+		r, err := httpRequest(http.MethodDelete, baseURL+patternRPCZSpansList+"?num", "")
+		require.Nil(t, err)
+		require.Contains(t, string(r), "Method Not Allowed")
 	})
 }
 
@@ -147,13 +149,6 @@ func (e *sliceSpanExporter) Export(span *rpcz.ReadOnlySpan) {
 }
 
 func TestRPC_Exporter(t *testing.T) {
-	s := newDefaultAdminServer()
-	mustStartAdminServer(t, s)
-	t.Cleanup(func() {
-		if err := s.Close(nil); err != nil {
-			t.Log(err)
-		}
-	})
 	oldGlobalRPCZ := rpcz.GlobalRPCZ
 	defer func() {
 		rpcz.GlobalRPCZ = oldGlobalRPCZ
@@ -173,19 +168,12 @@ func TestRPC_Exporter(t *testing.T) {
 	require.Equal(t, spanID, exporter.spans[0].ID)
 
 	// And the GlobalRPCZ still stores a copy of the exported span
-	rRaw, err := httpRequest(http.MethodGet, fmt.Sprintf("http://%s", s.server.Addr)+patternRPCZSpansList+"?num", "")
+	rRaw, err := httpRequest(http.MethodGet, baseURL+patternRPCZSpansList+"?num", "")
 	require.Nil(t, err)
 	require.Contains(t, string(rRaw), fmt.Sprint(spanID))
 }
 
 func TestRPCZOk(t *testing.T) {
-	s := newDefaultAdminServer()
-	mustStartAdminServer(t, s)
-	t.Cleanup(func() {
-		if err := s.Close(nil); err != nil {
-			t.Log(err)
-		}
-	})
 	oldGlobalRPCZ := rpcz.GlobalRPCZ
 	defer func() {
 		rpcz.GlobalRPCZ = oldGlobalRPCZ
@@ -206,22 +194,22 @@ func TestRPCZOk(t *testing.T) {
 	}{
 		{
 			name:    "handleSpans ok query parameter num is empty",
-			url:     fmt.Sprintf("http://%s", s.server.Addr) + patternRPCZSpansList + "?num",
+			url:     baseURL + patternRPCZSpansList + "?num",
 			content: fmt.Sprintf("1:\n  span: (server, %d)\n", spanID),
 		},
 		{
 			name:    "handleSpans ok without any query parameter",
-			url:     fmt.Sprintf("http://%s", s.server.Addr) + patternRPCZSpansList,
+			url:     baseURL + patternRPCZSpansList,
 			content: fmt.Sprintf("1:\n  span: (server, %d)\n", spanID),
 		},
 		{
 			name:    "handleSpans ok",
-			url:     fmt.Sprintf("http://%s", s.server.Addr) + patternRPCZSpansList + "?num=1",
+			url:     baseURL + patternRPCZSpansList + "?num=1",
 			content: fmt.Sprintf("1:\n  span: (server, %d)\n", spanID),
 		},
 		{
 			name:    "handleSpan ok",
-			url:     fmt.Sprintf("http://%s", s.server.Addr) + patternRPCZSpanGet + fmt.Sprint(spanID),
+			url:     baseURL + patternRPCZSpanGet + fmt.Sprint(spanID),
 			content: fmt.Sprintf("span: (server, %d)\n", spanID),
 		},
 	}
@@ -238,51 +226,51 @@ func TestRPCZOk(t *testing.T) {
 }
 
 func TestCmdVersion(t *testing.T) {
-	s := newDefaultAdminServer()
-	mustStartAdminServer(t, s)
-	t.Cleanup(func() {
-		if err := s.Close(nil); err != nil {
-			t.Log(err)
-		}
-	})
-	versionURL := fmt.Sprintf("http://%s", s.server.Addr) + "/version"
-	respData, err := httpRequest(http.MethodGet, versionURL, "")
-	if err != nil {
-		require.Nil(t, err, "httpGetBody failed")
-		return
-	}
-
 	res := struct {
 		Errcode int    `json:"errorcode"`
 		Message string `json:"message"`
 		Version string `json:"version"`
 	}{}
-	err = json.Unmarshal(respData, &res)
-	require.Nil(t, err, "testAdminServerVersion unmarshal failed")
-	require.Equal(t, 0, res.Errcode)
-	require.Equal(t, testVersion, res.Version)
+	t.Run("ok", func(t *testing.T) {
+		versionURL := baseURL + "/version"
+		respData, err := httpRequest(http.MethodGet, versionURL, "")
+		if err != nil {
+			require.Nil(t, err, "httpGetBody failed")
+			return
+		}
+		err = json.Unmarshal(respData, &res)
+		require.Nil(t, err, "testAdminServerVersion unmarshal failed")
+		require.Equal(t, 0, res.Errcode)
+		require.Equal(t, testVersion, res.Version)
+	})
+	t.Run("method not allowed", func(t *testing.T) {
+		versionURL := baseURL + "/version"
+		rsp, err := httpRequest(http.MethodDelete, versionURL, "")
+		require.Nil(t, err)
+		err = json.Unmarshal(rsp, &res)
+		require.Nil(t, err)
+		require.Equal(t, http.StatusMethodNotAllowed, res.Errcode)
+	})
 }
 
 func TestCmdsLogLevel(t *testing.T) {
-	s := newDefaultAdminServer()
-	mustStartAdminServer(t, s)
-	t.Cleanup(func() {
-		if err := s.Close(nil); err != nil {
-			t.Log(err)
-		}
-	})
-
 	dlogger := log.GetDefaultLogger()
 
 	// Preset test conditions
-	log.Register("default", log.NewZapLog([]log.OutputConfig{
-		{Writer: log.OutputConsole, Level: "debug"},
-		{Writer: log.OutputFile, WriteConfig: log.WriteConfig{Filename: "test"}, Level: "info"},
-	}))
+	log.Register(
+		"default", log.NewZapLog(
+			[]log.OutputConfig{
+				{Writer: log.OutputConsole, Level: "debug"},
+				{Writer: log.OutputFile, WriteConfig: log.WriteConfig{Filename: "test"}, Level: "info"},
+			},
+		),
+	)
 
-	t.Cleanup(func() {
-		log.Register("default", dlogger)
-	})
+	t.Cleanup(
+		func() {
+			log.Register("default", dlogger)
+		},
+	)
 
 	res := struct {
 		Errcode  int    `json:"errorcode"`
@@ -291,89 +279,106 @@ func TestCmdsLogLevel(t *testing.T) {
 		PreLevel string `json:"prelevel"`
 	}{}
 
-	t.Run("right case", func(t *testing.T) {
-		logURL := fmt.Sprintf("http://%s", s.server.Addr) + "/cmds/loglevel?logger=default&output=1"
-		// TestGet
-		respData, err := httpRequest(http.MethodGet, logURL, "")
+	// case: correct
+	t.Run(
+		"right_case", func(t *testing.T) {
+			logURL := baseURL + "/cmds/loglevel?logger=default&output=1"
+			// TestGet
+			respData, err := httpRequest(http.MethodGet, logURL, "")
+			require.Nil(t, err, "httpGetBody failed")
+
+			err = json.Unmarshal(respData, &res)
+			require.Nil(t, err, "testAdminServerLogLevel unmarshal failed")
+			require.Equal(t, 0, res.Errcode)
+			require.Equal(t, "info", res.Level)
+
+			// TestUpdate
+			body, err := httpRequest(http.MethodPut, logURL, "value=debug")
+			require.Nil(t, err, "httpRequest failed:", err)
+			err = json.Unmarshal(body, &res)
+			require.Nil(t, err, "Unmarshal failed:", err)
+			require.Equal(t, 0, res.Errcode)
+			require.Equal(t, "info", res.PreLevel)
+			require.Equal(t, "debug", res.Level)
+		},
+	)
+	t.Run("method not allowed", func(t *testing.T) {
+		logURL := baseURL + "/cmds/loglevel?logger=default&output=1"
+		respData, err := httpRequest(http.MethodDelete, logURL, "")
 		require.Nil(t, err, "httpGetBody failed")
 
 		err = json.Unmarshal(respData, &res)
 		require.Nil(t, err, "testAdminServerLogLevel unmarshal failed")
-		require.Equal(t, 0, res.Errcode)
-		require.Equal(t, "info", res.Level)
+		require.Equal(t, http.StatusMethodNotAllowed, res.Errcode)
+	},
+	)
+	// case: Request parameter is empty
+	t.Run(
+		"nil_query_param_case", func(t *testing.T) {
+			logURL := baseURL + "/cmds/loglevel"
+			respData, err := httpRequest(http.MethodGet, logURL, "")
+			require.Nil(t, err, "httpGetBody failed")
 
-		// TestUpdate
-		body, err := httpRequest(http.MethodPut, logURL, "value=debug")
-		require.Nil(t, err, "httpRequest failed:", err)
-		err = json.Unmarshal(body, &res)
-		require.Nil(t, err, "Unmarshal failed:", err)
-		require.Equal(t, 0, res.Errcode)
-		require.Equal(t, "info", res.PreLevel)
-		require.Equal(t, "debug", res.Level)
-	})
-	t.Run("request parameter is empty", func(t *testing.T) {
-		logURL := fmt.Sprintf("http://%s", s.server.Addr) + "/cmds/loglevel"
-		respData, err := httpRequest(http.MethodGet, logURL, "")
-		require.Nil(t, err, "httpGetBody failed")
+			err = json.Unmarshal(respData, &res)
+			require.Nil(t, err, "unmarshal failed")
+			require.Equal(t, 0, res.Errcode)
+			require.Equal(t, "debug", res.Level)
+		},
+	)
 
-		err = json.Unmarshal(respData, &res)
-		require.Nil(t, err, "unmarshal failed")
-		require.Equal(t, 0, res.Errcode)
-		require.Equal(t, "debug", res.Level)
-	})
-	t.Run("failed to parse request parameters", func(t *testing.T) {
-		logURL := fmt.Sprintf("http://%s", s.server.Addr) + "/cmds/loglevel?logger%"
-		respData, err := httpRequest(http.MethodGet, logURL, "")
-		require.Nil(t, err, "httpGetBody failed:", err)
+	// case: Failed to parse request parameters
+	t.Run(
+		"parse_form_err_case", func(t *testing.T) {
+			logURL := baseURL + "/cmds/loglevel?logger%"
+			respData, err := httpRequest(http.MethodGet, logURL, "")
+			require.Nil(t, err, "httpGetBody failed:", err)
 
-		err = json.Unmarshal(respData, &res)
-		require.Nil(t, err, "Unmarshal failed", err)
-		require.Equal(t, errCodeServer, res.Errcode)
-	})
-	t.Run("logger is invalid", func(t *testing.T) {
-		logURL := fmt.Sprintf("http://%s", s.server.Addr) + "/cmds/loglevel?logger=invalid"
-		respData, err := httpRequest(http.MethodGet, logURL, "")
-		require.Nil(t, err, "httpGetBody failed:", err)
+			err = json.Unmarshal(respData, &res)
+			require.Nil(t, err, "Unmarshal failed", err)
+			require.Equal(t, ErrCodeServer, res.Errcode)
+		},
+	)
 
-		err = json.Unmarshal(respData, &res)
-		require.Nil(t, err, "Unmarshal failed", err)
-		require.Equal(t, errCodeServer, res.Errcode)
-		require.Equal(t, "logger invalid not found", res.Message)
-	})
+	// case: logger is invalid
+	t.Run(
+		"invalid_logger_err_case", func(t *testing.T) {
+			logURL := baseURL + "/cmds/loglevel?logger=invalid"
+			respData, err := httpRequest(http.MethodGet, logURL, "")
+			require.Nil(t, err, "httpGetBody failed:", err)
+
+			err = json.Unmarshal(respData, &res)
+			require.Nil(t, err, "Unmarshal failed", err)
+			require.Equal(t, ErrCodeServer, res.Errcode)
+			require.Equal(t, "logger not found", res.Message)
+		},
+	)
 }
 
 func TestCmdsConfig(t *testing.T) {
-	s := newDefaultAdminServer()
-	mustStartAdminServer(t, s)
-	t.Cleanup(func() {
-		if err := s.Close(nil); err != nil {
-			t.Log(err)
-		}
-	})
-	configURL := fmt.Sprintf("http://%s//cmds/config", s.server.Addr)
+	versionURL := baseURL + "/cmds/config"
 	res := struct {
 		Errcode int         `json:"errorcode"`
 		Message string      `json:"message"`
 		Content interface{} `json:"content"`
 	}{}
-	t.Run("failed to read configuration file", func(t *testing.T) {
-		// Replace invalid config path
-		s.config.configPath = "./invalid/invalid.yaml"
-		respData, err := httpRequest(http.MethodGet, configURL, "")
-		// Adjust back to the correct path
-		s.config.configPath = testConfigPath
-		require.Nil(t, err, "httpGetBody failed")
 
-		err = json.Unmarshal(respData, &res)
-		require.Nil(t, err, "unmarshal failed", err)
-		require.Equal(t, errCodeServer, res.Errcode)
-	})
-	t.Run("failed to get unmarshaler", func(t *testing.T) {
-		// Replace invalid unmarshaler
-		config.RegisterUnmarshaler("yaml", nil)
-		respData, err := httpRequest(http.MethodGet, configURL, "")
-		// Adjust back to the correct unmarshaler
-		config.RegisterUnmarshaler("yaml", &config.YamlUnmarshaler{})
+	// case: correct
+	t.Run(
+		"right_case", func(t *testing.T) {
+			respData, err := httpRequest(http.MethodGet, versionURL, "")
+			if err != nil {
+				require.Nil(t, err, "httpGetBody failed")
+				return
+			}
+
+			err = json.Unmarshal(respData, &res)
+			require.Nil(t, err, "unmarshal failed", err)
+			require.Equal(t, 0, res.Errcode)
+			require.NotNil(t, res.Content, "config content is empty")
+		},
+	)
+	t.Run("method not allowed", func(t *testing.T) {
+		respData, err := httpRequest(http.MethodDelete, versionURL, "")
 		if err != nil {
 			require.Nil(t, err, "httpGetBody failed")
 			return
@@ -381,119 +386,146 @@ func TestCmdsConfig(t *testing.T) {
 
 		err = json.Unmarshal(respData, &res)
 		require.Nil(t, err, "unmarshal failed", err)
-		require.Equal(t, errCodeServer, res.Errcode)
-		require.Equal(t, "cannot find yaml unmarshaler", res.Message)
-	})
-	t.Run("failed to unmarshal configuration file", func(t *testing.T) {
-		// Replace invalid config path
-		s.config.configPath = "../testdata/greeter.trpc.go"
-		respData, err := httpRequest(http.MethodGet, configURL, "")
-		// Adjust back to the correct path
-		s.config.configPath = testConfigPath
-		require.Nil(t, err, "httpGetBody failed")
+		require.Equal(t, http.StatusMethodNotAllowed, res.Errcode)
+	},
+	)
 
-		err = json.Unmarshal(respData, &res)
-		require.Nil(t, err, "unmarshal failed", err)
-		require.Equal(t, errCodeServer, res.Errcode)
-	})
-	t.Run("right case", func(t *testing.T) {
-		time.Sleep(1 * time.Second)
-		respData, err := httpRequest(http.MethodGet, configURL, "")
-		require.Nil(t, err, "httpGetBody failed")
+	// case: Failed to read configuration file
+	t.Run(
+		"read_file_fail_case", func(t *testing.T) {
+			server := adminServer
+			// Replace invalid config path
+			server.config.configPath = "./invalid/invalid.yaml"
+			respData, err := httpRequest(http.MethodGet, versionURL, "")
+			// Adjust back to the correct path
+			server.config.configPath = testConfigPath
+			if err != nil {
+				require.Nil(t, err, "httpGetBody failed")
+				return
+			}
 
-		err = json.Unmarshal(respData, &res)
-		require.Nil(t, err, "unmarshal failed", err)
-		require.Equal(t, 0, res.Errcode)
-		require.NotNil(t, res.Content, "config content is empty")
-	})
+			err = json.Unmarshal(respData, &res)
+			require.Nil(t, err, "unmarshal failed", err)
+			require.Equal(t, ErrCodeServer, res.Errcode)
+		},
+	)
+
+	// case: Failed to get unmarshaler
+	t.Run(
+		"get_unmarshaler_fail_case", func(t *testing.T) {
+			// Replace invalid unmarshaler
+			config.RegisterUnmarshaler("yaml", nil)
+			respData, err := httpRequest(http.MethodGet, versionURL, "")
+			// Adjust back to the correct unmarshaler
+			config.RegisterUnmarshaler("yaml", &config.YamlUnmarshaler{})
+			if err != nil {
+				require.Nil(t, err, "httpGetBody failed")
+				return
+			}
+
+			err = json.Unmarshal(respData, &res)
+			require.Nil(t, err, "unmarshal failed", err)
+			require.Equal(t, ErrCodeServer, res.Errcode)
+			require.Equal(t, "cannot find yaml unmarshaler", res.Message)
+		},
+	)
+
+	// case: Failed to unmarshal configuration file
+	t.Run(
+		"unmarshal_file_fail_case", func(t *testing.T) {
+
+			versionURL := baseURL + "/cmds/config"
+			server := adminServer
+			// Replace invalid config path
+			server.config.configPath = "../testdata/greeter.trpc.go"
+			respData, err := httpRequest(http.MethodGet, versionURL, "")
+			// Adjust back to the correct path
+			server.config.configPath = testConfigPath
+			if err != nil {
+				require.Nil(t, err, "httpGetBody failed")
+				return
+			}
+
+			err = json.Unmarshal(respData, &res)
+			require.Nil(t, err, "unmarshal failed", err)
+			require.Equal(t, ErrCodeServer, res.Errcode)
+		},
+	)
 }
 
 func TestCmdsHealthCheck(t *testing.T) {
-	s := newDefaultAdminServer()
-	mustStartAdminServer(t, s)
-	t.Cleanup(func() {
-		if err := s.Close(nil); err != nil {
-			t.Log(err)
-		}
-	})
-
-	rsp, err := http.Get(fmt.Sprintf("http://%s/is_healthy", s.server.Addr))
+	rsp, err := http.Get(baseURL + "/is_healthy")
 	require.Nil(t, err)
 	require.Equal(t, http.StatusOK, rsp.StatusCode)
 
-	rsp, err = http.Get(fmt.Sprintf("http://%s/is_healthy/", s.server.Addr))
+	rsp, err = http.Get(baseURL + "/is_healthy/")
 	require.Nil(t, err)
 	require.Equal(t, http.StatusOK, rsp.StatusCode)
 
-	rsp, err = http.Get(fmt.Sprintf("http://%s/is_healthy/not_exist", s.server.Addr))
+	rsp, err = http.Get(baseURL + "/is_healthy/not_exist")
 	require.Nil(t, err)
 	require.Equal(t, http.StatusNotFound, rsp.StatusCode)
 
-	unregister, update, err := s.RegisterHealthCheck("service")
+	unregister, update, err := adminServer.RegisterHealthCheck("service")
 	require.Nil(t, err)
-	rsp, err = http.Get(fmt.Sprintf("http://%s/is_healthy", s.server.Addr))
+	rsp, err = http.Get(baseURL + "/is_healthy")
 	require.Nil(t, err)
 	require.Equal(t, http.StatusNotFound, rsp.StatusCode)
-	rsp, err = http.Get(fmt.Sprintf("http://%s/is_healthy/service", s.server.Addr))
+	rsp, err = http.Get(baseURL + "/is_healthy/service")
 	require.Nil(t, err)
 	require.Equal(t, http.StatusNotFound, rsp.StatusCode)
 
 	update(healthcheck.Serving)
-	rsp, err = http.Get(fmt.Sprintf("http://%s/is_healthy", s.server.Addr))
+	rsp, err = http.Get(baseURL + "/is_healthy")
 	require.Nil(t, err)
 	require.Equal(t, http.StatusOK, rsp.StatusCode)
-	rsp, err = http.Get(fmt.Sprintf("http://%s/is_healthy/service", s.server.Addr))
+	rsp, err = http.Get(baseURL + "/is_healthy/service")
 	require.Nil(t, err)
 	require.Equal(t, http.StatusOK, rsp.StatusCode)
 
 	update(healthcheck.NotServing)
-	rsp, err = http.Get(fmt.Sprintf("http://%s/is_healthy", s.server.Addr))
+	rsp, err = http.Get(baseURL + "/is_healthy")
 	require.Nil(t, err)
 	require.Equal(t, http.StatusServiceUnavailable, rsp.StatusCode)
-	rsp, err = http.Get(fmt.Sprintf("http://%s/is_healthy/service", s.server.Addr))
+	rsp, err = http.Get(baseURL + "/is_healthy/service")
 	require.Nil(t, err)
 	require.Equal(t, http.StatusServiceUnavailable, rsp.StatusCode)
 
 	unregister()
-	rsp, err = http.Get(fmt.Sprintf("http://%s/is_healthy", s.server.Addr))
+	rsp, err = http.Get(baseURL + "/is_healthy")
 	require.Nil(t, err)
 	require.Equal(t, http.StatusOK, rsp.StatusCode)
-	rsp, err = http.Get(fmt.Sprintf("http://%s/is_healthy/service", s.server.Addr))
+	rsp, err = http.Get(baseURL + "/is_healthy/service")
 	require.Nil(t, err)
 	require.Equal(t, http.StatusNotFound, rsp.StatusCode)
 }
 
 func TestCmds(t *testing.T) {
-	s := newDefaultAdminServer()
-	mustStartAdminServer(t, s)
-	t.Cleanup(func() {
-		if err := s.Close(nil); err != nil {
-			t.Log(err)
-		}
-	})
-
-	usercmdURL := fmt.Sprintf("http://%s", s.server.Addr) + "/cmds"
-	respData, err := httpRequest(http.MethodGet, usercmdURL, "")
-	require.Nil(t, err, "cmds request failed")
-
 	res := struct {
 		Errcode int      `json:"errorcode"`
 		Message string   `json:"message"`
 		Cmds    []string `json:"cmds"`
 	}{}
-	err = json.Unmarshal(respData, &res)
-	require.Nil(t, err, "Unmarshal failed")
+	t.Run("ok", func(t *testing.T) {
+		usercmdURL := baseURL + "/cmds"
+		respData, err := httpRequest(http.MethodGet, usercmdURL, "")
+		require.Nil(t, err, "cmds request failed")
+
+		err = json.Unmarshal(respData, &res)
+		require.Nil(t, err, "Unmarshal failed")
+	})
+	t.Run("method not allowed", func(t *testing.T) {
+		versionURL := baseURL + "/version"
+		rsp, err := httpRequest(http.MethodDelete, versionURL, "")
+		require.Nil(t, err)
+		err = json.Unmarshal(rsp, &res)
+		require.Nil(t, err)
+		require.Equal(t, http.StatusMethodNotAllowed, res.Errcode)
+	})
 }
 
 func TestErrorOutput(t *testing.T) {
-	s := newDefaultAdminServer()
-	mustStartAdminServer(t, s)
-	t.Cleanup(func() {
-		if err := s.Close(nil); err != nil {
-			t.Log(err)
-		}
-	})
-	usercmdURL := fmt.Sprintf("http://%s", s.server.Addr) + "/errout"
+	usercmdURL := baseURL + "/errout"
 	respData, err := httpRequest(http.MethodGet, usercmdURL, "")
 	require.Nil(t, err, "cmds request failed")
 
@@ -507,16 +539,8 @@ func TestErrorOutput(t *testing.T) {
 	require.Contains(t, res.Message, "error")
 }
 
-func TestPanicHandle(t *testing.T) {
-	s := newDefaultAdminServer()
-	mustStartAdminServer(t, s)
-	t.Cleanup(func() {
-		if err := s.Close(nil); err != nil {
-			t.Log(err)
-		}
-	})
-
-	usercmdURL := fmt.Sprintf("http://%s", s.server.Addr) + "/panicHandle"
+func TestPanicHanle(t *testing.T) {
+	usercmdURL := baseURL + "/panicHandle"
 	respData, err := httpRequest(http.MethodGet, usercmdURL, "")
 	require.Nil(t, err, "cmds request failed")
 
@@ -531,7 +555,7 @@ func TestPanicHandle(t *testing.T) {
 }
 
 func TestListen(t *testing.T) {
-	s := NewServer()
+	s := NewTrpcAdminServer()
 
 	// listen fail on invalid address
 	err := os.Setenv(transport.EnvGraceRestart, "0")
@@ -551,33 +575,34 @@ func TestListen(t *testing.T) {
 }
 
 func TestClose(t *testing.T) {
-	s := newDefaultAdminServer()
-	mustStartAdminServer(t, s)
-
-	err := s.Close(nil)
+	err := adminServer.Close(nil)
 	require.Nil(t, err)
 
-	usercmdURL := fmt.Sprintf("http://%s/cmds", s.server.Addr)
+	usercmdURL := baseURL + "/cmds"
 	_, err = httpRequest(http.MethodGet, usercmdURL, "")
 	var netErr *net.OpError
-
 	require.ErrorAs(t, err, &netErr)
+
+	startAdminServer()
 }
 
 func TestOptionsConfig(t *testing.T) {
-	s := newDefaultAdminServer()
-	WithTLS(true)(s.config)
-	err := s.Serve()
+	adminServer.Close(nil)
+
+	WithTLS(true)(adminServer.config)
+	err := adminServer.Serve()
 	require.NotNil(t, err)
 	require.Contains(t, err.Error(), "not support")
+
+	startAdminServer()
 }
 
 func httpRequest(method string, url string, body string) ([]byte, error) {
 	request, err := http.NewRequest(method, url, strings.NewReader(body))
-	request.Header.Set("content-type", "application/x-www-form-urlencoded")
 	if err != nil {
 		return nil, err
 	}
+	request.Header.Set("content-type", "application/x-www-form-urlencoded")
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
@@ -599,79 +624,71 @@ func panicHandle(w http.ResponseWriter, r *http.Request) {
 	panic("panic error handle")
 }
 
-func TestUnregisterHandlers(t *testing.T) {
-	_ = newDefaultAdminServer()
-	mux, err := extractServeMuxData()
-	require.Nil(t, err)
-	require.Len(t, mux.m, 0)
-	require.Len(t, mux.es, 0)
-	require.False(t, mux.hosts)
+func Test_init(t *testing.T) {
+	t.Run("reset default serve mux to remove pprof registration at admin init func", func(t *testing.T) {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		require.Nil(t, err)
+		go func() {
+			if err := http.Serve(l, nil); err != nil {
+				t.Logf("http serving: %v", err)
+			}
+		}()
+		time.Sleep(200 * time.Millisecond)
 
-	http.HandleFunc("/usercmd", userCmd)
-	http.HandleFunc("/errout", errOutput)
-	http.HandleFunc("/panicHandle", panicHandle)
-	http.HandleFunc("www.qq.com/", userCmd)
-	http.HandleFunc("anything/", userCmd)
+		r, err := http.Get(fmt.Sprintf("http://%s/debug/pprof/", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusNotFound, r.StatusCode)
 
-	l := mustListenTCP(t)
-	go func() {
-		if err := http.Serve(l, nil); err != nil {
-			t.Log(err)
-		}
-	}()
-	time.Sleep(200 * time.Millisecond)
+		r, err = http.Get(fmt.Sprintf("http://%s/debug/pprof/cmdline", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusNotFound, r.StatusCode)
 
-	mux, err = extractServeMuxData()
-	require.Nil(t, err)
-	require.Equal(t, 5, len(mux.m))
-	require.Equal(t, 2, len(mux.es))
-	require.Equal(t, true, mux.hosts)
+		r, err = http.Get(fmt.Sprintf("http://%s/debug/pprof/profile", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusNotFound, r.StatusCode)
 
-	err = unregisterHandlers(
-		[]string{
-			"/usercmd",
-			"/errout",
-			"/panicHandle",
-			"www.qq.com/",
-			"anything/",
-		},
-	)
-	require.Nil(t, err)
+		r, err = http.Get(fmt.Sprintf("http://%s/debug/pprof/symbol", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusNotFound, r.StatusCode)
 
-	mux, err = extractServeMuxData()
-	require.Nil(t, err)
-	require.Len(t, mux.m, 0)
-	require.Len(t, mux.es, 0)
-	require.False(t, mux.hosts)
+		r, err = http.Get(fmt.Sprintf("http://%s/debug/pprof/trace", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusNotFound, r.StatusCode)
+	})
+	t.Run("register pprof handler explicitly after importing the admin package", func(t *testing.T) {
+		http.DefaultServeMux.HandleFunc("/debug/pprof/", pprof.Index)
+		http.DefaultServeMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		http.DefaultServeMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		http.DefaultServeMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		http.DefaultServeMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+		t.Cleanup(func() {
+			http.DefaultServeMux = http.NewServeMux()
+		})
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		require.Nil(t, err)
+		go func() {
+			if err := http.Serve(l, nil); err != nil {
+				t.Logf("http serving: %v", err)
+			}
+		}()
+		time.Sleep(200 * time.Millisecond)
 
-	resp1, err := http.Get(fmt.Sprintf("http://%v/usercmd", l.Addr()))
-	require.Nil(t, err)
-	defer resp1.Body.Close()
-	require.Equal(t, http.StatusNotFound, resp1.StatusCode)
+		r, err := http.Get(fmt.Sprintf("http://%s/debug/pprof/", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusOK, r.StatusCode)
 
-	http.HandleFunc("/usercmd", userCmd)
-	http.HandleFunc("/errout", errOutput)
-	http.HandleFunc("/panicHandle", panicHandle)
+		r, err = http.Get(fmt.Sprintf("http://%s/debug/pprof/cmdline", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusOK, r.StatusCode)
 
-	mux, err = extractServeMuxData()
-	require.Nil(t, err)
-	require.Len(t, mux.m, 3)
-	require.Len(t, mux.es, 0)
-	require.False(t, mux.hosts)
+		r, err = http.Get(fmt.Sprintf("http://%s/debug/pprof/symbol", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusOK, r.StatusCode)
 
-	resp2, err := http.Get(fmt.Sprintf("http://%v/usercmd", l.Addr()))
-	require.Nil(t, err)
-	defer resp2.Body.Close()
-	respBody, err := io.ReadAll(resp2.Body)
-	require.Nil(t, err)
-	require.Equal(t, []byte("usercmd"), respBody)
-}
-func mustListenTCP(t *testing.T) *net.TCPListener {
-	l, err := net.Listen("tcp", testAddress)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return l.(*net.TCPListener)
+		r, err = http.Get(fmt.Sprintf("http://%s/debug/pprof/trace", l.Addr().String()))
+		require.Nil(t, err)
+		require.Equal(t, http.StatusOK, r.StatusCode)
+	})
 }
 
 // serveMux keep the same structure with http.ServeMux
@@ -731,24 +748,23 @@ func extractServeMuxData() (*serveMux, error) {
 }
 
 func TestTrpcAdminServer(t *testing.T) {
-	s := NewServer(WithAddr("invalid addr"))
+	s := NewTrpcAdminServer(WithAddr("invalid addr"))
 	err := s.Serve()
 	require.NotNil(t, err)
 
-	s = NewServer(WithAddr(testAddress))
+	s = NewTrpcAdminServer(WithAddr("127.0.0.1:9038"))
 	err = s.Register(struct{}{}, struct{}{})
 	require.Nil(t, err)
 
 	go func() {
-		if err := s.Serve(); err != nil {
-			t.Log(err)
-		}
+		_ = s.Serve()
 	}()
-	time.Sleep(200 * time.Millisecond)
 
+	time.Sleep(200 * time.Millisecond)
 	ch := make(chan struct{}, 1)
 	err = s.Close(ch)
 	closed := <-ch
 	require.NotNil(t, closed)
 	require.Nil(t, err)
+	startAdminServer()
 }

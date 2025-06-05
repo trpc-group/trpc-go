@@ -15,6 +15,7 @@ package selector
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -151,6 +152,37 @@ func TestIPSelectorSelectOptionalBanned(t *testing.T) {
 	require.Equal(t, 3, n)
 }
 
+func TestIPSelectorWithCircuitBreaker(t *testing.T) {
+	cb := circuitBreak{blacklist: make(map[string]bool)}
+	s := NewIPSelectorWithCircuitBreaker(&cb)
+	addr1, addr2 := t.Name()+"1", t.Name()+"2"
+	addrs := addr1 + "," + addr2
+	cb.Report(addr1, false)
+	node, err := s.Select(addr1)
+	require.Nil(t, err, "all die all alive")
+
+	for i := 0; i < 10; i++ {
+		node, err = s.Select(addrs)
+		require.Nil(t, err)
+		require.Equal(t, addr2, node.Address, "addr1 is not available, always select addr2")
+	}
+
+	require.Nil(t, s.Report(node, 0, errors.New("")))
+	node, err = s.Select(addrs)
+	require.Nil(t, err, "all die all alive")
+
+	addr3 := t.Name() + "3"
+	addrs = addrs + "," + addr3
+	node, err = s.Select(addrs)
+	require.Nil(t, err)
+	require.Equal(t, addr3, node.Address)
+
+	require.Nil(t, s.Report(&registry.Node{Address: addr1}, 0, nil))
+	require.Nil(t, s.Report(&registry.Node{Address: addr2}, 0, nil))
+	_, err = s.Select(addrs)
+	require.Nil(t, err)
+}
+
 // BenchmarkIPSelectorSelectOneService benchmark Select 性能
 func BenchmarkIPSelectorSelectOneService(b *testing.B) {
 	s := Get("ip")
@@ -164,5 +196,22 @@ func BenchmarkIPSelectorSelectMultiService(b *testing.B) {
 	s := Get("ip")
 	for i := 0; i < b.N; i++ {
 		s.Select("trpc.service.ip.1:8888,trpc.service.ip.1:8886,trpc.service.ip.1:8887")
+	}
+}
+
+type circuitBreak struct {
+	blacklist map[string]bool
+}
+
+func (cb *circuitBreak) Available(addr string) bool {
+	_, ok := cb.blacklist[addr]
+	return !ok
+}
+
+func (cb *circuitBreak) Report(addr string, ok bool) {
+	if ok {
+		delete(cb.blacklist, addr)
+	} else {
+		cb.blacklist[addr] = true
 	}
 }

@@ -22,15 +22,16 @@ import (
 	"sync"
 	"sync/atomic"
 
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
-
 	trpc "trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	iatomic "trpc.group/trpc-go/trpc-go/internal/atomic"
 	icodec "trpc.group/trpc-go/trpc-go/internal/codec"
 	"trpc.group/trpc-go/trpc-go/internal/queue"
-	"trpc.group/trpc-go/trpc-go/transport"
+	"trpc.group/trpc-go/trpc-go/internal/rpczenable"
+	"trpc.group/trpc-go/trpc-go/log"
+	"trpc.group/trpc-go/trpc-go/rpcz"
 )
 
 // Client is the Streaming client interface, NewStream is its only method.
@@ -55,31 +56,67 @@ type streamClient struct {
 	streamID uint32
 }
 
+// ClientStreamDesc client stream description.
+//
+// Deprecated: The architecture is adjusted to the client's package
+type ClientStreamDesc = client.ClientStreamDesc
+
+// ClientStream client streaming interface.
+//
+// Deprecated: The architecture is adjusted to the client's package
+type ClientStream = client.ClientStream
+
 // The specific implementation of ClientStream.
 type clientStream struct {
-	desc      *client.ClientStreamDesc
-	method    string
-	sc        *streamClient
-	ctx       context.Context
-	opts      *client.Options
-	streamID  uint32
-	stream    client.Stream
-	recvQueue *queue.Queue[*response]
-	closed    uint32
-	closeCh   chan struct{}
-	closeOnce sync.Once
+	desc           *client.ClientStreamDesc
+	method         string
+	sc             *streamClient
+	ctx            context.Context
+	opts           *client.Options
+	streamID       uint32
+	stream         client.Stream
+	recvQueue      *queue.Queue[*response]
+	closed         uint32
+	closeCh        chan struct{}
+	closeOnce      sync.Once
+	isServerClosed iatomic.Bool
 }
 
 // NewStream creates a new stream through which users send and receive messages.
 func (c *streamClient) NewStream(ctx context.Context, desc *client.ClientStreamDesc,
 	method string, opt ...client.Option) (client.ClientStream, error) {
-	return c.newStream(ctx, desc, method, opt...)
+	stream, err := c.newStream(ctx, desc, method, opt...)
+	if err != nil {
+		return nil, errs.WrapFrameError(err, errs.RetClientStreamInitErr, "new stream")
+	}
+	return stream, nil
 }
 
 // newStream creates a new stream through which users send and receive messages.
-func (c *streamClient) newStream(ctx context.Context, desc *client.ClientStreamDesc,
-	method string, opt ...client.Option) (client.ClientStream, error) {
-	ctx, _ = codec.EnsureMessage(ctx)
+func (c *streamClient) newStream(
+	ctx context.Context,
+	desc *client.ClientStreamDesc,
+	method string,
+	opt ...client.Option,
+) (_ client.ClientStream, err error) {
+	ctx, msg := codec.EnsureMessage(ctx)
+	// Note: This span only records the creation of a client stream.
+	// It does not capture any subsequent events of sending/receiving messages.
+	var (
+		span  rpcz.Span
+		ender rpcz.Ender
+	)
+	if rpczenable.Enabled {
+		span, ender, ctx = rpcz.NewSpanContext(ctx, "new client stream")
+		defer func() {
+			if err == nil {
+				span.SetAttribute(rpcz.TRPCAttributeError, msg.ClientRspErr())
+			} else {
+				span.SetAttribute(rpcz.TRPCAttributeError, err)
+			}
+			ender.End()
+		}()
+	}
 	cs := &clientStream{
 		desc:      desc,
 		method:    method,
@@ -90,8 +127,16 @@ func (c *streamClient) newStream(ctx context.Context, desc *client.ClientStreamD
 		recvQueue: queue.New[*response](ctx.Done()),
 		stream:    client.NewStream(),
 	}
+	if rpczenable.Enabled {
+		span.SetAttribute(rpcz.TRPCAttributeRPCName, method)
+		span.SetAttribute(rpcz.TRPCAttributeStreamID, cs.streamID)
+	}
 	if err := cs.prepare(opt...); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("client stream (method = %s, streamID = %d) prepare error: %w",
+			method, cs.streamID, err)
+	}
+	if rpczenable.Enabled {
+		span.SetAttribute(rpcz.TRPCAttributeFilterNames, cs.opts.FilterNames)
 	}
 	if cs.opts.StreamFilters != nil {
 		return cs.opts.StreamFilters.Filter(cs.ctx, cs.desc, cs.invoke)
@@ -185,16 +230,16 @@ func (cs *clientStream) dealContextDone() error {
 func (cs *clientStream) SendMsg(m interface{}) error {
 	ctx, msg := codec.WithCloneContextAndMessage(cs.ctx)
 	defer codec.PutBackMessage(msg)
-	msg.WithFrameHead(newFrameHead(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA, cs.streamID))
+	msg.WithFrameHead(newFrameHead(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA, cs.streamID))
 	msg.WithStreamID(cs.streamID)
 	msg.WithClientRPCName(cs.method)
 	msg.WithCompressType(codec.Message(cs.ctx).CompressType())
 	return cs.stream.Send(ctx, m)
 }
 
-func newFrameHead(t trpcpb.TrpcStreamFrameType, id uint32) *trpc.FrameHead {
+func newFrameHead(t trpc.TrpcStreamFrameType, id uint32) *trpc.FrameHead {
 	return &trpc.FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		FrameType:       uint8(trpc.TrpcDataFrameType_TRPC_STREAM_FRAME),
 		StreamFrameType: uint8(t),
 		StreamID:        id,
 	}
@@ -202,14 +247,15 @@ func newFrameHead(t trpcpb.TrpcStreamFrameType, id uint32) *trpc.FrameHead {
 
 // CloseSend normally closes the sender, no longer sends messages, only accepts messages.
 func (cs *clientStream) CloseSend() error {
+	return cs.closeSend(&trpc.TrpcStreamCloseMeta{CloseType: int32(trpc.TrpcStreamCloseType_TRPC_STREAM_CLOSE)})
+}
+
+func (cs *clientStream) closeSend(closeMeta *trpc.TrpcStreamCloseMeta) error {
 	ctx, msg := codec.WithCloneContextAndMessage(cs.ctx)
 	defer codec.PutBackMessage(msg)
-	msg.WithFrameHead(newFrameHead(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE, cs.streamID))
+	msg.WithFrameHead(newFrameHead(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE, cs.streamID))
 	msg.WithStreamID(cs.streamID)
-	msg.WithStreamFrame(&trpcpb.TrpcStreamCloseMeta{
-		CloseType: int32(trpcpb.TrpcStreamCloseType_TRPC_STREAM_CLOSE),
-		Ret:       0,
-	})
+	msg.WithStreamFrame(closeMeta)
 	return cs.stream.Send(ctx, nil)
 }
 
@@ -218,7 +264,6 @@ func (cs *clientStream) prepare(opt ...client.Option) error {
 	msg.WithClientRPCName(cs.method)
 	msg.WithStreamID(cs.streamID)
 
-	opt = append([]client.Option{client.WithStreamTransport(transport.DefaultClientStreamTransport)}, opt...)
 	opts, err := cs.stream.Init(cs.ctx, opt...)
 	if err != nil {
 		return err
@@ -227,36 +272,52 @@ func (cs *clientStream) prepare(opt ...client.Option) error {
 	return nil
 }
 
-func (cs *clientStream) invoke(ctx context.Context, _ *client.ClientStreamDesc) (client.ClientStream, error) {
-	if err := cs.stream.Invoke(ctx); err != nil {
-		return nil, err
+func (cs *clientStream) invoke(ctx context.Context, _ *client.ClientStreamDesc) (_ client.ClientStream, err error) {
+	var (
+		span  rpcz.Span
+		ender rpcz.Ender
+	)
+	if rpczenable.Enabled {
+		span, ender, ctx = rpcz.NewSpanContext(ctx, "client stream invoke")
+		defer func() {
+			span.SetAttribute(rpcz.TRPCAttributeError, err)
+			ender.End()
+		}()
+	}
+	// Create the underlying connection with a new context to prevent the
+	// connection from being closed directly when the context is canceled.
+	if err := cs.stream.Invoke(trpc.CloneContext(ctx)); err != nil {
+		return nil, fmt.Errorf("client stream (method = %s, streamID = %d) invoke error: %w",
+			cs.method, cs.streamID, err)
 	}
 	w := getWindowSize(cs.opts.MaxWindowSize)
 	newCtx, newMsg := codec.WithCloneContextAndMessage(ctx)
 	defer codec.PutBackMessage(newMsg)
 	copyMetaData(newMsg, codec.Message(cs.ctx))
-	newMsg.WithFrameHead(newFrameHead(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT, cs.streamID))
+	newMsg.WithFrameHead(newFrameHead(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT, cs.streamID))
 	newMsg.WithClientRPCName(cs.method)
 	newMsg.WithStreamID(cs.streamID)
 	newMsg.WithCompressType(codec.Message(cs.ctx).CompressType())
-	newMsg.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{
-		RequestMeta:    &trpcpb.TrpcStreamInitRequestMeta{},
+	newMsg.WithStreamFrame(&trpc.TrpcStreamInitMeta{
+		RequestMeta:    &trpc.TrpcStreamInitRequestMeta{},
 		InitWindowSize: w,
 	})
 	cs.opts.RControl = newReceiveControl(w, cs.feedback)
 	// Send the init message out.
 	if err := cs.stream.Send(newCtx, nil); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("client stream (method = %s, streamID = %d) send error: %w",
+			cs.method, cs.streamID, err)
 	}
 	// After init is sent, the server will return directly.
 	if _, err := cs.stream.Recv(newCtx); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("client stream (method = %s, streamID = %d) recv error: %w",
+			cs.method, cs.streamID, err)
 	}
-	initRspMeta, ok := newMsg.StreamFrame().(*trpcpb.TrpcStreamInitMeta)
+	initRspMeta, ok := newMsg.StreamFrame().(*trpc.TrpcStreamInitMeta)
 	if !ok {
 		return nil, fmt.Errorf("client stream (method = %s, streamID = %d) recv "+
 			"unexpected frame type: %T, expected: %T",
-			cs.method, cs.streamID, newMsg.StreamFrame(), (*trpcpb.TrpcStreamInitMeta)(nil))
+			cs.method, cs.streamID, newMsg.StreamFrame(), (*trpc.TrpcStreamInitMeta)(nil))
 	}
 	initWindowSize := initRspMeta.GetInitWindowSize()
 	cs.configSendControl(initWindowSize)
@@ -281,10 +342,10 @@ func (cs *clientStream) configSendControl(initWindowSize uint32) {
 func (cs *clientStream) feedback(i uint32) error {
 	ctx, msg := codec.WithCloneContextAndMessage(cs.ctx)
 	defer codec.PutBackMessage(msg)
-	msg.WithFrameHead(newFrameHead(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK, cs.streamID))
+	msg.WithFrameHead(newFrameHead(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK, cs.streamID))
 	msg.WithStreamID(cs.streamID)
 	msg.WithClientRPCName(cs.method)
-	msg.WithStreamFrame(&trpcpb.TrpcStreamFeedBackMeta{WindowSizeIncrement: i})
+	msg.WithStreamFrame(&trpc.TrpcStreamFeedBackMeta{WindowSizeIncrement: i})
 	return cs.stream.Send(ctx, nil)
 }
 
@@ -292,14 +353,14 @@ func (cs *clientStream) feedback(i uint32) error {
 func (cs *clientStream) handleFrame(ctx context.Context, resp *response,
 	respData []byte, frameHead *trpc.FrameHead) error {
 	msg := codec.Message(ctx)
-	switch trpcpb.TrpcStreamFrameType(frameHead.StreamFrameType) {
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA:
+	switch trpc.TrpcStreamFrameType(frameHead.StreamFrameType) {
+	case trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA:
 		// Get the data and return it to the client.
 		resp.data = respData
 		resp.err = nil
 		cs.recvQueue.Put(resp)
 		return nil
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE:
+	case trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE:
 		// Close, it should be judged as Reset or Close.
 		resp.data = nil
 		var err error
@@ -311,8 +372,9 @@ func (cs *clientStream) handleFrame(ctx context.Context, resp *response,
 		}
 		resp.err = err
 		cs.recvQueue.Put(resp)
+		cs.isServerClosed.Store(true)
 		return err
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK:
+	case trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK:
 		cs.handleFeedback(msg)
 		return nil
 	default:
@@ -322,7 +384,7 @@ func (cs *clientStream) handleFrame(ctx context.Context, resp *response,
 
 // handleFeedback handles the feedback frame.
 func (cs *clientStream) handleFeedback(msg codec.Msg) {
-	if feedbackFrame, ok := msg.StreamFrame().(*trpcpb.TrpcStreamFeedBackMeta); ok && cs.opts.SControl != nil {
+	if feedbackFrame, ok := msg.StreamFrame().(*trpc.TrpcStreamFeedBackMeta); ok && cs.opts.SControl != nil {
 		cs.opts.SControl.UpdateWindow(feedbackFrame.WindowSizeIncrement)
 	}
 }
@@ -330,10 +392,14 @@ func (cs *clientStream) handleFeedback(msg codec.Msg) {
 // dispatch is used to distribute the received data packets, receive them in a loop,
 // and then distribute the data packets according to different data types.
 func (cs *clientStream) dispatch() {
-	defer func() {
-		cs.opts.StreamTransport.Close(cs.ctx)
-		cs.close()
+	go func() {
+		select {
+		case <-cs.ctx.Done():
+			cs.close()
+		case <-cs.closeCh:
+		}
 	}()
+	defer cs.close()
 	for {
 		ctx, msg := codec.WithCloneContextAndMessage(cs.ctx)
 		msg.WithCompressType(codec.Message(cs.ctx).CompressType())
@@ -341,8 +407,11 @@ func (cs *clientStream) dispatch() {
 		respData, err := cs.stream.Recv(ctx)
 		if err != nil {
 			// return to client on error.
+			if err == io.EOF {
+				err = errs.WrapFrameError(err, errs.RetClientStreamReadEnd, streamClosed)
+			}
 			cs.recvQueue.Put(&response{
-				err: errs.WrapFrameError(err, errs.RetClientStreamReadEnd, streamClosed),
+				err: err,
 			})
 			return
 		}
@@ -364,6 +433,16 @@ func (cs *clientStream) dispatch() {
 
 func (cs *clientStream) close() {
 	cs.closeOnce.Do(func() {
+		if !cs.isServerClosed.Load() {
+			if err := cs.closeSend(&trpc.TrpcStreamCloseMeta{
+				CloseType: int32(trpc.TrpcStreamCloseType_TRPC_STREAM_RESET),
+				Ret:       int32(errs.RetClientCanceled),
+				Msg:       []byte("client has already canceled"),
+			}); err != nil {
+				log.Error("client stream close send failed", err)
+			}
+		}
+		cs.opts.StreamTransport.Close(cs.ctx)
 		atomic.StoreUint32(&cs.closed, 1)
 		close(cs.closeCh)
 	})

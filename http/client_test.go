@@ -22,12 +22,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"trpc.group/trpc-go/trpc-go/client"
 	thttp "trpc.group/trpc-go/trpc-go/http"
 )
 
 func TestStdHTTPClient(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "PUT" {
+		if r.Method == http.MethodPut {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("unsupported method"))
 			return
@@ -55,7 +56,7 @@ func TestStdHTTPClient(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, body, rspBody2)
 
-	req, _ := http.NewRequest("PUT", ts.URL, bytes.NewBuffer(body))
+	req, _ := http.NewRequest(http.MethodPut, ts.URL, bytes.NewBuffer(body))
 	rsp3, err3 := cli.Do(req)
 	require.Nil(t, err3)
 	require.Equal(t, http.StatusInternalServerError, rsp3.StatusCode)
@@ -64,4 +65,10 @@ func TestStdHTTPClient(t *testing.T) {
 	defer rsp3.Body.Close()
 	require.Nil(t, err)
 	require.Equal(t, "unsupported method", string(rspBody3))
+}
+
+func TestNewStdHTTPClientPassthrough(t *testing.T) {
+	c := thttp.NewStdHTTPClient("trpc.http.stdclient.test", client.WithTarget("ip://1.1.1.1:12345"))
+	_, err := c.Get("http://127.0.0.1:21932")
+	require.Contains(t, err.Error(), "Get \"http://127.0.0.1:21932\": dial tcp 127.0.0.1:21932: connect: connection refused")
 }

@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
 	tnettrans "trpc.group/trpc-go/trpc-go/transport/tnet"
 )
 
@@ -32,6 +31,15 @@ func TestSetNumPollers(t *testing.T) {
 
 func TestOptions(t *testing.T) {
 	opts := &tnettrans.ServerTransportOptions{}
+	// WithKeepAlivePeriod
 	tnettrans.WithKeepAlivePeriod(time.Second)(opts)
 	assert.Equal(t, time.Second, opts.KeepAlivePeriod)
+
+	// WithMaxUDPPacketSize
+	tnettrans.WithMaxUDPPacketSize(32767)(opts)
+	assert.Equal(t, 32767, opts.MaxUDPPacketSize)
+
+	// WithServerExactUDPBufferSizeEnabled
+	tnettrans.WithServerExactUDPBufferSizeEnabled(true)(opts)
+	assert.Equal(t, true, opts.ExactUDPBufferSizeEnabled)
 }

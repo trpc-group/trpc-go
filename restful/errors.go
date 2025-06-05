@@ -18,9 +18,9 @@ import (
 	"net/http"
 
 	"github.com/valyala/fasthttp"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/http/fastop"
 	"trpc.group/trpc-go/trpc-go/restful/errors"
 )
 
@@ -52,7 +52,7 @@ func (w *WithStatusCode) Unwrap() error {
 }
 
 // tRPC error code => http status code
-var httpStatusMap = map[trpcpb.TrpcRetCode]int{
+var httpStatusMap = map[int32]int{
 	errs.RetServerDecodeFail:   http.StatusBadRequest,
 	errs.RetServerEncodeFail:   http.StatusInternalServerError,
 	errs.RetServerNoService:    http.StatusNotFound,
@@ -84,7 +84,7 @@ func statusCodeFromError(err error) int {
 	if withStatusCode, ok := err.(*WithStatusCode); ok {
 		statusCode = withStatusCode.StatusCode
 	} else {
-		if statusFromMap, ok := httpStatusMap[errs.Code(err)]; ok {
+		if statusFromMap, ok := httpStatusMap[int32(errs.Code(err))]; ok {
 			statusCode = statusFromMap
 		}
 	}
@@ -94,10 +94,11 @@ func statusCodeFromError(err error) int {
 
 // DefaultErrorHandler is the default ErrorHandler.
 var DefaultErrorHandler = func(ctx context.Context, w http.ResponseWriter, r *http.Request, err error) {
-	// get outbound Serializer
-	_, s := serializerForTranscoding(r.Header[headerContentType],
-		r.Header[headerAccept])
-	w.Header().Set(headerContentType, s.ContentType())
+	s, ok := responseSerializer(r.Header[headerAccept])
+	if !ok {
+		s = requestSerializer(r.Header[headerContentType])
+	}
+	fastop.CanonicalHeaderSet(w.Header(), headerContentType, s.ContentType())
 
 	// marshal error
 	buf, merr := marshalError(err, s)
@@ -113,11 +114,11 @@ var DefaultErrorHandler = func(ctx context.Context, w http.ResponseWriter, r *ht
 
 // DefaultFastHTTPErrorHandler is the default FastHTTPErrorHandler.
 var DefaultFastHTTPErrorHandler = func(ctx context.Context, requestCtx *fasthttp.RequestCtx, err error) {
-	// get outbound Serializer
-	_, s := serializerForTranscoding(
-		[]string{bytes2str(requestCtx.Request.Header.Peek(headerContentType))},
-		[]string{bytes2str(requestCtx.Request.Header.Peek(headerAccept))},
-	)
+	s, ok := responseSerializer([]string{string(requestCtx.Request.Header.Peek(headerAccept))})
+	if !ok {
+		s = requestSerializer([]string{string(requestCtx.Request.Header.Peek(headerContentType))})
+	}
+
 	requestCtx.Response.Header.Set(headerContentType, s.ContentType())
 
 	// marshal error

@@ -12,8 +12,8 @@ client:                                            # configuration for client ca
       timeout: 800                                 # maximum request processing time in milliseconds.
       target: ip://127.0.0.1:8000                  # service addr
 
-plugins:                                          # plugin configuration.
-  log:                                            # log configuration.
-    default:                                      # default log configuration, support multiple outputs.
-      - writer: console                           # console standard output default.
-        level: debug                              # standard output log level.
+plugins:                                           # plugin configuration.
+  log:                                             # log configuration.
+    default:                                       # default log configuration, support multiple outputs.
+      - writer: console                            # console standard output default.
+        level: debug                               # standard output log level.

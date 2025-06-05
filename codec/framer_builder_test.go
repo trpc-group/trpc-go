@@ -28,6 +28,7 @@ func TestReaderSize(t *testing.T) {
 	bufSize := 128 * 1024
 	SetReaderSize(bufSize)
 	assert.Equal(t, bufSize, GetReaderSize())
+
 	SetReaderSize(0)
 	assert.Equal(t, 0, GetReaderSize())
 }

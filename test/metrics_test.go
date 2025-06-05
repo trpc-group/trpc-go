@@ -19,13 +19,17 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/metrics"
 	testpb "trpc.group/trpc-go/trpc-go/test/protocols"
 )
 
 func (s *TestSuite) TestMetricsConsoleSink() {
-	metrics.RegisterMetricsSink(metrics.NewConsoleSink())
+	sink := metrics.NewConsoleSink()
+	metrics.RegisterMetricsSink(sink)
+	s.T().Cleanup(func() {
+		metrics.RegisterMetricsSink(noopSink{sink.Name()})
+	})
 	s.startServer(&TRPCService{})
 
 	roundTripCostGauge := metrics.Gauge("request-cost")
@@ -51,7 +55,7 @@ func (s *TestSuite) TestMetricsConsoleSink() {
 
 		_, err := s.newTRPCClient().UnaryCall(trpc.BackgroundContext(), req)
 
-		endTime := time.Now().Sub(startTime).Milliseconds()
+		endTime := time.Since(startTime).Milliseconds()
 		roundTripCostGauge.Set(float64(endTime))
 		roundTripCostHistogram.AddSample(float64(endTime))
 		roundTripCostTimer.Record()
@@ -83,17 +87,30 @@ func (s *TestSuite) TestMetricsConsoleSink() {
 	}
 }
 
+type noopSink struct {
+	name string
+}
+
+func (s noopSink) Name() string {
+	return s.name
+}
+
+// Report reports a record.
+func (s noopSink) Report(_ metrics.Record, _ ...metrics.Option) error {
+	return nil
+}
+
 func newSimpleRequests(t *testing.T, n int) []*testpb.SimpleRequest {
 	t.Helper()
 
 	requests := make([]*testpb.SimpleRequest, 0, n)
 	for size := 0; size < n; size++ {
-		payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, int32(size))
+		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(size))
 		if err != nil {
 			t.Fatal(err)
 		}
 		requests = append(requests, &testpb.SimpleRequest{
-			ResponseType: testpb.PayloadType_COMPRESSIBLE,
+			ResponseType: testpb.PayloadType_COMPRESSABLE,
 			ResponseSize: int32(size),
 			Payload:      payload,
 		})

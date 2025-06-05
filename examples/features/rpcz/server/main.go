@@ -18,7 +18,7 @@ import (
 	"context"
 	"flag"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/errs"
 	pb "trpc.group/trpc-go/trpc-go/examples/features/rpcz/proto"
 	"trpc.group/trpc-go/trpc-go/log"
@@ -50,7 +50,7 @@ func main() {
 		})
 	}
 
-	pb.RegisterRPCZService(s, &testRPCZAttributeImpl{})
+	pb.RegisterRPCZService(s.Service("trpc.examples.rpcz.RPCZ"), &testRPCZAttributeImpl{})
 
 	// service starts
 	s.Serve()
@@ -68,14 +68,14 @@ func (t *testRPCZAttributeImpl) Hello(ctx context.Context, req *pb.HelloReq) (*p
 	case "Code":
 		return t.codeResult(ctx, req)
 	default:
-		return nil, errs.New(111, "unknow rpcz type")
+		return nil, errs.New(111, "unknown rpcz type")
 	}
 
 }
 
 func (t *testRPCZAttributeImpl) basicResult(ctx context.Context, req *pb.HelloReq) (*pb.HelloRsp, error) {
 	rsp := &pb.HelloRsp{}
-	log.Debugf("recv req:%s", req)
+	log.Debugf("recv req: %s", req)
 	rsp.Msg = "Hello " + req.GetMsg()
 	return rsp, nil
 }
@@ -92,7 +92,7 @@ func (t *testRPCZAttributeImpl) codeResult(ctx context.Context, req *pb.HelloReq
 	span := rpcz.SpanFromContext(ctx)
 	span.SetAttribute(attributeName, 1)
 
-	log.Debugf("recv req:%s", req)
+	log.Debugf("recv req: %s", req)
 	rsp.Msg = "Hello attribute rpcz: " + req.GetMsg()
 	return rsp, nil
 }

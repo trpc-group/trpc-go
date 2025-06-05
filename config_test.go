@@ -14,7 +14,10 @@
 package trpc
 
 import (
+	"context"
+	"fmt"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -22,9 +25,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v3"
 
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
+	"trpc.group/trpc-go/trpc-go/plugin"
 	"trpc.group/trpc-go/trpc-go/rpcz"
 )
 
@@ -52,6 +57,7 @@ global:
   env_name: ${test}
   container_name: ${container_name}
   local_ip: $local_ip
+  disable_graceful_restart: true
 server:
   app: ${}
   server: ${server
@@ -80,6 +86,7 @@ client:
 		return
 	}
 	assert.Equal(t, c.Global.Namespace, "development")
+	assert.Equal(t, c.Global.DisableGracefulRestart, true)
 	assert.Equal(t, c.Global.EnvName, "") // env name not set, should be replaced with empty value
 	assert.Equal(t, c.Global.ContainerName, containerName)
 	assert.Equal(t, c.Global.LocalIP, "$local_ip") // only ${var} instead of $var is valid
@@ -149,6 +156,59 @@ func Test_setDefault(t *testing.T) {
 	assert.NotEqual(t, dstNotEmpty, def)
 }
 
+func TestServiceConfigOverloadCtrl(t *testing.T) {
+	testServerOC := &overloadctrl.NoopOC{}
+	overloadctrl.RegisterServer("test_server_oc",
+		func(*overloadctrl.ServiceMethodInfo) overloadctrl.OverloadController {
+			return testServerOC
+		})
+
+	t.Run("default oc", func(t *testing.T) {
+		var cfg ServiceConfig
+		require.Nil(t, yaml.Unmarshal([]byte(`
+name: xxx
+`), &cfg))
+		token, err := cfg.OverloadCtrl.Acquire(context.Background(), "")
+		require.Nil(t, err)
+		require.Equal(t, overloadctrl.NoopToken{}, token)
+	})
+	t.Run("backward compatibility", func(t *testing.T) {
+		var cfg ServiceConfig
+		require.Nil(t, yaml.Unmarshal([]byte(`
+overload_ctrls: [test_server_oc]
+`), &cfg))
+		require.Equal(t, testServerOC, cfg.OverloadCtrl.OverloadController)
+	})
+	t.Run("chain not available", func(t *testing.T) {
+		var cfg ServiceConfig
+		require.NotNil(t, yaml.Unmarshal([]byte(`
+overload_ctrls: [test_server_oc, noop]
+`), &cfg))
+	})
+	t.Run("use one config only", func(t *testing.T) {
+		var cfg ServiceConfig
+		require.NotNil(t, yaml.Unmarshal([]byte(`
+overload_ctrls: [test_server_oc]
+overload_ctrl: test_server_oc
+`), &cfg))
+	})
+	t.Run("use new config", func(t *testing.T) {
+		var cfg ServiceConfig
+		require.Nil(t, yaml.Unmarshal([]byte(`
+overload_ctrl: test_server_oc
+`), &cfg))
+		require.Equal(t, testServerOC, cfg.OverloadCtrl.OverloadController)
+	})
+	t.Run("unmarshal_marshal", func(t *testing.T) {
+		ocData := "overload_ctrl: test_server_oc"
+		var cfg ServiceConfig
+		require.Nil(t, yaml.Unmarshal([]byte(ocData), &cfg))
+		data, err := yaml.Marshal(&cfg)
+		require.Nil(t, err)
+		require.Contains(t, string(data), ocData)
+	})
+}
+
 func TestConfigTransport(t *testing.T) {
 	t.Run("Server Config", func(t *testing.T) {
 		var cfg Config
@@ -201,6 +261,48 @@ stream_filter:
 		require.Equal(t, filterName, cfg.StreamFilter[0])
 	})
 
+}
+
+// TestGetConfProvider test Config struct
+func TestGetConfProvider(t *testing.T) {
+	// set env config
+	var cfg *Config
+
+	tests := []struct {
+		name         string
+		mock         func()
+		wantProvider string
+	}{
+		{
+			name: "global config compatibility",
+			mock: func() {
+				cfg = &Config{
+					Global: GlobalCfg{
+						EnvName: "local",
+					},
+				}
+			},
+			wantProvider: "file",
+		},
+	}
+
+	// simulate getConfProvider()
+	getConfProvider := func() string {
+		provider := "tconf"
+		if cfg.Global.EnvName == "local" {
+			provider = "file"
+		}
+		return provider
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.mock()
+			require.NotNil(t, cfg)
+			provider := getConfProvider()
+			require.Equal(t, tt.wantProvider, provider, "result: %s, want: %s", provider, tt.wantProvider)
+		})
+	}
 }
 
 func TestRecordWhen(t *testing.T) {
@@ -258,6 +360,7 @@ capacity: 10`),
 	})
 
 }
+
 func TestRecordWhen_NotNode(t *testing.T) {
 	t.Run("NOT node is empty", func(t *testing.T) {
 		config := &RPCZConfig{}
@@ -313,6 +416,7 @@ record_when:
 		require.Contains(t, errs.Msg(err), "cannot unmarshal !!seq into map[trpc.nodeKind]yaml.Node")
 	})
 }
+
 func TestRecordWhen_ANDNode(t *testing.T) {
 	t.Run("AND node is empty", func(t *testing.T) {
 		config := &RPCZConfig{}
@@ -369,6 +473,7 @@ record_when:
 		require.Contains(t, errs.Msg(err), "cannot unmarshal !!map into []map[trpc.nodeKind]yaml.Node")
 	})
 }
+
 func TestRPCZ_RecordWhen_ErrorCode(t *testing.T) {
 	config := &RPCZConfig{}
 	mustYamlUnmarshal(t, []byte(`
@@ -425,6 +530,7 @@ record_when:
 		require.False(t, ok, i)
 	}
 }
+
 func TestRPC_RecordWhen_CustomAttribute(t *testing.T) {
 	config := &RPCZConfig{}
 	mustYamlUnmarshal(t, []byte(`
@@ -483,6 +589,7 @@ record_when:
 		require.False(t, ok, i)
 	}
 }
+
 func TestRPC_RecordWhen_InvalidCustomAttribute(t *testing.T) {
 	t.Run("miss left parenthesis", func(t *testing.T) {
 		config := &RPCZConfig{}
@@ -513,6 +620,7 @@ record_when:
 `), config), "invalid attribute form")
 	})
 }
+
 func TestRPCZ_RecordWhen_MinDuration(t *testing.T) {
 	t.Run("not empty", func(t *testing.T) {
 		config := &RPCZConfig{}
@@ -615,6 +723,7 @@ record_when:
 		require.True(t, ok)
 	})
 }
+
 func TestRPCZ_RecordWhen_MinRequestSize(t *testing.T) {
 	config := &RPCZConfig{}
 	mustYamlUnmarshal(t, []byte(`
@@ -658,6 +767,7 @@ record_when:
 		require.True(t, ok)
 	})
 }
+
 func TestRPCZ_RecordWhen_MinResponseSize(t *testing.T) {
 	config := &RPCZConfig{}
 	mustYamlUnmarshal(t, []byte(`
@@ -701,6 +811,7 @@ record_when:
 		require.True(t, ok)
 	})
 }
+
 func TestRPCZ_RecordWhen_RPCName(t *testing.T) {
 	config := &RPCZConfig{}
 	mustYamlUnmarshal(t, []byte(`
@@ -736,6 +847,7 @@ record_when:
 		require.True(t, ok)
 	})
 }
+
 func TestRPCZ_RecordWhen_ErrorCodeAndMinDuration(t *testing.T) {
 	config := &RPCZConfig{}
 	mustYamlUnmarshal(t, []byte(`
@@ -808,6 +920,7 @@ func mustYamlUnmarshal(t *testing.T, in []byte, out interface{}) {
 		t.Fatal(err)
 	}
 }
+
 func TestRepairServiceIdleTime(t *testing.T) {
 	t.Run("set by service timeout", func(t *testing.T) {
 		var cfg Config
@@ -855,4 +968,146 @@ server:
 		require.Nil(t, RepairConfig(&cfg))
 		require.Equal(t, 1500, cfg.Server.Service[0].Idletime)
 	})
+}
+
+func TestConfigSetMaxFrameSize(t *testing.T) {
+	oldMaxFrameSize := DefaultMaxFrameSize
+	defer func() { DefaultMaxFrameSize = oldMaxFrameSize }()
+	var cfg Config
+	size := 88888888
+	require.Nil(t, yaml.Unmarshal([]byte(fmt.Sprintf(`
+global:
+  max_frame_size: %d
+`, size)), &cfg))
+	require.Nil(t, RepairConfig(&cfg))
+	SetGlobalVariables(&cfg)
+	require.Equal(t, size, DefaultMaxFrameSize)
+}
+
+func TestConfigSetPluginTimeout(t *testing.T) {
+	oldSetupTimeout := plugin.SetupTimeout
+	defer func() { plugin.SetupTimeout = oldSetupTimeout }()
+	var cfg Config
+	timeout := time.Minute
+	require.Nil(t, yaml.Unmarshal([]byte(fmt.Sprintf(`
+global:
+  plugin_setup_timeout: %s
+`, timeout)), &cfg))
+	require.Nil(t, RepairConfig(&cfg))
+	SetGlobalVariables(&cfg)
+	require.Equal(t, timeout, plugin.SetupTimeout)
+}
+
+func TestMethodTimeoutCfg(t *testing.T) {
+	var cfg Config
+	require.Nil(t, yaml.Unmarshal([]byte(`
+server:
+  service:
+    - method:
+        M1:
+          timeout: 1000
+        M2: {}
+`), &cfg))
+	require.Len(t, cfg.Server.Service, 1)
+	require.Len(t, cfg.Server.Service[0].Method, 2)
+	m1, ok := cfg.Server.Service[0].Method["M1"]
+	require.True(t, ok)
+	require.NotNil(t, m1.Timeout)
+	require.Equal(t, 1000, *m1.Timeout)
+	m2, ok := cfg.Server.Service[0].Method["M2"]
+	require.True(t, ok)
+	require.Nil(t, m2.Timeout)
+}
+
+func TestServiceCurrentSerializationTypeConfig(t *testing.T) {
+	var cfg Config
+	const (
+		globalType = 0
+		localType  = 1
+	)
+	require.Nil(t, yaml.Unmarshal([]byte(fmt.Sprintf(`
+server:
+  current_serialization_type: %d
+  service:
+    - name: service0
+      current_serialization_type: %d
+    - name: service1
+`, globalType, localType)), &cfg))
+	require.Nil(t, RepairConfig(&cfg))
+	require.Len(t, cfg.Server.Service, 2)
+	require.NotNil(t, cfg.Server.Service[0].CurrentSerializationType)
+	require.Equal(t, localType, *cfg.Server.Service[0].CurrentSerializationType)
+	require.NotNil(t, cfg.Server.Service[1].CurrentSerializationType)
+	require.Equal(t, globalType, *cfg.Server.Service[1].CurrentSerializationType)
+}
+
+func TestServiceCurrentCompressionTypeConfig(t *testing.T) {
+	var cfg Config
+	const (
+		globalType = 0
+		localType  = 1
+	)
+	require.Nil(t, yaml.Unmarshal([]byte(fmt.Sprintf(`
+server:
+  current_compress_type: %d
+  service:
+    - name: service0
+      current_compress_type: %d
+    - name: service1
+`, globalType, localType)), &cfg))
+	require.Nil(t, RepairConfig(&cfg))
+	require.Len(t, cfg.Server.Service, 2)
+	require.NotNil(t, cfg.Server.Service[0].CurrentCompressType)
+	require.Equal(t, localType, *cfg.Server.Service[0].CurrentCompressType)
+	require.NotNil(t, cfg.Server.Service[1].CurrentCompressType)
+	require.Equal(t, globalType, *cfg.Server.Service[1].CurrentCompressType)
+}
+
+func TestServerOverloadControl(t *testing.T) {
+	filePath := "./trpc_go.yaml"
+	ocName := "default"
+	content := fmt.Sprintf(`
+server:
+  app: some_app
+  server: some_server
+  overload_ctrl: %s
+  service:
+    - name: some_service
+`, ocName)
+	require.NoError(t, os.WriteFile(filePath, []byte(content), os.ModePerm))
+	defer func() {
+		_ = os.Remove(filePath)
+	}()
+
+	builder := overloadctrl.GetServer(ocName)
+	defer func() { // Restore the original oc builder.
+		overloadctrl.RegisterServer(ocName, builder)
+	}()
+	overloadctrl.RegisterServer(ocName, func(smi *overloadctrl.ServiceMethodInfo) overloadctrl.OverloadController {
+		return &overloadctrl.NoopOC{}
+	})
+
+	c, err := LoadConfig(filePath)
+	require.NoError(t, err)
+	require.Equal(t, ocName, c.Server.OverloadCtrl.Builder)
+	require.Equal(t, ocName, c.Server.Service[0].OverloadCtrl.Builder)
+	require.True(t, reflect.DeepEqual(c.Server.Service[0].OverloadCtrl.OverloadController,
+		c.Server.OverloadCtrl.OverloadController))
+}
+
+func TestClientNamespace(t *testing.T) {
+	var cfg Config
+	namespace := "Development"
+	require.Nil(t, yaml.Unmarshal([]byte(fmt.Sprintf(`
+global:
+  namespace: %s
+client:
+  service:
+    - name: service0
+`, namespace)), &cfg))
+	require.Nil(t, RepairConfig(&cfg))
+	require.Equal(t, namespace, cfg.Client.Namespace)
+	require.Equal(t, namespace, cfg.Client.CallerNamespace)
+	require.Equal(t, namespace, cfg.Client.Service[0].Namespace)
+	require.Equal(t, namespace, cfg.Client.Service[0].CallerNamespace)
 }

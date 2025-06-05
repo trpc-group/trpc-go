@@ -16,8 +16,8 @@ package healthcheck_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"trpc.group/trpc-go/trpc-go/healthcheck"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHealthCheckService(t *testing.T) {

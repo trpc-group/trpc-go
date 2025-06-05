@@ -20,7 +20,9 @@ import (
 
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/filter"
+	ikeeporder "trpc.group/trpc-go/trpc-go/internal/keeporder"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"trpc.group/trpc-go/trpc-go/restful"
 	"trpc.group/trpc-go/trpc-go/transport"
 )
@@ -36,17 +38,22 @@ type Options struct {
 
 	Address                  string        // listen address, ip:port
 	Timeout                  time.Duration // timeout for handling a request
+	ReadTimeout              time.Duration // timeout for reading a request
 	DisableRequestTimeout    bool          // whether to disable request timeout that inherits from upstream
 	DisableKeepAlives        bool          // disables keep-alives
+	DisableGracefulRestart   bool          // whether to disable graceful restart
 	CurrentSerializationType int
 	CurrentCompressType      int
 
-	protocol   string // protocol like "trpc", "http" etc.
-	network    string // network like "tcp", "udp" etc.
-	handlerSet bool   // whether that custom handler is set
+	methods map[string]*methodOptions
+
+	protocol string // protocol like "trpc", "http" etc.
+	network  string // network like "tcp", "udp" etc.
 
 	ServeOptions []transport.ListenServeOption
 	Transport    transport.ServerTransport
+
+	OverloadCtrl overloadctrl.OverloadController
 
 	Registry registry.Registry
 	Codec    codec.Codec
@@ -58,9 +65,19 @@ type Options struct {
 	MaxWindowSize    uint32                          // max window size for server stream
 	CloseWaitTime    time.Duration                   // min waiting time when closing server for wait deregister finish
 	MaxCloseWaitTime time.Duration                   // max waiting time when closing server for wait requests finish
+	RESTOptions      []restful.Option                // RESTful router options
+	StreamFilters    StreamFilterChain
 
-	RESTOptions   []restful.Option // RESTful router options
-	StreamFilters StreamFilterChain
+	// OnResponseObsoleted is called immediately after the framework has finished using
+	// the response struct passed by the user.
+	// Users can use this function to return the response and its related resources to the pool,
+	// enabling better object reuse. If users choose to do so, the response struct returned by the
+	// user will typically be obtained from the pool rather than being allocated directly.
+	OnResponseObsoleted func(ctx context.Context, rsp interface{})
+}
+
+type methodOptions struct {
+	timeout *time.Duration
 }
 
 // StreamHandle is the interface that defines server stream processing.
@@ -118,10 +135,10 @@ func WithServiceName(s string) Option {
 }
 
 // WithFilter returns an Option that adds a filter.Filter (pre or post).
-func WithFilter(f filter.ServerFilter) Option {
+func WithFilter(f interface{}) Option {
 	return func(o *Options) {
 		const filterName = "server.WithFilter"
-		o.Filters = append(o.Filters, f)
+		o.Filters = append(o.Filters, filter.ConvertToServerFilter(filterName, f))
 		o.FilterNames = append(o.FilterNames, filterName)
 	}
 }
@@ -194,12 +211,47 @@ func WithListener(lis net.Listener) Option {
 	}
 }
 
-// WithServerAsync returns an Option that sets whether to enable server asynchronous or not.
-// When enable it, the server can cyclically receive packets and process request and response
-// packets concurrently for the same connection.
+// WithServerAsync returns an Option that sets whether to enable server async or not.
+// See: internalissues/113
 func WithServerAsync(serverAsync bool) Option {
 	return func(o *Options) {
 		o.ServeOptions = append(o.ServeOptions, transport.WithServerAsync(serverAsync))
+	}
+}
+
+// WithKeepOrderPreDecodeExtractor returns a ListenServeOption which enables the keep order feature
+// by providing pre-decoding extractor.
+//
+// By providing the pre-decoding extractor, a keep-order key will be extracted from the decoding result
+// or the raw binary request body.
+// Requests sharing the same keep-order key are processed serially within the same group.
+// Requests from different groups, identified by different keys, are processed in parallel.
+//
+// The default value is nil (do not keep order).
+func WithKeepOrderPreDecodeExtractor(preDecodeExtractor ikeeporder.PreDecodeExtractor) Option {
+	return func(o *Options) {
+		o.ServeOptions = append(o.ServeOptions, transport.WithKeepOrderPreDecodeExtractor(preDecodeExtractor))
+	}
+}
+
+// WithKeepOrderPreUnmarshalExtractor returns a ListenServeOption which enables the keep order feature
+// by providing pre-unmarshalling extractor.
+//
+// By providing the pre-unmarshalling extractor, a keep-order key will be extracted from the unmarshalled request.
+// Requests sharing the same keep-order key are processed serially within the same group.
+// Requests from different groups, identified by different keys, are processed in parallel.
+//
+// The default value is nil (do not keep order).
+func WithKeepOrderPreUnmarshalExtractor(preUnmarshalExtractor ikeeporder.PreUnmarshalExtractor) Option {
+	return func(o *Options) {
+		o.ServeOptions = append(o.ServeOptions, transport.WithKeepOrderPreUnmarshalExtractor(preUnmarshalExtractor))
+	}
+}
+
+// WithOrderedGroups returns a ListenServeOption which specifies the groups to use for order-keeping.
+func WithOrderedGroups(groups ikeeporder.OrderedGroups) Option {
+	return func(o *Options) {
+		o.ServeOptions = append(o.ServeOptions, transport.WithOrderedGroups(groups))
 	}
 }
 
@@ -227,6 +279,25 @@ func WithMaxRoutines(routines int) Option {
 func WithTimeout(t time.Duration) Option {
 	return func(o *Options) {
 		o.Timeout = t
+	}
+}
+
+// WithReadTimeout returns an Option that sets timeout for reading a request.
+func WithReadTimeout(t time.Duration) Option {
+	return func(o *Options) {
+		o.ReadTimeout = t
+		o.ServeOptions = append(o.ServeOptions, transport.WithServerReadTimeout(t))
+	}
+}
+
+// WithMethodTimeout returns an Options that sets timeout for handling the method.
+func WithMethodTimeout(method string, timeout time.Duration) Option {
+	return func(o *Options) {
+		if mo, ok := o.methods[method]; ok {
+			mo.timeout = &timeout
+		} else {
+			o.methods[method] = &methodOptions{timeout: &timeout}
+		}
 	}
 }
 
@@ -275,7 +346,6 @@ func WithProtocol(s string) Option {
 func WithHandler(h transport.Handler) Option {
 	return func(o *Options) {
 		o.ServeOptions = append(o.ServeOptions, transport.WithHandler(h))
-		o.handlerSet = true
 	}
 }
 
@@ -321,10 +391,25 @@ func WithMaxCloseWaitTime(t time.Duration) Option {
 	}
 }
 
+// WithDisableGracefulRestart returns an Option that sets whether enable graceful restart or not.
+// It is no use for windows, because graceful restart is not supported on windows.
+func WithDisableGracefulRestart(disable bool) Option {
+	return func(o *Options) {
+		o.DisableGracefulRestart = disable
+	}
+}
+
 // WithRESTOptions returns an Option that sets RESTful router options.
 func WithRESTOptions(opts ...restful.Option) Option {
 	return func(o *Options) {
 		o.RESTOptions = append(o.RESTOptions, opts...)
+	}
+}
+
+// WithOverloadCtrl returns an Option that sets overloadctrl.OverloadController.
+func WithOverloadCtrl(oc overloadctrl.OverloadController) Option {
+	return func(o *Options) {
+		o.OverloadCtrl = oc
 	}
 }
 
@@ -340,5 +425,43 @@ func WithIdleTimeout(t time.Duration) Option {
 func WithDisableKeepAlives(disable bool) Option {
 	return func(o *Options) {
 		o.ServeOptions = append(o.ServeOptions, transport.WithDisableKeepAlives(disable))
+	}
+}
+
+// WithOnResponseObsoleted returns an Option that sets OnResponseObsoleted function.
+// OnResponseObsoleted is called immediately after the framework has finished using
+// the response struct passed by the user.
+// Users can use this function to return the response and its related resources to the pool,
+// enabling better object reuse. If users choose to do so, the response struct returned by the
+// user will typically be obtained from the pool rather than being allocated directly.
+func WithOnResponseObsoleted(f func(ctx context.Context, rsp interface{})) Option {
+	return func(o *Options) {
+		o.OnResponseObsoleted = f
+	}
+}
+
+// WithServiceOption returns an Option that sets Option by service name.
+func WithServiceOption(serviceName string, opt Option) Option {
+	return func(o *Options) {
+		if o.ServiceName == serviceName {
+			opt(o)
+		}
+	}
+}
+
+// WithProfilerTagger returns an Option that assigns tags to goroutine.
+// This allows for more detailed filtering in pprof CPU statistics based on different labels.
+func WithProfilerTagger(t ProfilerTagger) Option {
+	return func(o *Options) {
+		o.Filters = append(filter.ServerChain{profilerTaggerFilter(t)}, o.Filters...)
+		o.FilterNames = append([]string{"profiler_tagger_filter"}, o.FilterNames...)
+	}
+}
+
+// WithStreamProfilerTagger returns an Option that assigns tags to goroutine for stream service.
+// This allows for more detailed filtering in pprof CPU statistics based on different labels.
+func WithStreamProfilerTagger(t StreamProfilerTagger) Option {
+	return func(o *Options) {
+		o.StreamFilters = append(StreamFilterChain{streamProfilerTaggerFilter(t)}, o.StreamFilters...)
 	}
 }

@@ -19,11 +19,11 @@ import (
 
 	"trpc.group/trpc-go/trpc-go/examples/features/filter/shared"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/filter"
 	"trpc.group/trpc-go/trpc-go/log"
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 func main() {
@@ -39,7 +39,7 @@ func main() {
 	// start rpc call
 	rsp, err := proxy.SayHi(ctx, &pb.HelloRequest{Msg: "feature filter example"})
 	if err != nil {
-		log.ErrorContextf(ctx, "say hi err:%v", err)
+		log.ErrorContextf(ctx, "say hi err: %v", err)
 		return
 	}
 	log.InfoContextf(ctx, "get msg: %s", rsp.GetMsg())

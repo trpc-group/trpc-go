@@ -15,36 +15,38 @@ package http
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
 	"github.com/valyala/fasthttp"
-	"trpc.group/trpc-go/trpc-go/internal/reuseport"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
+	"trpc.group/trpc-go/trpc-go/internal/http/fastop"
+	inet "trpc.group/trpc-go/trpc-go/internal/net"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
+	itls "trpc.group/trpc-go/trpc-go/internal/tls"
 	"trpc.group/trpc-go/trpc-go/restful"
 	"trpc.group/trpc-go/trpc-go/transport"
 )
 
 var (
 	// DefaultRESTServerTransport is the default RESTful ServerTransport.
-	DefaultRESTServerTransport = NewRESTServerTransport(false, transport.WithReusePort(true))
-
+	DefaultRESTServerTransport transport.ServerTransport = NewRESTServerTransportBasedOnStdHTTP(func() *http.Server {
+		return &http.Server{}
+	}, WithReusePort())
 	// DefaultRESTHeaderMatcher is the default REST HeaderMatcher.
 	DefaultRESTHeaderMatcher = func(ctx context.Context,
 		_ http.ResponseWriter,
 		r *http.Request,
 		serviceName, methodName string,
 	) (context.Context, error) {
-		return putRESTMsgInCtx(ctx, r.Header.Get, serviceName, methodName)
+		return putRESTMsgInCtx(ctx, func(key string) string {
+			return fastop.CanonicalHeaderGet(r.Header, key)
+		}, inet.ResolveAddress(protocol.TCP, r.RemoteAddr), serviceName, methodName)
 	}
 
 	// DefaultRESTFastHTTPHeaderMatcher is the default REST FastHTTPHeaderMatcher.
@@ -56,10 +58,8 @@ var (
 		headerGetter := func(k string) string {
 			return string(requestCtx.Request.Header.Peek(k))
 		}
-		return putRESTMsgInCtx(ctx, headerGetter, serviceName, methodName)
+		return putRESTMsgInCtx(ctx, headerGetter, requestCtx.RemoteAddr(), serviceName, methodName)
 	}
-
-	errReplaceRouter = errors.New("not allow to replace router when is based on fasthttp")
 )
 
 func init() {
@@ -78,24 +78,30 @@ func init() {
 func putRESTMsgInCtx(
 	ctx context.Context,
 	headerGetter func(string) string,
+	remoteAddr net.Addr,
 	service, method string,
 ) (context.Context, error) {
 	ctx, msg := codec.WithNewMessage(ctx)
 	msg.WithCalleeServiceName(service)
 	msg.WithServerRPCName(method)
 	msg.WithSerializationType(codec.SerializationTypePB)
-	if v := headerGetter(TrpcTimeout); v != "" {
+	msg.WithRemoteAddr(remoteAddr)
+	if v := headerGetter(canonicalTrpcTimeout); v != "" {
 		i, _ := strconv.Atoi(v)
 		msg.WithRequestTimeout(time.Millisecond * time.Duration(i))
 	}
-	if v := headerGetter(TrpcCaller); v != "" {
+
+	if v := headerGetter(canonicalTrpcCaller); v != "" {
 		msg.WithCallerServiceName(v)
 	}
-	if v := headerGetter(TrpcMessageType); v != "" {
-		i, _ := strconv.Atoi(v)
-		msg.WithDyeing((int32(i) & int32(trpcpb.TrpcMessageType_TRPC_DYEING_MESSAGE)) != 0)
+	if v := headerGetter(canonicalTrpcCallerMethod); v != "" {
+		msg.WithCallerMethod(v)
 	}
-	if v := headerGetter(TrpcTransInfo); v != "" {
+	if v := headerGetter(canonicalTrpcMessageType); v != "" {
+		i, _ := strconv.Atoi(v)
+		msg.WithDyeing((int32(i) & int32(trpc.TrpcMessageType_TRPC_DYEING_MESSAGE)) != 0)
+	}
+	if v := headerGetter(canonicalTrpcTransInfo); v != "" {
 		if _, err := unmarshalTransInfo(msg, v); err != nil {
 			return nil, err
 		}
@@ -103,105 +109,64 @@ func putRESTMsgInCtx(
 	return ctx, nil
 }
 
-// RESTServerTransport is the RESTful ServerTransport.
+// RESTServerTransport is the RESTful Server Transport based on standard http.
 type RESTServerTransport struct {
-	basedOnFastHTTP bool
-	opts            *transport.ServerTransportOptions
+	newStdHTTPServer func() *http.Server
+	reusePort        bool
 }
 
-// NewRESTServerTransport creates a RESTful ServerTransport.
-func NewRESTServerTransport(basedOnFastHTTP bool, opt ...transport.ServerTransportOption) transport.ServerTransport {
-	opts := &transport.ServerTransportOptions{
-		IdleTimeout: time.Minute,
+// NewRESTServerTransportBasedOnStdHTTP return *RESTServerTransport based on standard http.
+func NewRESTServerTransportBasedOnStdHTTP(newStdHTTPServer func() *http.Server, opts ...RESTServerTransportOption,
+) *RESTServerTransport {
+	var options restServerTransportOptions
+	for _, opt := range opts {
+		opt(&options)
 	}
-
-	for _, o := range opt {
-		o(opts)
-	}
-
 	return &RESTServerTransport{
-		basedOnFastHTTP: basedOnFastHTTP,
-		opts:            opts,
+		newStdHTTPServer: newStdHTTPServer,
+		reusePort:        options.reusePort,
 	}
 }
 
 // ListenAndServe implements interface of transport.ServerTransport.
-func (st *RESTServerTransport) ListenAndServe(ctx context.Context, opt ...transport.ListenServeOption) error {
+func (t *RESTServerTransport) ListenAndServe(ctx context.Context, opt ...transport.ListenServeOption) error {
 	opts := &transport.ListenServeOptions{
-		Network: "tcp",
+		Network: protocol.TCP,
 	}
 	for _, o := range opt {
 		o(opts)
 	}
-	// Get listener.
-	ln := opts.Listener
-	if ln == nil {
-		var err error
-		ln, err = st.getListener(opts)
-		if err != nil {
-			return fmt.Errorf("restfull server transport get listener err: %w", err)
-		}
+	ln, err := listen(t.reusePort, opts)
+	if err != nil {
+		return fmt.Errorf("listening: %w", err)
 	}
-	// Save listener.
-	if err := transport.SaveListener(ln); err != nil {
-		return fmt.Errorf("save restful listener error: %w", err)
-	}
-	// Convert to tcpKeepAliveListener.
-	if tcpln, ok := ln.(*net.TCPListener); ok {
-		ln = tcpKeepAliveListener{tcpln}
-	}
-	// Config tls.
-	if len(opts.TLSKeyFile) != 0 && len(opts.TLSCertFile) != 0 {
-		tlsConf, err := generateTLSConfig(opts)
-		if err != nil {
-			return err
-		}
-		ln = tls.NewListener(ln, tlsConf)
-	}
-
-	go func() {
-		<-opts.StopListening
-		ln.Close()
-	}()
-
-	return st.serve(ctx, ln, opts)
+	return t.serve(ctx, ln, opts)
 }
 
-// serve starts service.
-func (st *RESTServerTransport) serve(
-	ctx context.Context,
-	ln net.Listener,
-	opts *transport.ListenServeOptions,
-) error {
-	// Get router.
+func (t *RESTServerTransport) serve(ctx context.Context, ln net.Listener, opts *transport.ListenServeOptions) error {
 	router := restful.GetRouter(opts.ServiceName)
 	if router == nil {
-		return fmt.Errorf("service %s router not registered", opts.ServiceName)
+		return fmt.Errorf("getting service %s router failed: empty router, "+
+			"the corresponding router has not been registered", opts.ServiceName)
 	}
-
-	if st.basedOnFastHTTP { // Based on fasthttp.
-		r, ok := router.(*restful.Router)
-		if !ok {
-			return errReplaceRouter
-		}
-		server := &fasthttp.Server{Handler: r.HandleRequestCtx}
-		go func() {
-			_ = server.Serve(ln)
-		}()
-		if st.opts.ReusePort {
-			go func() {
-				<-ctx.Done()
-				_ = server.Shutdown()
-			}()
-		}
-		return nil
+	server := t.newStdHTTPServer()
+	server.Handler = router
+	server.Addr = opts.Address
+	if opts.IdleTimeout > 0 {
+		server.IdleTimeout = opts.IdleTimeout
 	}
-	// Based on net/http.
-	server := &http.Server{Addr: opts.Address, Handler: router}
+	if len(opts.TLSKeyFile) != 0 && len(opts.TLSCertFile) != 0 {
+		config, err := itls.GetServerConfig(opts.CACertFile, opts.TLSCertFile, opts.TLSKeyFile)
+		if err != nil {
+			return fmt.Errorf("rest server transport serve get tls config err: %w", err)
+		}
+		server.TLSConfig = config
+	}
+	server.SetKeepAlivesEnabled(!opts.DisableKeepAlives)
 	go func() {
 		_ = server.Serve(ln)
 	}()
-	if st.opts.ReusePort {
+	if t.reusePort {
 		go func() {
 			<-ctx.Done()
 			_ = server.Shutdown(context.TODO())
@@ -210,69 +175,120 @@ func (st *RESTServerTransport) serve(
 	return nil
 }
 
-// getListener gets listener.
-func (st *RESTServerTransport) getListener(opts *transport.ListenServeOptions) (net.Listener, error) {
-	var err error
-	var ln net.Listener
+// NewRestServerFastHTTPTransport return *RESTServerTransport based on fast http.
+func NewRestServerFastHTTPTransport(
+	newFastHTTPServer func() *fasthttp.Server,
+	opts ...RESTServerTransportOption,
+) *RestServerTransportBaseOnFastHTTP {
+	var options restServerTransportOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+	return &RestServerTransportBaseOnFastHTTP{
+		newFastHTTPServer: newFastHTTPServer,
+		reusePort:         options.reusePort,
+	}
+}
 
-	v, _ := os.LookupEnv(transport.EnvGraceRestart)
-	ok, _ := strconv.ParseBool(v)
-	if ok {
-		// Find the passed listener.
-		pln, err := transport.GetPassedListener(opts.Network, opts.Address)
+// RestServerTransportBaseOnFastHTTP is the RESTful Server Transport based on fasthttp.
+type RestServerTransportBaseOnFastHTTP struct {
+	newFastHTTPServer func() *fasthttp.Server
+	reusePort         bool
+}
+
+// ListenAndServe implements interface of transport.ServerTransport.
+func (t *RestServerTransportBaseOnFastHTTP) ListenAndServe(ctx context.Context, opt ...transport.ListenServeOption) error {
+	opts := &transport.ListenServeOptions{
+		Network: protocol.TCP,
+	}
+	for _, o := range opt {
+		o(opts)
+	}
+	ln, err := listen(t.reusePort, opts)
+	if err != nil {
+		return fmt.Errorf("listening, reusePort(%v): %w", t.reusePort, err)
+	}
+	return t.serve(ctx, ln, opts)
+}
+
+func (t *RestServerTransportBaseOnFastHTTP) serve(ctx context.Context, ln net.Listener, opts *transport.ListenServeOptions,
+) error {
+	s := t.newFastHTTPServer()
+	s.Handler = restful.GetFasthttpRouter(opts.ServiceName)
+	if opts.IdleTimeout > 0 {
+		s.IdleTimeout = opts.IdleTimeout
+	}
+	if len(opts.TLSKeyFile) != 0 && len(opts.TLSCertFile) != 0 {
+		config, err := itls.GetServerConfig(opts.CACertFile, opts.TLSCertFile, opts.TLSKeyFile)
 		if err != nil {
-			return nil, err
+			return fmt.Errorf("rest server transport serve get tls config err: %w", err)
 		}
+		s.TLSConfig = config
+	}
+	s.DisableKeepalive = opts.DisableKeepAlives
+	go func() {
+		_ = s.Serve(ln)
+	}()
+	if t.reusePort {
+		go func() {
+			<-ctx.Done()
+			_ = s.Shutdown()
+		}()
+	}
+	return nil
+}
 
-		ln, ok = pln.(net.Listener)
-		if !ok {
-			return nil, errors.New("invalid net.Listener")
-		}
-
-		return ln, nil
+func listen(reusePort bool, opts *transport.ListenServeOptions) (net.Listener, error) {
+	ln, err := getListener(opts, reusePort)
+	if err != nil {
+		return nil, fmt.Errorf("getting listener, reusePort(%v): %w", reusePort, err)
 	}
 
-	if st.opts.ReusePort {
-		ln, err = reuseport.Listen(opts.Network, opts.Address)
-		if err != nil {
-			return nil, fmt.Errorf("restful reuseport listen error: %w", err)
-		}
-	} else {
-		ln, err = net.Listen(opts.Network, opts.Address)
-		if err != nil {
-			return nil, fmt.Errorf("restful listen error: %w", err)
-		}
+	if err := transport.SaveListener(ln); err != nil {
+		return nil, fmt.Errorf("saving restful listener: %w", err)
 	}
 
+	ln = mayLiftToTCPKeepAliveListener(ln)
+
+	ln, err = itls.MayLiftToTLSListener(ln, opts.CACertFile, opts.TLSCertFile, opts.TLSKeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("may lift to tls listener failed, CACertFile(%s), TLSCertFile(%s), TLSKeyFile(%s): %w",
+			opts.CACertFile, opts.TLSCertFile, opts.TLSKeyFile, err)
+	}
+
+	// Close listener on stop signal.
+	go func() {
+		<-opts.StopListening
+		ln.Close()
+	}()
 	return ln, nil
 }
 
-// generateTLSConfig generates config of tls.
-func generateTLSConfig(opts *transport.ListenServeOptions) (*tls.Config, error) {
-	tlsConf := &tls.Config{}
-
-	cert, err := tls.LoadX509KeyPair(opts.TLSCertFile, opts.TLSKeyFile)
-	if err != nil {
-		return nil, err
+func mayLiftToTCPKeepAliveListener(ln net.Listener) net.Listener {
+	if tcpln, ok := ln.(*net.TCPListener); ok {
+		return tcpKeepAliveListener{tcpln}
 	}
-	tlsConf.Certificates = []tls.Certificate{cert}
+	return ln
+}
 
-	// Two-way authentication.
-	if opts.CACertFile != "" {
-		tlsConf.ClientAuth = tls.RequireAndVerifyClientCert
-		if opts.CACertFile != "root" {
-			ca, err := os.ReadFile(opts.CACertFile)
-			if err != nil {
-				return nil, err
-			}
-			pool := x509.NewCertPool()
-			ok := pool.AppendCertsFromPEM(ca)
-			if !ok {
-				return nil, errors.New("failed to append certs from pem")
-			}
-			tlsConf.ClientCAs = pool
-		}
+// NewRESTServerTransport creates a RESTful ServerTransport.
+// Deprecated: Use NewRestServerFastHTTPTransport, or NewRESTServerTransportBasedOnStdHTTP instead.
+func NewRESTServerTransport(basedOnFastHTTP bool, opt ...transport.ServerTransportOption) transport.ServerTransport {
+	opts := &transport.ServerTransportOptions{}
+	for _, o := range opt {
+		o(opts)
 	}
 
-	return tlsConf, nil
+	var tOptions []RESTServerTransportOption
+	if opts.ReusePort {
+		tOptions = append(tOptions, WithReusePort())
+	}
+
+	if basedOnFastHTTP {
+		return NewRestServerFastHTTPTransport(func() *fasthttp.Server { return &fasthttp.Server{} }, tOptions...)
+	}
+	return NewRESTServerTransportBasedOnStdHTTP(func() *http.Server {
+		return &http.Server{}
+	}, tOptions...)
+
 }

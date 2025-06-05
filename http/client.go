@@ -21,6 +21,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 )
 
 // Client provides the HTTP client interface.
@@ -52,7 +53,7 @@ var NewClientProxy = func(name string, opts ...client.Option) Client {
 		client:      client.DefaultClient,
 	}
 	c.opts = make([]client.Option, 0, len(opts)+1)
-	c.opts = append(c.opts, client.WithProtocol("http"))
+	c.opts = append(c.opts, client.WithProtocol(protocol.HTTP))
 	c.opts = append(c.opts, opts...)
 	return c
 }
@@ -64,9 +65,13 @@ func NewStdHTTPClient(name string, opts ...client.Option) *http.Client {
 		serviceName: name,
 		client:      client.DefaultClient,
 	}
-	c.opts = make([]client.Option, 0, len(opts)+1)
-	c.opts = append(c.opts, client.WithProtocol("http"))
+	c.opts = make([]client.Option, 0, len(opts)+2)
+	c.opts = append(c.opts, client.WithProtocol(protocol.HTTP))
 	c.opts = append(c.opts, opts...)
+	// Use passthrough selector to bypass the naming process,
+	// as the framework will ignore the result of naming.
+	// Ensure it takes effect by placing it afterwards.
+	c.opts = append(c.opts, client.WithTarget("passthrough://"+name))
 	return &http.Client{Transport: c}
 }
 
@@ -98,7 +103,7 @@ func (c *cli) RoundTrip(request *http.Request) (*http.Response, error) {
 
 	if err != nil {
 		// If the error is caused by the status code, ignore it and return the response normally.
-		if rsp != nil && rsp.StatusCode == int(errs.Code(err)) {
+		if rsp != nil && rsp.StatusCode == errs.Code(err) {
 			return rsp, nil
 		}
 		return nil, err
@@ -174,7 +179,10 @@ func (c *cli) Get(ctx context.Context, path string, rspBody interface{}, opts ..
 
 // send uses trpc client to send http request.
 func (c *cli) send(ctx context.Context, reqBody, rspBody interface{}, opts ...client.Option) error {
-	return c.client.Invoke(ctx, reqBody, rspBody, append(c.opts, opts...)...)
+	options := make([]client.Option, 0, len(c.opts)+len(opts))
+	options = append(options, c.opts...)
+	options = append(options, opts...)
+	return c.client.Invoke(ctx, reqBody, rspBody, options...)
 }
 
 // setDefaultCallOption sets default call option.

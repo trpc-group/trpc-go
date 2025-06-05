@@ -13,14 +13,14 @@
 
 package config
 
-// WithCodec returns an option which sets the codec's name.
+// WithCodec returns an option which sets the codec by name.
 func WithCodec(name string) LoadOption {
 	return func(c *TrpcConfig) {
 		c.decoder = GetCodec(name)
 	}
 }
 
-// WithProvider returns an option which sets the provider's name.
+// WithProvider returns an option which sets the provider by name.
 func WithProvider(name string) LoadOption {
 	return func(c *TrpcConfig) {
 		c.p = GetProvider(name)
@@ -43,7 +43,18 @@ func WithWatch() LoadOption {
 }
 
 // WithWatchHook returns an option to set log func for config change logger
-func WithWatchHook(f func(msg WatchMessage)) LoadOption {
+func WithWatchHook(f func(WatchMessage)) LoadOption {
+	return func(c *TrpcConfig) {
+		c.watchHook = func(message WatchMessage) error {
+			f(message)
+			return nil
+		}
+	}
+}
+
+// WithWatchHookWithError returns an option to set a watch hook that explicitly returns an error.
+// Typically, it is used in conjunction with implementing the DataProviderWithError interface.
+func WithWatchHookWithError(f func(WatchMessage) error) LoadOption {
 	return func(c *TrpcConfig) {
 		c.watchHook = f
 	}

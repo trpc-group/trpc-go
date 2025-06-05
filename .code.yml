@@ -1,0 +1,150 @@
+branch:
+  trunk_name: "master"
+  branch_type_A:
+    tag:
+      pattern: "v${versionnumber}"
+      versionnumber: "{Major-version}.{Feature-version}.{Fix-version}"
+
+artifact:
+  - path: "/"
+    artifact_name: "trpc-go"
+    dependence_conf: "go.mod"
+    repository_url: "http://git.woa.com/trpc-go/trpc-go"
+    artifact_type: "框架"
+
+source:
+  test_source:
+    filepath_regex: [".*_test.go$"]
+  auto_generate_source:
+    filepath_regex: [".*.pb.go$", ".*.trpc.go$", ".*_mock.go$", "^HelloReq.go$"]
+
+code_review:
+  restrict_labels: ["CR-编程规范", "CR-业务逻辑","CR-边界逻辑","CR-代码架构","CR-性能影响","CR-安全性","CR-可测试性","CR-可读性"]
+
+file:
+  - path: "/.*"
+    owners: ["nickzydeng", "tensorchen"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["nickzydeng", "tensorchen"]
+      necessary_reviewers: ["nickzydeng", "tensorchen"]
+  - path: "/admin/.*"
+    owners: ["jethe", "quickyang"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["jethe", "quickyang"]
+      necessary_reviewers: ["jethe", "quickyang"]
+  - path: "/client/.*"
+    owners: ["nickzydeng", "misakachen"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["nickzydeng", "misakachen"]
+      necessary_reviewers: ["nickzydeng", "misakachen"]
+  - path: "/codec/.*"
+    owners: ["nickzydeng", "zhijiezhang"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["nickzydeng", "zhijiezhang"]
+      necessary_reviewers: ["nickzydeng", "zhijiezhang"]
+  - path: "/config/.*"
+    owners: ["alvinzhu", "treycheng"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["alvinzhu", "treycheng"]
+      necessary_reviewers: ["alvinzhu", "treycheng"]
+  - path: "/errs/.*"
+    owners: ["nickzydeng", "jessemjchen"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["nickzydeng", "jessemjchen"]
+      necessary_reviewers: ["nickzydeng", "jessemjchen"]
+  - path: "/examples/.*"
+    owners: ["misakachen", "jessemjchen"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["misakachen", "jessemjchen"]
+      necessary_reviewers: ["misakachen", "jessemjchen"]
+  - path: "/filter/.*"
+    owners: ["tensorchen", "nickzydeng"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["tensorchen", "nickzydeng"]
+      necessary_reviewers: ["tensorchen", "nickzydeng"]
+  - path: "/http/.*"
+    owners: ["alvinzhu", "treycheng"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["alvinzhu", "treycheng"]
+      necessary_reviewers: ["alvinzhu", "treycheng"]
+  - path: "/log/.*"
+    owners: ["tensorchen", "nickzydeng"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["tensorchen", "nickzydeng"]
+      necessary_reviewers: ["tensorchen", "nickzydeng"]
+  - path: "/metrics/.*"
+    owners: ["zhijiezhang", "neilluo"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["zhijiezhang", "neilluo"]
+      necessary_reviewers: ["zhijiezhang", "neilluo"]
+  - path: "/naming/.*"
+    owners: ["misakachen", "nickzydeng"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["misakachen", "nickzydeng"]
+      necessary_reviewers: ["misakachen", "nickzydeng"]
+  - path: "/plugin/.*"
+    owners: ["tensorchen", "nickzydeng"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["tensorchen", "nickzydeng"]
+      necessary_reviewers: ["tensorchen", "nickzydeng"]
+  - path: "/pool/.*"
+    owners: ["tensorchen", "misakachen"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["tensorchen", "misakachen"]
+      necessary_reviewers: ["tensorchen", "misakachen"]
+  - path: "/server/.*"
+    owners: ["nickzydeng", "zhijiezhang"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["nickzydeng", "zhijiezhang"]
+      necessary_reviewers: ["nickzydeng", "zhijiezhang"]
+  - path: "/testdata/.*"
+    owners: ["tensorchen", "misakachen"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["tensorchen", "misakachen"]
+      necessary_reviewers: ["tensorchen", "misakachen"]
+  - path: "/transport/.*"
+    owners: ["tensorchen", "neilluo"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["tensorchen", "neilluo"]
+      necessary_reviewers: ["tensorchen", "neilluo"]
+  - path: "/internal/.*"
+    owners: ["nickzydeng", "jessemjchen"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["nickzydeng", "jessemjchen"]
+      necessary_reviewers: ["nickzydeng", "jessemjchen"]
+  - path: "/stream/.*"
+    owners: ["jessemjchen", "nickzydeng"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["jessemjchen", "nickzydeng"]
+      necessary_reviewers: ["jessemjchen", "nickzydeng"]
+  - path: "/restful/.*"
+    owners: ["zhiyiliu", "jessemjchen"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["zhiyiliu", "jessemjchen"]
+      necessary_reviewers: ["zhiyiliu", "jessemjchen"]
+  - path: "/overloadctrl/robust/.*"
+    owners: ["suziliu", "wineguo", "raylchen", "kehan"]
+    owner_rule: 0
+    code_review:
+      reviewers: ["suziliu", "wineguo", "raylchen", "kehan"]
+      necessary_reviewers: ["suziliu", "wineguo", "raylchen", "kehan"]

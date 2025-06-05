@@ -20,9 +20,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v3"
 
 	"trpc.group/trpc-go/trpc-go/plugin"
+
+	"gopkg.in/yaml.v3"
 )
 
 type config struct {
@@ -48,7 +49,7 @@ plugins:
 	err := yaml.Unmarshal([]byte(configInfoNotRegister), &cfg)
 	assert.Nil(t, err)
 
-	_, err = cfg.Plugins.SetupClosables()
+	err = cfg.Plugins.Setup()
 	assert.NotNil(t, err)
 
 	const configInfo = `
@@ -62,9 +63,8 @@ plugins:
 	err = yaml.Unmarshal([]byte(configInfo), &cfg)
 	assert.Nil(t, err)
 
-	clo, err := cfg.Plugins.SetupClosables()
+	err = cfg.Plugins.Setup()
 	assert.Nil(t, err)
-	require.Nil(t, clo())
 }
 
 type mockTimeoutPlugin struct{}
@@ -92,7 +92,7 @@ plugins:
 	err := yaml.Unmarshal([]byte(configInfo), &cfg)
 	assert.Nil(t, err)
 
-	_, err = cfg.Plugins.SetupClosables()
+	err = cfg.Plugins.Setup()
 	assert.NotNil(t, err)
 }
 
@@ -123,9 +123,8 @@ plugins:
 	err := yaml.Unmarshal([]byte(configInfo), &cfg)
 	assert.Nil(t, err)
 
-	clo, err := cfg.Plugins.SetupClosables()
+	err = cfg.Plugins.Setup()
 	assert.Nil(t, err)
-	require.Nil(t, clo())
 }
 func TestConfig_ExceedSetup(t *testing.T) {
 	const configInfo = `
@@ -147,7 +146,7 @@ plugins:
 	err := yaml.Unmarshal([]byte(configInfo), &cfg)
 	assert.Nil(t, err)
 
-	_, err = cfg.Plugins.SetupClosables()
+	err = cfg.Plugins.Setup()
 	assert.NotNil(t, err)
 }
 
@@ -178,7 +177,7 @@ plugins:
 	err := yaml.Unmarshal([]byte(configInfo), &cfg)
 	assert.Nil(t, err)
 
-	_, err = cfg.Plugins.SetupClosables()
+	err = cfg.Plugins.Setup()
 	assert.NotNil(t, err)
 }
 
@@ -209,7 +208,7 @@ plugins:
 	err := yaml.Unmarshal([]byte(configInfo), &cfg)
 	assert.Nil(t, err)
 
-	_, err = cfg.Plugins.SetupClosables()
+	err = cfg.Plugins.Setup()
 	assert.NotNil(t, err)
 }
 
@@ -253,7 +252,7 @@ plugins:
 	err := yaml.Unmarshal([]byte(configInfo), &cfg)
 	assert.Nil(t, err)
 
-	_, err = cfg.Plugins.SetupClosables()
+	err = cfg.Plugins.Setup()
 	assert.NotNil(t, err)
 }
 
@@ -278,7 +277,7 @@ plugins:
 	err := yaml.Unmarshal([]byte(configInfo), &cfg)
 	assert.Nil(t, err)
 
-	_, err = cfg.Plugins.SetupClosables()
+	err = cfg.Plugins.Setup()
 	assert.NotNil(t, err)
 }
 
@@ -379,9 +378,8 @@ plugins:
 	err := yaml.Unmarshal([]byte(configInfo), &cfg)
 	assert.Nil(t, err)
 
-	clo, err := cfg.Plugins.SetupClosables()
+	err = cfg.Plugins.Setup()
 	assert.Nil(t, err)
-	require.Nil(t, clo())
 	v, ok := <-testOrderCh
 	assert.True(t, ok)
 	assert.Equal(t, 3, v)
@@ -437,9 +435,8 @@ plugins:
 	err := yaml.Unmarshal([]byte(configInfo), &cfg)
 	assert.Nil(t, err)
 
-	clo, err := cfg.Plugins.SetupClosables()
+	err = cfg.Plugins.Setup()
 	assert.Nil(t, err)
-	require.Nil(t, clo())
 	v, ok := <-testOrderCh
 	assert.True(t, ok)
 	assert.Equal(t, v, 3)
@@ -449,6 +446,154 @@ plugins:
 	v, ok = <-testOrderCh
 	assert.True(t, ok)
 	assert.Equal(t, 4, v)
+}
+
+func TestDependsOnType(t *testing.T) {
+	t.Run("DependsOn", func(t *testing.T) {
+		const configInfo = `
+plugins:
+  pluginA:
+    A1:
+  pluginB:
+    B1:
+    B2:
+    B3:
+`
+		testOrderCh := make(chan string, 4)
+		plugin.Register("A1", &pluginA{
+			ch: testOrderCh,
+		})
+		plugin.Register("B1", &pluginB{
+			ch: testOrderCh,
+		})
+		plugin.Register("B2", &pluginB{
+			ch: testOrderCh,
+		})
+		plugin.Register("B3", &pluginB{
+			ch: testOrderCh,
+		})
+		cfg := config{}
+		err := yaml.Unmarshal([]byte(configInfo), &cfg)
+		require.Nil(t, err)
+
+		_, err = cfg.Plugins.SetupClosables()
+		require.Nil(t, err)
+
+		var orders []string
+		for i := 0; i < 4; i++ {
+			v, ok := <-testOrderCh
+			orders = append(orders, v)
+			require.True(t, ok)
+
+		}
+		require.ElementsMatch(t, []string{"B", "B", "B"}, orders[:3])
+		require.Equal(t, "A", orders[3])
+	})
+	t.Run("FlexDependsOn", func(t *testing.T) {
+		const configInfo = `
+plugins:
+  pluginA:
+    A1:
+  pluginB:
+    B1:
+    B2:
+    B3:
+  pluginC:
+    C1:
+    C2:
+    C3:
+`
+		testOrderCh := make(chan string, 7)
+		plugin.Register("A1", &pluginA{
+			ch: testOrderCh,
+		})
+		plugin.Register("B1", &pluginB{
+			ch: testOrderCh,
+		})
+		plugin.Register("B2", &pluginB{
+			ch: testOrderCh,
+		})
+		plugin.Register("B3", &pluginB{
+			ch: testOrderCh,
+		})
+		plugin.Register("C1", &pluginC{
+			ch: testOrderCh,
+		})
+		plugin.Register("C2", &pluginC{
+			ch: testOrderCh,
+		})
+		plugin.Register("C3", &pluginC{
+			ch: testOrderCh,
+		})
+		cfg := config{}
+		err := yaml.Unmarshal([]byte(configInfo), &cfg)
+		require.Nil(t, err)
+
+		_, err = cfg.Plugins.SetupClosables()
+		require.Nil(t, err)
+
+		var orders []string
+		for i := 0; i < 7; i++ {
+			v, ok := <-testOrderCh
+			orders = append(orders, v)
+			require.True(t, ok)
+
+		}
+		require.ElementsMatch(t, []string{"C", "C", "C"}, orders[:3])
+		require.ElementsMatch(t, []string{"B", "B", "B"}, orders[3:6])
+		require.Equal(t, "A", orders[6])
+	})
+}
+
+type pluginA struct {
+	ch chan string
+}
+
+func (p *pluginA) Type() string {
+	return "pluginA"
+}
+
+func (p *pluginA) Setup(name string, decoder plugin.Decoder) error {
+	p.ch <- "A"
+	return nil
+}
+
+func (p *pluginA) DependsOn() []string {
+	return []string{"pluginB-*"}
+}
+
+func (p *pluginA) FlexDependsOn() []string {
+	return []string{"pluginC-*"}
+}
+
+type pluginB struct {
+	ch chan string
+}
+
+func (p *pluginB) Type() string {
+	return "pluginB"
+}
+
+func (p *pluginB) Setup(name string, decoder plugin.Decoder) error {
+	p.ch <- "B"
+	return nil
+}
+
+func (p *pluginB) FlexDependsOn() []string {
+	return []string{"pluginC-*"}
+}
+
+type pluginC struct {
+	ch chan string
+}
+
+func (p *pluginC) Type() string {
+	return "pluginC"
+}
+
+func (p *pluginC) Setup(name string, decoder plugin.Decoder) error {
+	p.ch <- "C"
+	return nil
 }
 
 type mockFinishSuccPlugin struct{}
@@ -478,9 +623,8 @@ plugins:
 	err := yaml.Unmarshal([]byte(configInfo), &cfg)
 	assert.Nil(t, err)
 
-	clo, err := cfg.Plugins.SetupClosables()
+	err = cfg.Plugins.Setup()
 	assert.Nil(t, err)
-	require.Nil(t, clo())
 }
 
 type mockFinishFailPlugin struct{}
@@ -510,7 +654,7 @@ plugins:
 	err := yaml.Unmarshal([]byte(configInfo), &cfg)
 	assert.Nil(t, err)
 
-	_, err = cfg.Plugins.SetupClosables()
+	err = cfg.Plugins.Setup()
 	assert.NotNil(t, err)
 }
 
@@ -550,4 +694,38 @@ func TestPluginClose(t *testing.T) {
 		require.Nil(t, err)
 		require.Error(t, close())
 	})
+}
+
+type copierConfig struct {
+	name   string
+	enable bool
+}
+
+type copierPlugin struct {
+	assert func(copierConfig)
+}
+
+func (*copierPlugin) Type() string {
+	return "copier"
+}
+
+func (p *copierPlugin) Setup(name string, dec plugin.Decoder) error {
+	cfg := copierConfig{}
+	dec.Decode(&cfg)
+	p.assert(cfg)
+	return nil
+}
+
+func TestCopierPlugin(t *testing.T) {
+	expectedCfg := copierConfig{
+		name:   "config",
+		enable: true,
+	}
+	plugin.Register("copier", &copierPlugin{func(cc copierConfig) {
+		assert.Equal(t, expectedCfg, cc)
+	}})
+	cfg := plugin.NewPluginConfigs()
+	cfg.Add("copier", "copier", &expectedCfg)
+	_, err := plugin.SetupPlugins(cfg)
+	assert.Nil(t, err)
 }

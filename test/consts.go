@@ -20,6 +20,7 @@ const (
 	trpcServiceName      = "trpc.testing.end2end.TestTRPC"
 	streamingServiceName = "trpc.testing.end2end.TestStreaming"
 	httpServiceName      = "trpc.testing.end2end.TestHTTP"
+	fasthttpServiceName  = "trpc.testing.end2end.TestFastHTTP"
 
 	defaultServerAddress   = "localhost:0"
 	defaultAdminListenAddr = "127.0.0.1:9028"
@@ -27,5 +28,6 @@ const (
 	// retUnsupportedPayload is the return code for unsupported payload type.
 	retUnsupportedPayload = 1101
 
-	validUserNameForAuth = "trpc-go-end2end-testing"
+	validUserNameForAuth       = "trpc-go-end2end-testing"
+	proxyPathForRESTFulService = "trpc/go/end2end/testing/restful"
 )

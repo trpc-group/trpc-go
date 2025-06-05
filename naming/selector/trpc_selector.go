@@ -15,8 +15,10 @@ package selector
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
+	inaming "trpc.group/trpc-go/trpc-go/internal/naming"
 	"trpc.group/trpc-go/trpc-go/naming/circuitbreaker"
 	"trpc.group/trpc-go/trpc-go/naming/discovery"
 	"trpc.group/trpc-go/trpc-go/naming/loadbalance"
@@ -61,17 +63,9 @@ func (s *TrpcSelector) Select(serviceName string, opt ...Option) (*registry.Node
 	if opts.Discovery == nil {
 		return nil, errors.New("discovery not exists")
 	}
-	list, err := opts.Discovery.List(serviceName, opts.DiscoveryOptions...)
-	if err != nil {
-		return nil, err
-	}
 
 	if opts.ServiceRouter == nil {
 		return nil, errors.New("servicerouter not exists")
-	}
-	list, err = opts.ServiceRouter.Filter(serviceName, list, opts.ServiceRouterOptions...)
-	if err != nil {
-		return nil, err
 	}
 
 	if opts.LoadBalancer == nil {
@@ -80,6 +74,28 @@ func (s *TrpcSelector) Select(serviceName string, opt ...Option) (*registry.Node
 
 	if opts.CircuitBreaker == nil {
 		return nil, errors.New("circuitbreaker not exists")
+	}
+
+	list, err := opts.Discovery.List(serviceName, opts.DiscoveryOptions...)
+	if err != nil {
+		return nil, err
+	}
+
+	list, err = opts.ServiceRouter.Filter(serviceName, list, opts.ServiceRouterOptions...)
+	if err != nil {
+		return nil, err
+	}
+
+	if opts.Broadcast {
+		if len(list) == 0 {
+			return nil, fmt.Errorf("broadcast node list to %s is empty", serviceName)
+		}
+		return &registry.Node{
+			Address: list[0].Address,
+			Metadata: map[string]interface{}{
+				inaming.BroadcastNodeListKey: list,
+			},
+		}, nil
 	}
 
 	node, err := opts.LoadBalancer.Select(serviceName, list, opts.LoadBalanceOptions...)

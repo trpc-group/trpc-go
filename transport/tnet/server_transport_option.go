@@ -33,8 +33,10 @@ type ServerTransportOption func(o *ServerTransportOptions)
 
 // ServerTransportOptions is server transport options struct.
 type ServerTransportOptions struct {
-	KeepAlivePeriod time.Duration
-	ReusePort       bool
+	KeepAlivePeriod           time.Duration
+	ReusePort                 bool
+	MaxUDPPacketSize          int
+	ExactUDPBufferSizeEnabled bool
 }
 
 // WithKeepAlivePeriod sets the TCP keep alive interval.
@@ -51,5 +53,21 @@ func WithReusePort(reuse bool) ServerTransportOption {
 		if runtime.GOOS == "windows" {
 			opts.ReusePort = false
 		}
+	}
+}
+
+// WithMaxUDPPacketSize sets the max UDP packet size.
+func WithMaxUDPPacketSize(m int) ServerTransportOption {
+	return func(opts *ServerTransportOptions) {
+		opts.MaxUDPPacketSize = m
+	}
+}
+
+// WithServerExactUDPBufferSizeEnabled sets whether to allocate an exact-sized buffer for UDP packets, false in default.
+// If set to true, an exact-sized buffer is allocated for each UDP packet, requiring two system calls.
+// If set to false, a fixed buffer size of maxUDPPacketSize is used, 65536 in default, requiring only one system call.
+func WithServerExactUDPBufferSizeEnabled(enable bool) ServerTransportOption {
+	return func(opts *ServerTransportOptions) {
+		opts.ExactUDPBufferSizeEnabled = enable
 	}
 }

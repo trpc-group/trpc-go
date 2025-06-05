@@ -17,9 +17,10 @@ import (
 	"testing"
 	"time"
 
-	"trpc.group/trpc-go/trpc-go/naming/registry"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"trpc.group/trpc-go/trpc-go/naming/registry"
 )
 
 type testCircuitBreaker struct{}
@@ -34,17 +35,31 @@ func (cb *testCircuitBreaker) Report(node *registry.Node, cost time.Duration, er
 	return nil
 }
 
+func unregister(t *testing.T, name string) {
+	t.Helper()
+
+	lock.Lock()
+	delete(circuitbreakers, name)
+	lock.Unlock()
+}
+
 func TestCircuitBreakerRegister(t *testing.T) {
-	Register("cb", &testCircuitBreaker{})
-	assert.NotNil(t, Get("cb"))
-	unregisterForTesting("cb")
+	want := &testCircuitBreaker{}
+	Register("cb", want)
+	t.Cleanup(func() {
+		unregister(t, "cb")
+	})
+	require.Equal(t, want, Get("cb"))
 }
 
 func TestCircuitBreakerGet(t *testing.T) {
+	want := &testCircuitBreaker{}
 	Register("cb", &testCircuitBreaker{})
-	assert.NotNil(t, Get("cb"))
-	unregisterForTesting("cb")
-	assert.Nil(t, Get("not_exist"))
+	t.Cleanup(func() {
+		unregister(t, "cb")
+	})
+	require.Equal(t, want, Get("cb"))
+	require.Nil(t, Get("not_exist"))
 }
 
 func TestNoopCircuitBreaker(t *testing.T) {

@@ -16,20 +16,11 @@ package rollwriter
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"time"
 
-	"github.com/hashicorp/go-multierror"
-
 	"trpc.group/trpc-go/trpc-go/internal/report"
-)
-
-const (
-	defaultLogQueueSize    = 10000
-	defaultWriteLogSize    = 4 * 1024 // 4KB
-	defaultLogIntervalInMs = 100
-	defaultDropLog         = false
+	"github.com/hashicorp/go-multierror"
 )
 
 // AsyncRollWriter is the asynchronous rolling log writer which implements zapcore.WriteSyncer.
@@ -44,30 +35,29 @@ type AsyncRollWriter struct {
 	closeErr chan error
 }
 
-// NewAsyncRollWriter creates a new AsyncRollWriter.
+// NewAsyncRollWriter create a new AsyncRollWriter.
 func NewAsyncRollWriter(logger io.WriteCloser, opt ...AsyncOption) *AsyncRollWriter {
 	opts := &AsyncOptions{
-		LogQueueSize:     defaultLogQueueSize,
-		WriteLogSize:     defaultWriteLogSize,
-		WriteLogInterval: defaultLogIntervalInMs,
-		DropLog:          defaultDropLog,
+		LogQueueSize:     10000,    // default queue size as 10000
+		WriteLogSize:     4 * 1024, // default write log size as 4K
+		WriteLogInterval: 100,      // default sync interval as 100ms
+		DropLog:          false,    // default do not drop logs
 	}
 
 	for _, o := range opt {
 		o(opts)
 	}
 
-	w := &AsyncRollWriter{
-		logger:   logger,
-		opts:     opts,
-		logQueue: make(chan []byte, opts.LogQueueSize),
-		sync:     make(chan struct{}),
-		syncErr:  make(chan error),
-		close:    make(chan struct{}),
-		closeErr: make(chan error),
-	}
+	w := &AsyncRollWriter{}
+	w.logger = logger
+	w.opts = opts
+	w.logQueue = make(chan []byte, opts.LogQueueSize)
+	w.sync = make(chan struct{})
+	w.syncErr = make(chan error)
+	w.close = make(chan struct{})
+	w.closeErr = make(chan error)
 
-	// Start a new goroutine to write batch logs.
+	// start a new goroutine write batch logs.
 	go w.batchWriteLog()
 	return w
 }
@@ -81,11 +71,11 @@ func (w *AsyncRollWriter) Write(data []byte) (int, error) {
 		case w.logQueue <- log:
 		default:
 			report.LogQueueDropNum.Incr()
-			return 0, errors.New("async roll writer: log queue is full")
+			return 0, errors.New("log queue is full")
 		}
-		return len(data), nil
+	} else {
+		w.logQueue <- log
 	}
-	w.logQueue <- log
 	return len(data), nil
 }
 
@@ -112,8 +102,7 @@ func (w *AsyncRollWriter) batchWriteLog() {
 		select {
 		case <-ticker.C:
 			if buffer.Len() > 0 {
-				_, err := w.logger.Write(buffer.Bytes())
-				handleErr(err, "w.logger.Write on tick")
+				_, _ = w.logger.Write(buffer.Bytes())
 				buffer.Reset()
 			}
 		case data := <-w.logQueue:
@@ -130,8 +119,7 @@ func (w *AsyncRollWriter) batchWriteLog() {
 			}
 			buffer.Write(data)
 			if buffer.Len() >= w.opts.WriteLogSize {
-				_, err := w.logger.Write(buffer.Bytes())
-				handleErr(err, "w.logger.Write on log queue")
+				_, _ = w.logger.Write(buffer.Bytes())
 				buffer.Reset()
 			}
 		case <-w.sync:
@@ -153,12 +141,4 @@ func (w *AsyncRollWriter) batchWriteLog() {
 			return
 		}
 	}
-}
-
-func handleErr(err error, msg string) {
-	if err == nil {
-		return
-	}
-	// Log writer has errors, so output to stdout directly.
-	fmt.Printf("async roll writer err: %+v, msg: %s", err, msg)
 }

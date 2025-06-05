@@ -16,25 +16,44 @@ package server_test
 import (
 	"bytes"
 	"context"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/internal/attachment"
 	"trpc.group/trpc-go/trpc-go/server"
 )
 
 func TestAttachment(t *testing.T) {
-	msg := trpc.Message(context.Background())
-	attm := server.GetAttachment(msg)
-	require.Equal(t, attachment.NoopAttachment{}, attm.Request())
+	t.Run("sizer interface hasn't been implemented", func(t *testing.T) {
+		msg := trpc.Message(context.Background())
+		attm := server.GetAttachment(msg)
+		require.Equal(t, attachment.NoopAttachment{}, attm.Request())
 
-	attm.SetResponse(bytes.NewReader([]byte("attachment")))
-	responseAttm, ok := attachment.ServerResponseAttachment(msg)
-	require.True(t, ok)
-	bts, err := io.ReadAll(responseAttm)
-	require.Nil(t, err)
-	require.Equal(t, []byte("attachment"), bts)
+		want := []byte("attachment")
+		attm.SetResponse(bytes.NewBuffer(want))
+		responseAttm, err := attachment.ServerResponseSizedAttachment(msg)
+		require.Nil(t, err)
+		require.EqualValues(t, len(want), responseAttm.Size())
+
+		got := make([]byte, len(want))
+		require.Nil(t, responseAttm.ReadAll(got))
+		require.Equal(t, want, got)
+	})
+	t.Run("sizer interface has been implemented", func(t *testing.T) {
+		msg := trpc.Message(context.Background())
+		attm := server.GetAttachment(msg)
+		require.Equal(t, attachment.NoopAttachment{}, attm.Request())
+
+		want := []byte("attachment")
+		attm.SetResponse(bytes.NewReader(want))
+		responseAttm, err := attachment.ServerResponseSizedAttachment(msg)
+		require.Nil(t, err)
+		require.EqualValues(t, len(want), responseAttm.Size())
+
+		got := make([]byte, len(want))
+		require.Nil(t, responseAttm.ReadAll(got))
+		require.Equal(t, want, got)
+	})
 }

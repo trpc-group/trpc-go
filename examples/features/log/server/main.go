@@ -18,10 +18,10 @@ import (
 	"context"
 	"fmt"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/log"
 
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 // GreeterServerImpl service implement
@@ -35,11 +35,11 @@ func (s *GreeterServerImpl) SayHello(ctx context.Context, req *pb.HelloRequest) 
 
 	rsp.Msg = fmt.Sprintf("trpc-go-server response: %s", req.Msg)
 
-	log.Tracef("recv msg:%s", req)
-	log.Debugf("recv msg:%s", req)
-	log.Infof("recv msg:%s", req)
-	log.Warnf("recv msg:%s", req)
-	log.Errorf("recv msg:%s", req)
+	log.Tracef("recv msg: %s", req)
+	log.Debugf("recv msg: %s", req)
+	log.Infof("recv msg: %s", req)
+	log.Warnf("recv msg: %s", req)
+	log.Errorf("recv msg: %s", req)
 
 	return rsp, nil
 }
@@ -49,7 +49,7 @@ func main() {
 	s := trpc.NewServer()
 
 	// Register service.
-	pb.RegisterGreeterService(s, &GreeterServerImpl{})
+	pb.RegisterGreeterService(s.Service("trpc.examples.log.Log"), &GreeterServerImpl{})
 
 	// Serve and listen.
 	if err := s.Serve(); err != nil {

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"trpc.group/trpc-go/trpc-go/codec"
 )
@@ -84,11 +85,11 @@ func TestGetMetaData(t *testing.T) {
 	}
 }
 
-// TestGetIP test getIP.
+// TestGetIP test GetIP.
 func TestGetIP(t *testing.T) {
 	nicName := []string{"en1", "utun0"}
 	for _, name := range nicName {
-		got := getIP(name)
+		got := GetIP(name)
 		t.Logf("get ip by name: %v, ip: %v",
 			name, got)
 		assert.LessOrEqual(t, 0, len(got))
@@ -96,7 +97,7 @@ func TestGetIP(t *testing.T) {
 
 	// Test None Existed NIC
 	NoneExistNIC := "ethNoneExist"
-	ip := getIP(NoneExistNIC)
+	ip := GetIP(NoneExistNIC)
 	assert.Empty(t, ip)
 }
 func TestGoAndWait(t *testing.T) {
@@ -110,49 +111,53 @@ func TestGoAndWait(t *testing.T) {
 	)
 	assert.NotNil(t, err)
 }
+
 func TestGo(t *testing.T) {
-	ctx := BackgroundContext()
-	f := func(ctx context.Context) {
+	timeout := time.Millisecond * 100
+	t.Run("default go is async", func(t *testing.T) {
+		start, done := make(chan struct{}), make(chan struct{})
+		require.Nil(t, Go(context.Background(), timeout, func(context.Context) {
+			done <- <-start
+		}))
 		select {
-		case <-ctx.Done():
-			assert.NotNil(t, ctx.Err())
+		case <-done:
+			t.Error("should not done")
+		default:
 		}
-	}
-	err := Go(ctx, time.Millisecond, f)
-	assert.Nil(t, err)
-	type goImpl struct {
-		Goer
-		test int
-	}
-	g := &goImpl{Goer: DefaultGoer}
-	f = func(ctx context.Context) {
+		start <- struct{}{}
+		<-done
+	})
+	t.Run("syncGo", func(t *testing.T) {
+		var cost time.Duration
+		start := time.Now()
+		require.Nil(t, NewSyncGoer().Go(context.Background(), timeout, func(ctx context.Context) {
+			<-ctx.Done()
+			cost = time.Since(start)
+		}))
+		require.Greater(t, cost, timeout)
+	})
+	t.Run("async timeout", func(t *testing.T) {
+		done := make(chan struct{})
+		start := time.Now()
+		require.Nil(t, NewAsyncGoer(0, 1024, false).
+			Go(context.Background(), timeout, func(ctx context.Context) {
+				done <- <-ctx.Done()
+			}))
 		select {
-		case <-ctx.Done():
-			g.test = 1
+		case <-time.After(timeout * 2):
+			t.Error("async does not timeout as expected")
+		case <-done:
+			require.Greater(t, time.Since(start), timeout)
 		}
-	}
-	err = g.Go(ctx, 10*time.Millisecond, f)
-	assert.Nil(t, err)
-	assert.NotEqual(t, 1, g.test)
-	g = &goImpl{Goer: NewSyncGoer()}
-	f = func(ctx context.Context) {
-		select {
-		case <-ctx.Done():
-			g.test = 2
-		}
-	}
-	err = g.Go(ctx, 10*time.Millisecond, f)
-	assert.Nil(t, err)
-	assert.Equal(t, 2, g.test)
-	g = &goImpl{Goer: NewAsyncGoer(1, PanicBufLen, true)}
-	err = g.Go(ctx, time.Second, f)
-	assert.Nil(t, err)
-	panicfunc := func(ctx context.Context) {
-		panic("go test1 panic")
-	}
-	g = &goImpl{Goer: DefaultGoer}
-	err = g.Go(ctx, time.Millisecond, panicfunc)
-	assert.Nil(t, err)
+	})
+	t.Run("async panic recover", func(t *testing.T) {
+		require.Nil(t, NewAsyncGoer(0, 1024, true).
+			Go(context.Background(), timeout, func(ctx context.Context) {
+				panic(t.Name())
+			}))
+		// We must sleep a while to wait async panic happen.
+		time.Sleep(timeout * 2)
+	})
 }
 
 func TestGoAndWaitWithPanic(t *testing.T) {
@@ -193,6 +198,6 @@ func TestNetInterfaceIPGetIPByNic(t *testing.T) {
 func TestDeduplicate(t *testing.T) {
 	a := []string{"a1", "a2"}
 	b := []string{"b1", "b2", "a2"}
-	r := deduplicate(a, b)
+	r := Deduplicate(a, b)
 	assert.Equal(t, r, []string{"a1", "a2", "b1", "b2"})
 }

@@ -17,6 +17,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net"
+	"os"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -24,14 +26,15 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
+	"golang.org/x/sync/errgroup"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/filter"
 	"trpc.group/trpc-go/trpc-go/server"
+
 	testpb "trpc.group/trpc-go/trpc-go/test/protocols"
 )
 
@@ -74,9 +77,9 @@ func (s *TestSuite) testClientCancelAfterSend() {
 
 	err := <-errChan
 	if s.tRPCEnv.client.multiplexed {
-		require.Equal(s.T(), errs.RetClientCanceled, errs.Code(err))
+		require.Equal(s.T(), errs.RetClientCanceled, errs.Code(err), "full err: %+v", err)
 	} else {
-		require.Equal(s.T(), errs.RetClientTimeout, errs.Code(err))
+		require.Equal(s.T(), errs.RetClientTimeout, errs.Code(err), "full err: %+v", err)
 	}
 
 }
@@ -119,30 +122,25 @@ func (s *TestSuite) testClientDoesntDeadlockWhileWritingLargeMessages() {
 	defer s.closeServer(nil)
 
 	largeFrameSize := trpc.DefaultMaxFrameSize - 1000
-	payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, int32(largeFrameSize))
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(largeFrameSize))
 	require.Nil(s.T(), err)
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSIBLE,
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
 		Payload:      payload,
 	}
 
 	c := s.newTRPCClient()
-	var wg sync.WaitGroup
+
+	var g errgroup.Group
 	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < 100; j++ {
-				func() {
-					ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*10))
-					defer cancel()
-					_, err := c.UnaryCall(ctx, req)
-					require.Nil(s.T(), err)
-				}()
-			}
-		}()
+		g.Go(func() error {
+			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*10))
+			defer cancel()
+			_, err := c.UnaryCall(ctx, req)
+			return err
+		})
 	}
-	wg.Wait()
+	require.Nil(s.T(), g.Wait())
 }
 
 func (s *TestSuite) TestRequestPacketOverClientMaxFrameSize() {
@@ -164,8 +162,9 @@ func (s *TestSuite) testRequestPacketOverClientMaxFrameSize() {
 
 	c := s.newTRPCClient()
 	_, err := c.UnaryCall(trpc.BackgroundContext(), s.defaultSimpleRequest)
-	require.Equal(s.T(), errs.RetClientEncodeFail, errs.Code(err))
-	require.Contains(s.T(), err.Error(), "frame len is larger than MaxFrameSize")
+	require.Equal(s.T(), errs.RetClientEncodeFail, errs.Code(err), "full err: %+v", err)
+	require.Regexp(s.T(), `.*frameSize\(\d+\) = headerSize\(\d+\) \+ bodySize\(\d+\) \+ attachmentSize\(\d+\)`+
+		` is larger than MaxFrameSize\(\d+\).*`, err.Error())
 }
 
 func (s *TestSuite) TestRequestPacketOverServerMaxFrameSize() {
@@ -185,7 +184,7 @@ func (s *TestSuite) testRequestPacketOverServerMaxFrameSize() {
 		&TRPCService{},
 		server.WithFilter(
 			func(ctx context.Context, req interface{}, next filter.ServerHandleFunc) (rsp interface{}, err error) {
-				trpc.DefaultMaxFrameSize = 100
+				trpc.DefaultMaxFrameSize = 200
 				return next(ctx, req)
 			}),
 	)
@@ -193,8 +192,9 @@ func (s *TestSuite) testRequestPacketOverServerMaxFrameSize() {
 
 	c := s.newTRPCClient()
 	_, err := c.UnaryCall(trpc.BackgroundContext(), s.defaultSimpleRequest)
-	require.Equal(s.T(), errs.RetServerEncodeFail, errs.Code(err))
-	require.Contains(s.T(), err.Error(), "frame len is larger than MaxFrameSize")
+	require.Equal(s.T(), errs.RetServerEncodeFail, errs.Code(err), "full err: %+v", err)
+	require.Regexp(s.T(), `.*frameSize\(\d+\) = headerSize\(\d+\) \+ bodySize\(\d+\) \+ attachmentSize\(\d+\)`+
+		` is larger than MaxFrameSize\(\d+\).*`, err.Error())
 }
 
 func (s *TestSuite) TestSendRequestAfterServerClosed() {
@@ -212,7 +212,10 @@ func (s *TestSuite) testSendRequestAfterServerClosed() {
 	require.Nil(s.T(), err)
 
 	done := make(chan struct{})
-	go s.closeServer(done)
+	go func() {
+		s.closeServer(done)
+		s.listener = nil
+	}()
 	<-done
 	for {
 		if _, err = c.EmptyCall(trpc.BackgroundContext(), &testpb.Empty{}); err != nil {
@@ -223,9 +226,9 @@ func (s *TestSuite) testSendRequestAfterServerClosed() {
 
 	_, err = s.newTRPCClient().EmptyCall(trpc.BackgroundContext(), &testpb.Empty{})
 	if s.tRPCEnv.client.multiplexed {
-		require.Equal(s.T(), errs.RetClientNetErr, errs.Code(err))
+		require.Equal(s.T(), errs.RetClientNetErr, errs.Code(err), "full err: %+v", err)
 	} else {
-		require.Equal(s.T(), errs.RetClientConnectFail, errs.Code(err))
+		require.Equal(s.T(), errs.RetClientConnectFail, errs.Code(err), "full err: %+v", err)
 	}
 }
 
@@ -331,19 +334,39 @@ func (s *TestSuite) concurrencyUnaryCall(num int) <-chan int {
 	return ch
 }
 
+func (s *TestSuite) TestWithServerWritevOption() {
+	s.startServer(
+		&TRPCService{},
+		server.WithWritev(true),
+		server.WithServerAsync(true),
+	)
+	s.T().Cleanup(func() {
+		go s.closeServer(nil)
+		c := s.newTRPCClient()
+		for {
+			// make sure the server is closed.
+			if _, err := c.EmptyCall(trpc.BackgroundContext(), &testpb.Empty{}); err != nil {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	})
+	require.Zero(s.T(), <-s.concurrencyUnaryCall(100))
+}
+
 func (s *TestSuite) TestClientTimeoutAtUnaryCall() {
 	s.startServer(&TRPCService{unaryCallSleepTime: time.Second})
 
 	c := s.newTRPCClient()
 	_, err := c.UnaryCall(trpc.BackgroundContext(), s.defaultSimpleRequest, client.WithTimeout(100*time.Millisecond))
-	require.Equal(s.T(), errs.RetClientTimeout, errs.Code(err))
+	require.Equal(s.T(), errs.RetClientTimeout, errs.Code(err), "full err: %+v", err)
 }
 
 func (s *TestSuite) TestServerWithLongMaxCloseWaitTimeAndHandleOverAllOldRequest() {
 	for _, e := range allTRPCEnvs {
 		s.tRPCEnv = e
 		s.Run(e.String(), func() {
-			require.Nil(s.T(), s.testServerWithCloseWaitTime(time.Second, 3*time.Second, time.Second))
+			require.Nil(s.T(), s.testServerWithCloseWaitTime(time.Second, 5*time.Second, 500*time.Millisecond))
 		})
 	}
 	s.server = nil
@@ -374,7 +397,7 @@ func (s *TestSuite) TestServerWithShortMaxCloseWaitTime() {
 
 func (s *TestSuite) testServerWithCloseWaitTime(
 	minCloseWaitTime, maxCloseWaitTime, serviceHandleTime time.Duration,
-) (err error) {
+) error {
 	startHandleFirstRequest := make(chan struct{})
 	isFirstRequest := true
 	s.startServer(
@@ -390,9 +413,11 @@ func (s *TestSuite) testServerWithCloseWaitTime(
 		server.WithMaxCloseWaitTime(maxCloseWaitTime),
 	)
 
+	firstErr := make(chan error)
 	go func() {
 		c := s.newTRPCClient()
-		_, err = c.EmptyCall(trpc.BackgroundContext(), &testpb.Empty{}, client.WithTimeout(maxCloseWaitTime))
+		_, err := c.EmptyCall(trpc.BackgroundContext(), &testpb.Empty{}, client.WithTimeout(maxCloseWaitTime))
+		firstErr <- err
 	}()
 
 	<-startHandleFirstRequest
@@ -415,7 +440,7 @@ func (s *TestSuite) testServerWithCloseWaitTime(
 	}
 	require.NotZero(s.T(), sendRequestPeriodicallyUntilServerHasClosed())
 
-	return err
+	return <-firstErr
 }
 
 func (s *TestSuite) TestRegisterOnShutdown() {
@@ -459,6 +484,22 @@ func (s *TestSuite) TestTRPCProtocol() {
 	require.Nil(s.T(), err)
 }
 
+// internal /trpc-go/issues/910
+func (s *TestSuite) TestCalleeMethod() {
+	const methodAliasInProtobuf = "/v1/test/empty"
+	ch := make(chan string, 10)
+
+	s.startServer(&TRPCService{EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		ch <- trpc.Message(ctx).CalleeMethod()
+		return &testpb.Empty{}, nil
+	}})
+	ctx := trpc.BackgroundContext()
+	_, err := s.newTRPCClient().EmptyCall(ctx, &testpb.Empty{})
+	require.Nil(s.T(), err)
+
+	require.Equal(s.T(), methodAliasInProtobuf, <-ch)
+}
+
 func serverFilter(ctx context.Context, req interface{}, next filter.ServerHandleFunc) (rsp interface{}, err error) {
 	requestID := trpc.Request(ctx).RequestId
 	if requestID == 0 {
@@ -473,11 +514,11 @@ func serverFilter(ctx context.Context, req interface{}, next filter.ServerHandle
 }
 
 func clientFilter(ctx context.Context, req, rsp interface{}, next filter.ClientHandleFunc) error {
-	if requestProtocol := trpc.Request(ctx); !reflect.DeepEqual(requestProtocol, &trpcpb.RequestProtocol{}) {
+	if requestProtocol := trpc.Request(ctx); !reflect.DeepEqual(requestProtocol, &trpc.RequestProtocol{}) {
 		return fmt.Errorf("RequestProtocol(%v) is not empty", requestProtocol)
 	}
 	err := next(ctx, req, rsp)
-	if responseProtocol := trpc.Response(ctx); !reflect.DeepEqual(responseProtocol, &trpcpb.ResponseProtocol{}) {
+	if responseProtocol := trpc.Response(ctx); !reflect.DeepEqual(responseProtocol, &trpc.ResponseProtocol{}) {
 		return fmt.Errorf("ResponseProtocol(%v) is not empty", responseProtocol)
 	}
 	return err
@@ -613,4 +654,49 @@ func (s *TestSuite) TestTRPCGoer() {
 		require.Nil(t, err)
 	})
 
+}
+
+// TestNoReadFrameFailErrorOnClient is conducted by adding a sleep period during a client's request sending process
+// to verify whether the server can read a correct frame.
+// This is to check if the potential issues with frame 141 or 171 errors in versions v0.17.0 - v0.17.2 have been fixed.
+// Before conducting this test, please ensure that the request data file for testing is prepared.
+// The file path is: test/testdata/request.bin. The method to obtain it is as follows:
+// 1. In the tcpRoundTrip() of transport/client_transport_tcp.go,
+// write the data from reqData into request.bin before executing tcpWriteFrame(),for example:
+//
+//	...
+//	os.WriteFile("request.bin", reqData, 0600)
+//	err = c.tcpWriteFrame(ctx, conn, reqData)
+//	...
+//
+// 2. Perform a client call to the server service, for example:
+//
+//	...
+//	rsp, err := p.SayHello(context.Background(), &pb.HelloRequest{Msg: "client"})
+//	...
+func (s *TestSuite) TestNoReadFrameFailErrorOnClient() {
+	s.startServer(&TRPCService{})
+	bs, err := os.ReadFile("./request.bin")
+	require.Nil(s.T(), err)
+	addr := s.listener.Addr().String()
+	c, err := net.Dial("tcp", addr)
+	require.Nil(s.T(), err)
+	defer c.Close()
+
+	// Split into two segments for sending: first send the first two bytes,
+	// sleep for 10 seconds, then send the remaining part.
+	// If the server retries reading due to a timeout,
+	// it will trigger a "Read Frame Fail" error because the first segment of data is discarded.
+	pre := 2
+	_, err = c.Write(bs[:pre])
+	require.Nil(s.T(), err)
+	time.Sleep(10 * time.Second)
+	_, err = c.Write(bs[pre:])
+	require.Nil(s.T(), err)
+
+	// If the server triggers a "Read Frame Fail" error, the TCP connection will be closed,
+	// and the client will receive an EOF.
+	buffer := make([]byte, 1024)
+	_, err = c.Read(buffer)
+	require.NoError(s.T(), err, "tcp client transport ReadFrame error")
 }

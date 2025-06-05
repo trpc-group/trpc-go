@@ -47,10 +47,10 @@ var (
 	ErrPoolClosed = errors.New("connection pool closed") // ErrPoolClosed connection pool closed error.
 	ErrConnClosed = errors.New("conn closed")            // ErrConnClosed connection closed.
 	ErrNoDeadline = errors.New("dial no deadline")       // ErrNoDeadline has no deadline set.
-	ErrConnInPool = errors.New("conn already in pool")   // ErrNoDeadline has no deadline set.
+	ErrConnInPool = errors.New("conn already in pool")   // ErrConnInPool conn already in pool.
 )
 
-// HealthChecker idle connection health check function.
+// HealthChecker is used to check idle connection health.
 // The function supports quick check and comprehensive check.
 // Quick check is called when an idle connection is obtained,
 // and only checks whether the connection status is abnormal.
@@ -83,20 +83,19 @@ type pool struct {
 	connectionPools *sync.Map
 }
 
+// Get the connection from the connection pool.
+// Deprecated: please use GetWithOptions() instead.
+func (p *pool) Get(network string, address string, _ time.Duration, opt ...GetOption) (net.Conn, error) {
+	opts := NewGetOptions()
+	for _, o := range opt {
+		o(&opts)
+	}
+	return p.GetWithOptions(network, address, opts)
+}
+
 type dialFunc = func(ctx context.Context) (net.Conn, error)
 
 func (p *pool) getDialFunc(network string, address string, opts GetOptions) dialFunc {
-	dialOpts := &DialOptions{
-		Network:       network,
-		Address:       address,
-		LocalAddr:     opts.LocalAddr,
-		CACertFile:    opts.CACertFile,
-		TLSCertFile:   opts.TLSCertFile,
-		TLSKeyFile:    opts.TLSKeyFile,
-		TLSServerName: opts.TLSServerName,
-		IdleTimeout:   p.opts.IdleTimeout,
-	}
-
 	return func(ctx context.Context) (net.Conn, error) {
 		select {
 		case <-ctx.Done():
@@ -108,14 +107,22 @@ func (p *pool) getDialFunc(network string, address string, opts GetOptions) dial
 			return nil, ErrNoDeadline
 		}
 
-		opts := *dialOpts
-		opts.Timeout = time.Until(d)
-		return p.opts.Dial(&opts)
+		return p.opts.Dial(&DialOptions{
+			Network:       network,
+			Address:       address,
+			LocalAddr:     opts.LocalAddr,
+			CACertFile:    opts.CACertFile,
+			TLSCertFile:   opts.TLSCertFile,
+			TLSKeyFile:    opts.TLSKeyFile,
+			TLSServerName: opts.TLSServerName,
+			IdleTimeout:   p.opts.IdleTimeout,
+			Timeout:       time.Until(d),
+		})
 	}
 }
 
-// Get is used to get the connection from the connection pool.
-func (p *pool) Get(network string, address string, opts GetOptions) (net.Conn, error) {
+// GetWithOptions is used to get the connection from the connection pool.
+func (p *pool) GetWithOptions(network string, address string, opts GetOptions) (net.Conn, error) {
 	ctx, cancel := opts.getDialCtx(p.opts.DialTimeout)
 	if cancel != nil {
 		defer cancel()
@@ -135,7 +142,7 @@ func (p *pool) Get(network string, address string, opts GetOptions) (net.Conn, e
 		IdleTimeout:        p.opts.IdleTimeout,
 		framerBuilder:      opts.FramerBuilder,
 		customReader:       opts.CustomReader,
-		forceClosed:        p.opts.ForceClose,
+		forceClose:         p.opts.ForceClose,
 		PushIdleConnToTail: p.opts.PushIdleConnToTail,
 		onCloseFunc:        func() { p.connectionPools.Delete(key) },
 		poolIdleTimeout:    p.opts.PoolIdleTimeout,
@@ -143,16 +150,30 @@ func (p *pool) Get(network string, address string, opts GetOptions) (net.Conn, e
 
 	if newPool.MaxActive > 0 {
 		newPool.token = make(chan struct{}, p.opts.MaxActive)
+	} else {
+		newPool.token = make(chan struct{})
 	}
 
-	newPool.checker = newPool.defaultChecker
-	if p.opts.Checker != nil {
-		newPool.checker = p.opts.Checker
+	baseChecker := p.opts.Checker
+	if baseChecker == nil {
+		baseChecker = newPool.defaultChecker
+	}
+	// The base checker is the main checker, and the additional checkers are called in order.
+	newPool.checker = func(pc *PoolConn, isFast bool) bool {
+		if !baseChecker(pc, isFast) {
+			return false
+		}
+		for _, checker := range p.opts.AdditionalCheckers {
+			if !checker(pc, isFast) {
+				return false
+			}
+		}
+		return true
 	}
 
 	// Avoid the problem of writing concurrently to the pool map during initialization.
-	v, ok := p.connectionPools.LoadOrStore(key, newPool)
-	if !ok {
+	v, loaded := p.connectionPools.LoadOrStore(key, newPool)
+	if !loaded {
 		newPool.RegisterChecker(defaultCheckInterval, newPool.checker)
 		newPool.keepMinIdles()
 		return newPool.Get(ctx)
@@ -162,47 +183,60 @@ func (p *pool) Get(network string, address string, opts GetOptions) (net.Conn, e
 
 // ConnectionPool is the connection pool.
 type ConnectionPool struct {
-	Dial        func(context.Context) (net.Conn, error) // initialize the connection.
-	MinIdle     int                                     // Minimum number of idle connections.
-	MaxIdle     int                                     // Maximum number of idle connections, 0 means no limit.
-	MaxActive   int                                     // Maximum number of active connections, 0 means no limit.
-	IdleTimeout time.Duration                           // idle connection timeout.
-	// Whether to wait when the maximum number of active connections is reached.
-	Wait               bool
-	MaxConnLifetime    time.Duration // Maximum lifetime of the connection.
-	mu                 sync.Mutex    // Control concurrent locks.
-	checker            HealthChecker // Idle connection health check function.
-	closed             bool          // Whether the connection pool has been closed.
-	token              chan struct{} // control concurrency by applying token.
-	idleSize           int           // idle connections size.
-	idle               connList      // idle connection list.
-	framerBuilder      codec.FramerBuilder
-	forceClosed        bool // Force close the connection, suitable for streaming scenarios.
-	PushIdleConnToTail bool // connection to ip will be push tail when ConnectionPool.put method is called.
-	// customReader creates a reader encapsulating the underlying connection.
-	customReader    func(io.Reader) io.Reader
-	onCloseFunc     func()        // execute when checker goroutine judge the connection_pool is useless.
-	used            int32         // size of connections used by user, atomic.
-	lastGetTime     int64         // last get connection millisecond timestamp, atomic.
-	poolIdleTimeout time.Duration // pool idle timeout.
+	// Dial Initializes the connection.
+	Dial dialFunc
+	// checker checks idle connection health.
+	checker HealthChecker
+	// framerBuilder defines how to build a framer.
+	framerBuilder codec.FramerBuilder
+	// onCloseFunc execute when the connectionPool is useless.
+	onCloseFunc func()
+	// CustomReader creates a reader encapsulating the underlying connection.
+	customReader func(io.Reader) io.Reader
+
+	// MinIdle is minimum number of idle connections.
+	MinIdle int
+	// MaxIdle is maximum number of idle connections, 0 means no limit.
+	MaxIdle int
+	// MaxActive is maximum number of active connections, 0 means no limit.
+	MaxActive int
+	// Wait decides wait when the max number of active connections is reached or not.
+	Wait bool
+	// forceClose closes the connection, suitable for streaming scenarios.
+	forceClose bool
+	// Connection to ip will be push tail when ConnectionPool.put method is called.
+	PushIdleConnToTail bool
+	// poolIdleTimeout is the idle timeout of pool.
+	poolIdleTimeout time.Duration
+	// IdleTimeout is the idle timeout of connection.
+	IdleTimeout time.Duration
+	// MaxConnLifetime is maximum lifetime of the connection.
+	MaxConnLifetime time.Duration
+
+	// mu controls concurrency.
+	mu sync.Mutex
+	// closed indicates whether the ConnectionPool is closed.
+	closed bool
+	// token controls concurrency by applying token.
+	token chan struct{}
+	// idle is the idle connection list.
+	idle connList
+	// used is the size of connections used by user, atomic.
+	used int32
+	// lastGetTime is the connection last got millisecond timestamp, atomic.
+	lastGetTime int64
 }
 
 func (p *ConnectionPool) keepMinIdles() {
 	p.mu.Lock()
-	count := p.MinIdle - p.idleSize
-	if count > 0 {
-		p.idleSize += count
-	}
+	count := p.MinIdle - p.idle.count
 	p.mu.Unlock()
-
 	for i := 0; i < count; i++ {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultDialTimeout)
 			defer cancel()
 			if err := p.addIdleConn(ctx); err != nil {
-				p.mu.Lock()
-				p.idleSize--
-				p.mu.Unlock()
+				log.Errorf("failed to add idle connection: %w", err)
 			}
 		}()
 	}
@@ -221,18 +255,19 @@ func (p *ConnectionPool) addIdleConn(ctx context.Context) error {
 		return err
 	}
 
-	// put in idle list
+	// Put conn to the idle list.
 	pc := p.newPoolConn(c)
+
 	p.mu.Lock()
 	if p.closed {
 		pc.closed = true
 		pc.Conn.Close()
 	} else {
 		pc.t = time.Now()
-		if !p.PushIdleConnToTail {
-			p.idle.pushHead(pc)
-		} else {
+		if p.PushIdleConnToTail {
 			p.idle.pushTail(pc)
+		} else {
+			p.idle.pushHead(pc)
 		}
 	}
 	p.mu.Unlock()
@@ -259,9 +294,9 @@ func (p *ConnectionPool) Close() error {
 		p.mu.Unlock()
 		return nil
 	}
+
 	p.closed = true
 	p.idle.count = 0
-	p.idleSize = 0
 	pc := p.idle.head
 	p.idle.head, p.idle.tail = nil, nil
 	p.mu.Unlock()
@@ -273,21 +308,25 @@ func (p *ConnectionPool) Close() error {
 }
 
 // get gets the connection from the connection pool.
-func (p *ConnectionPool) get(ctx context.Context) (*PoolConn, error) {
+func (p *ConnectionPool) get(ctx context.Context) (pc *PoolConn, err error) {
 	if err := p.getToken(ctx); err != nil {
 		return nil, err
 	}
 
 	atomic.StoreInt64(&p.lastGetTime, time.Now().UnixMilli())
-	atomic.AddInt32(&p.used, 1)
+	defer func() {
+		if err == nil {
+			atomic.AddInt32(&p.used, 1)
+		}
+	}()
 
-	// try to get an idle connection.
+	// Try to get an idle connection.
 	if pc := p.getIdleConn(); pc != nil {
 		return pc, nil
 	}
 
-	// get new connection.
-	pc, err := p.getNewConn(ctx)
+	// Get new connection.
+	pc, err = p.getNewConn(ctx)
 	if err != nil {
 		p.freeToken()
 		return nil, err
@@ -295,10 +334,10 @@ func (p *ConnectionPool) get(ctx context.Context) (*PoolConn, error) {
 	return pc, nil
 }
 
-// if p.Wait is True, return err when timeout.
-// if p.Wait is False, return err when token empty immediately.
+// If p.Wait is True, return err when timeout.
+// If p.Wait is False, return err when token empty immediately.
 func (p *ConnectionPool) getToken(ctx context.Context) error {
-	if p.MaxActive <= 0 {
+	if cap(p.token) == 0 {
 		return nil
 	}
 
@@ -320,28 +359,26 @@ func (p *ConnectionPool) getToken(ctx context.Context) error {
 }
 
 func (p *ConnectionPool) freeToken() {
-	if p.MaxActive <= 0 {
+	if cap(p.token) == 0 {
 		return
 	}
 	<-p.token
 }
 
 func (p *ConnectionPool) getIdleConn() *PoolConn {
-	p.mu.Lock()
-	for p.idle.head != nil {
-		pc := p.idle.head
-		p.idle.popHead()
-		p.idleSize--
+	for {
+		p.mu.Lock()
+		pc := p.idle.popHead()
 		p.mu.Unlock()
+		if pc == nil {
+			return nil
+		}
 		if p.checker(pc, true) {
 			return pc
 		}
 		pc.Conn.Close()
 		pc.closed = true
-		p.mu.Lock()
 	}
-	p.mu.Unlock()
-	return nil
 }
 
 func (p *ConnectionPool) getNewConn(ctx context.Context) (*PoolConn, error) {
@@ -367,7 +404,7 @@ func (p *ConnectionPool) newPoolConn(c net.Conn) *PoolConn {
 		Conn:       c,
 		created:    time.Now(),
 		pool:       p,
-		forceClose: p.forceClosed,
+		forceClose: p.forceClose,
 		inPool:     false,
 	}
 	if p.framerBuilder != nil {
@@ -377,36 +414,40 @@ func (p *ConnectionPool) newPoolConn(c net.Conn) *PoolConn {
 	return pc
 }
 
+// checkHealthOnce does not actually guarantee that the checks on nodes are complete or non-repetitive.
+// When new nodes are added, there might be cases of missed checks,
+// and when nodes are removed, there might be cases of redundant checks.
+// The primary purpose of n is to provide an upper bound on the number of checks.
 func (p *ConnectionPool) checkHealthOnce() {
-	p.mu.Lock()
 	n := p.idle.count
-	for i := 0; i < n && p.idle.head != nil; i++ {
-		pc := p.idle.head
-		p.idle.popHead()
-		p.idleSize--
+	for i := 0; i < n; i++ {
+		p.mu.Lock()
+		pc := p.idle.popHead()
 		p.mu.Unlock()
+		if pc == nil {
+			break
+		}
 		if p.checker(pc, false) {
 			p.mu.Lock()
-			p.idleSize++
 			p.idle.pushTail(pc)
+			p.mu.Unlock()
 		} else {
 			pc.Conn.Close()
 			pc.closed = true
-			p.mu.Lock()
 		}
 	}
-	p.mu.Unlock()
 }
 
 func (p *ConnectionPool) checkRoutine(interval time.Duration) {
 	for {
 		time.Sleep(interval)
 		p.mu.Lock()
-		closed := p.closed
-		p.mu.Unlock()
-		if closed {
+		if p.closed {
+			p.mu.Unlock()
 			return
 		}
+		p.mu.Unlock()
+
 		p.checkHealthOnce()
 
 		if p.checkPoolIdleTimeout() {
@@ -425,28 +466,26 @@ func (p *ConnectionPool) checkMinIdle() {
 	p.keepMinIdles()
 }
 
-// checkPoolIdleTimeout check whether the connection_pool is useless
+// checkPoolIdleTimeout check whether the connection pool is useless.
 func (p *ConnectionPool) checkPoolIdleTimeout() bool {
-	p.mu.Lock()
 	lastGetTime := atomic.LoadInt64(&p.lastGetTime)
 	if lastGetTime == 0 || p.poolIdleTimeout == 0 {
-		p.mu.Unlock()
 		return false
 	}
-	if time.Now().UnixMilli()-lastGetTime > p.poolIdleTimeout.Milliseconds() &&
-		p.onCloseFunc != nil && atomic.LoadInt32(&p.used) == 0 {
-		p.mu.Unlock()
+
+	if p.onCloseFunc != nil && atomic.LoadInt32(&p.used) == 0 &&
+		time.Now().UnixMilli()-lastGetTime > p.poolIdleTimeout.Milliseconds() {
 		p.onCloseFunc()
-		if err := p.Close(); err != nil {
-			log.Errorf("failed to close ConnectionPool, error: %v", err)
-		}
+		p.Close()
 		return true
 	}
-	p.mu.Unlock()
 	return false
 }
 
 // RegisterChecker registers the idle connection check method.
+// Warn: Users should not call RegisterChecker directly, as it will
+// start a new goroutine that calls p.checkRoutine(interval). This can
+// result in multiple checkers simultaneously checking the ConnectionPool.
 func (p *ConnectionPool) RegisterChecker(interval time.Duration, checker HealthChecker) {
 	if interval <= 0 || checker == nil {
 		return
@@ -497,23 +536,23 @@ func (p *ConnectionPool) put(pc *PoolConn, forceClose bool) error {
 	if pc.closed {
 		return nil
 	}
+
 	p.mu.Lock()
 	if !p.closed && !forceClose {
 		pc.t = time.Now()
-		if !p.PushIdleConnToTail {
-			p.idle.pushHead(pc)
-		} else {
+		if p.PushIdleConnToTail {
 			p.idle.pushTail(pc)
-		}
-		if p.idleSize >= p.MaxIdle {
-			pc = p.idle.tail
-			p.idle.popTail()
 		} else {
-			p.idleSize++
+			p.idle.pushHead(pc)
+		}
+		if p.idle.count > p.MaxIdle {
+			pc = p.idle.popTail()
+		} else {
 			pc = nil
 		}
 	}
 	p.mu.Unlock()
+
 	if pc != nil {
 		pc.closed = true
 		pc.Conn.Close()
@@ -653,8 +692,11 @@ func (l *connList) pushHead(pc *PoolConn) {
 	l.head = pc
 }
 
-func (l *connList) popHead() {
+func (l *connList) popHead() *PoolConn {
 	pc := l.head
+	if pc == nil {
+		return nil
+	}
 	l.count--
 	if l.count == 0 {
 		l.head, l.tail = nil, nil
@@ -664,6 +706,7 @@ func (l *connList) popHead() {
 	}
 	pc.next, pc.prev = nil, nil
 	pc.inPool = false
+	return pc
 }
 
 func (l *connList) pushTail(pc *PoolConn) {
@@ -679,8 +722,11 @@ func (l *connList) pushTail(pc *PoolConn) {
 	l.tail = pc
 }
 
-func (l *connList) popTail() {
+func (l *connList) popTail() *PoolConn {
 	pc := l.tail
+	if pc == nil {
+		return nil
+	}
 	l.count--
 	if l.count == 0 {
 		l.head, l.tail = nil, nil
@@ -690,16 +736,17 @@ func (l *connList) popTail() {
 	}
 	pc.next, pc.prev = nil, nil
 	pc.inPool = false
+	return pc
 }
 
 func getNodeKey(network, address, protocol string) string {
-	const underline = "_"
+	const underline = '_'
 	var key strings.Builder
 	key.Grow(len(network) + len(address) + len(protocol) + 2)
 	key.WriteString(network)
-	key.WriteString(underline)
+	key.WriteByte(underline)
 	key.WriteString(address)
-	key.WriteString(underline)
+	key.WriteByte(underline)
 	key.WriteString(protocol)
 	return key.String()
 }

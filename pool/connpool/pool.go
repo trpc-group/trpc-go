@@ -45,29 +45,14 @@ type GetOptions struct {
 
 func (o *GetOptions) getDialCtx(dialTimeout time.Duration) (context.Context, context.CancelFunc) {
 	ctx := o.Ctx
-	defer func() {
-		// opts.Ctx is only used to pass ctx parameters, ctx is not recommended to be held by data structures.
-		o.Ctx = nil
-	}()
+	// opts.Ctx is only used to pass ctx parameters, ctx is not recommended to be held by data structures.
+	defer func() { o.Ctx = nil }()
 
-	for {
-		// If the RPC request does not set ctx, create a new ctx.
-		if ctx == nil {
-			break
-		}
-		// If the RPC request does not set the ctx timeout, create a new ctx.
-		deadline, ok := ctx.Deadline()
-		if !ok {
-			break
-		}
-		// If the RPC request timeout is greater than the set timeout, create a new ctx.
-		d := time.Until(deadline)
-		if o.DialTimeout > 0 && o.DialTimeout < d {
-			break
-		}
+	if o.contextHasValidDialTimeout(ctx) {
 		return ctx, nil
 	}
 
+	// If the RPC request does not set ctx or the ctx timeout is invalid, create a new ctx.
 	if o.DialTimeout > 0 {
 		dialTimeout = o.DialTimeout
 	}
@@ -75,6 +60,25 @@ func (o *GetOptions) getDialCtx(dialTimeout time.Duration) (context.Context, con
 		dialTimeout = defaultDialTimeout
 	}
 	return context.WithTimeout(context.Background(), dialTimeout)
+}
+
+func (o *GetOptions) contextHasValidDialTimeout(ctx context.Context) bool {
+	// If the RPC request does not set ctx, return invalid.
+	if ctx == nil {
+		return false
+	}
+	// If the RPC request does not set the ctx timeout, return invalid.
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return false
+	}
+	// If the RPC request timeout is greater than the set timeout, return invalid.
+	d := time.Until(deadline)
+	if o.DialTimeout > 0 && o.DialTimeout < d {
+		return false
+	}
+	// Otherwise, the timeout is valid.
+	return true
 }
 
 // NewGetOptions creates and initializes GetOptions.
@@ -124,11 +128,47 @@ func (o *GetOptions) WithCustomReader(customReader func(io.Reader) io.Reader) {
 	o.CustomReader = customReader
 }
 
-// Pool is the interface that specifies client connection pool options.
-// Compared with Pool, Pool directly uses the GetOptions data structure for function input parameters.
-// Compared with function option input parameter mode, it can reduce memory escape and improve calling performance.
+// GetOption Options helper.
+// Deprecated: please use PoolWithOptions instead.
+type GetOption func(*GetOptions)
+
+// WithFramerBuilder returns an Option which sets the FramerBuilder.
+// Deprecated: please use PoolWithOptions instead.
+func WithFramerBuilder(fb codec.FramerBuilder) GetOption {
+	return func(opts *GetOptions) {
+		opts.FramerBuilder = fb
+	}
+}
+
+// WithDialTLS returns an Option which sets the client to support TLS.
+// Deprecated: please use PoolWithOptions instead.
+func WithDialTLS(certFile, keyFile, caFile, serverName string) GetOption {
+	return func(opts *GetOptions) {
+		opts.TLSCertFile = certFile
+		opts.TLSKeyFile = keyFile
+		opts.CACertFile = caFile
+		opts.TLSServerName = serverName
+	}
+}
+
+// WithContext returns an Option which sets the requested ctx.
+// Deprecated: please use PoolWithOptions instead.
+func WithContext(ctx context.Context) GetOption {
+	return func(opts *GetOptions) {
+		opts.Ctx = ctx
+	}
+}
+
+// Pool is the interface that specifies client connection pool.
 type Pool interface {
-	Get(network string, address string, opt GetOptions) (net.Conn, error)
+	Get(network string, address string, timeout time.Duration, opt ...GetOption) (net.Conn, error)
+}
+
+// PoolWithOptions is the interface that specifies client connection pool options.
+// Compared with Pool, PoolWithOptions directly uses the GetOptions data structure for function input parameters.
+// Compared with function option input parameter mode, it can reduce memory escape and improve calling performance.
+type PoolWithOptions interface {
+	GetWithOptions(network string, address string, opt GetOptions) (net.Conn, error)
 }
 
 // DialFunc connects to an endpoint with the information in options.

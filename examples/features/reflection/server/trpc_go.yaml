@@ -1,0 +1,27 @@
+global:
+  namespace: Development
+  env_name: test
+
+server:
+  app: examples
+  server: echo
+  reflection_service: &reflection_service trpc.reflection.v1.ServerReflection
+  service:
+    - name: trpc.test.helloworld.GreeterXXX
+      ip: 127.0.0.1
+      nic: eth0
+      port: 8000
+      network: tcp
+      protocol: trpc
+    - name: trpc.examples.echo.EchoYYY
+      ip: 127.0.0.1
+      nic: eth0
+      port: 8001
+      network: tcp
+      protocol: trpc
+    - name: *reflection_service
+      ip: 127.0.0.1
+      nic: eth0
+      port: 8002
+      network: tcp
+      protocol: trpc

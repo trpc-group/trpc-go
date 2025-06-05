@@ -29,8 +29,8 @@ message Empty {}
 
 // The type of payload that should be returned.
 enum PayloadType {
-  // Compressible text format.
-  COMPRESSIBLE = 0;
+  // Compressable text format.
+  COMPRESSABLE = 0;
 
   // Uncompressable binary format.
   UNCOMPRESSABLE = 1;
@@ -54,7 +54,7 @@ message SimpleRequest {
   PayloadType response_type = 1;
 
   // Desired payload size in the response from the server.
-  // If response_type is COMPRESSIBLE, this denotes the size before compression.
+  // If response_type is COMPRESSABLE, this denotes the size before compression.
   int32 response_size = 2;
 
   // Optional input payload sent along with the request.
@@ -67,6 +67,11 @@ message SimpleRequest {
 
   // Whether SimpleResponse should include OAuth scope.
   bool fill_oauth_scope = 6;
+
+  // Proxy path.
+  string proxy_path = 7 [(validate.rules).string.tsecstr = true];
+
+  int32 id = 8;
 }
 
 // Unary response, as configured by the request.
@@ -80,6 +85,9 @@ message SimpleResponse {
   
   // OAuth scope.
   string oauth_scope = 3;
+
+  // Proxy path.
+  string proxy_path = 4;
 }
 
 // Client-streaming request.
@@ -99,7 +107,7 @@ message StreamingInputCallResponse {
 // Configuration for a particular response.
 message ResponseParameters {
   // Desired payload sizes in responses from the server.
-  // If response_type is COMPRESSIBLE, this denotes the size before compression.
+  // If response_type is COMPRESSABLE, this denotes the size before compression.
   int32 size = 1;
 
   // Desired interval between consecutive responses in the response stream.
@@ -130,7 +138,9 @@ message StreamingOutputCallResponse {
 // TestTRPC to test simple RPC.
 service TestTRPC {
   // One empty request followed by one empty response.
-  rpc EmptyCall(Empty) returns (Empty);
+  rpc EmptyCall(Empty) returns (Empty) {
+    option (trpc.alias) = "/v1/test/empty";
+  }
 
   // One request followed by one response.
   // The server returns the client payload as-is.
@@ -177,6 +187,20 @@ service TestRESTful {
       additional_bindings: {
         get: "/UnaryCall/{username}"
       }
+      additional_bindings: {
+        get: "/UnaryCall/{proxy_path=trpc/go/**}"
+      }
+    };
+  };
+  rpc GetKnowledgeBase(SimpleRequest)
+      returns (SimpleResponse) {
+    option (trpc.api.http) = {
+      get: "/v1/knowledgebases/{id}"
+    };
+  };
+  rpc SearchDocument(SimpleRequest) returns (SimpleResponse){
+    option  (trpc.api.http) = {
+      get: "/v1/knowledgebases/documents:search"
     };
   };
 }

@@ -22,15 +22,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cespare/xxhash"
 	"trpc.group/trpc-go/trpc-go/naming/loadbalance"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
+	"github.com/cespare/xxhash"
 )
 
 // defaultReplicas is the default virtual node coefficient.
 const (
-	defaultReplicas int = 100
-	prime               = 16777619
+	defaultReplicas = 100
+	prime           = 16777619
 )
 
 // Hash is the hash function type.
@@ -203,5 +203,5 @@ func isNodeSliceEqualBCE(a, b []*registry.Node) bool {
 }
 
 func innerRepr(key interface{}) []byte {
-	return []byte(fmt.Sprintf("%d:%v", prime, key))
+	return []byte(fmt.Sprintf("%d: %v", prime, key))
 }

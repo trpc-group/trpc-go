@@ -18,12 +18,14 @@ package protocols
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"net/mail"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -45,6 +47,9 @@ var (
 	_ = (*url.URL)(nil)
 	_ = (*mail.Address)(nil)
 	_ = anypb.Any{}
+	_ = sort.Sort
+	_ = unicode.IsUpper
+	_ = json.Valid([]byte(""))
 )
 
 // Validate checks the field values on Empty with the rules defined in the
@@ -71,6 +76,7 @@ func (m *Empty) validate(all bool) error {
 	if len(errors) > 0 {
 		return EmptyMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -172,6 +178,7 @@ func (m *Payload) validate(all bool) error {
 	if len(errors) > 0 {
 		return PayloadMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -315,9 +322,23 @@ func (m *SimpleRequest) validate(all bool) error {
 
 	// no validation rules for FillOauthScope
 
+	if isTsecstr := m._validateTsecstr(m.GetProxyPath()); !isTsecstr {
+		err := SimpleRequestValidationError{
+			field:  "ProxyPath",
+			reason: "value contains invalid strings",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	// no validation rules for Id
+
 	if len(errors) > 0 {
 		return SimpleRequestMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -479,9 +500,12 @@ func (m *SimpleResponse) validate(all bool) error {
 
 	// no validation rules for OauthScope
 
+	// no validation rules for ProxyPath
+
 	if len(errors) > 0 {
 		return SimpleResponseMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -610,6 +634,7 @@ func (m *StreamingInputCallRequest) validate(all bool) error {
 	if len(errors) > 0 {
 		return StreamingInputCallRequestMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -713,6 +738,7 @@ func (m *StreamingInputCallResponse) validate(all bool) error {
 	if len(errors) > 0 {
 		return StreamingInputCallResponseMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -845,6 +871,7 @@ func (m *ResponseParameters) validate(all bool) error {
 	if len(errors) > 0 {
 		return ResponseParametersMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -1011,6 +1038,7 @@ func (m *StreamingOutputCallRequest) validate(all bool) error {
 	if len(errors) > 0 {
 		return StreamingOutputCallRequestMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -1141,6 +1169,7 @@ func (m *StreamingOutputCallResponse) validate(all bool) error {
 	if len(errors) > 0 {
 		return StreamingOutputCallResponseMultiError(errors)
 	}
+
 	return nil
 }
 

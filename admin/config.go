@@ -18,15 +18,15 @@ import (
 )
 
 const (
-	defaultListenAddr   = "127.0.0.1:9028" // Default listening port.
-	defaultUseTLS       = false            // Default does not use TLS.
+	defaultListenAddr   = "127.0.0.1:9028" // default listen port.
+	defaultUseTLS       = false            // default doesn't use https.
 	defaultReadTimeout  = time.Second * 3
 	defaultWriteTimeout = time.Second * 60
 	defaultSkipServe    = false
 )
 
-func newDefaultConfig() *configuration {
-	return &configuration{
+func loadDefaultConfig() *adminConfig {
+	return &adminConfig{
 		skipServe:    defaultSkipServe,
 		addr:         defaultListenAddr,
 		enableTLS:    defaultUseTLS,
@@ -35,8 +35,8 @@ func newDefaultConfig() *configuration {
 	}
 }
 
-// configuration manages trpc service configuration.
-type configuration struct {
+// adminConfig manages trpc service configuration.
+type adminConfig struct {
 	addr         string
 	enableTLS    bool
 	readTimeout  time.Duration
@@ -44,4 +44,8 @@ type configuration struct {
 	version      string
 	configPath   string
 	skipServe    bool
+}
+
+func (a *adminConfig) getAddr() string {
+	return a.addr
 }

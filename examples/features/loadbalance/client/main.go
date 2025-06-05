@@ -29,7 +29,7 @@ import (
 	_ "trpc.group/trpc-go/trpc-go/naming/loadbalance/weightroundrobin"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 var serviceAddrMap sync.Map

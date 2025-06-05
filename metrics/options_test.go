@@ -17,8 +17,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"trpc.group/trpc-go/trpc-go/metrics"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestWithMeta(t *testing.T) {

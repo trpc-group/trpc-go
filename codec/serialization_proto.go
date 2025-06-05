@@ -14,9 +14,9 @@
 package codec
 
 import (
-	"errors"
+	"fmt"
 
-	"google.golang.org/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 )
 
 func init() {
@@ -30,7 +30,7 @@ type PBSerialization struct{}
 func (s *PBSerialization) Unmarshal(in []byte, body interface{}) error {
 	msg, ok := body.(proto.Message)
 	if !ok {
-		return errors.New("unmarshal fail: body not protobuf message")
+		return fmt.Errorf("failed to unmarshal body: expected proto.Message, got %T", body)
 	}
 	return proto.Unmarshal(in, msg)
 }
@@ -39,7 +39,7 @@ func (s *PBSerialization) Unmarshal(in []byte, body interface{}) error {
 func (s *PBSerialization) Marshal(body interface{}) ([]byte, error) {
 	msg, ok := body.(proto.Message)
 	if !ok {
-		return nil, errors.New("marshal fail: body not protobuf message")
+		return nil, fmt.Errorf("failed to marshal body: expected proto.Message, got %T", body)
 	}
 	return proto.Marshal(msg)
 }

@@ -19,11 +19,10 @@ import (
 	"fmt"
 	"sync"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/config"
 	"trpc.group/trpc-go/trpc-go/examples/features/common"
-
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 func main() {
@@ -35,10 +34,10 @@ func main() {
 		return
 	}
 
-	fmt.Printf("test : %s \n", c.GetString("custom.test", ""))
-	fmt.Printf("key1 : %s \n", c.GetString("custom.test_obj.key1", ""))
-	fmt.Printf("key2 : %t \n", c.GetBool("custom.test_obj.key2", false))
-	fmt.Printf("key2 : %d \n", c.GetInt32("custom.test_obj.key3", 0))
+	fmt.Printf("test : %s\n", c.GetString("custom.test", ""))
+	fmt.Printf("key1 : %s\n", c.GetString("custom.test_obj.key1", ""))
+	fmt.Printf("key2 : %t\n", c.GetBool("custom.test_obj.key2", false))
+	fmt.Printf("key2 : %d\n", c.GetInt32("custom.test_obj.key3", 0))
 
 	// print
 	// test : customConfigFromServer
@@ -51,8 +50,7 @@ func main() {
 	if err := c.Unmarshal(&custom); err != nil {
 		fmt.Println(err)
 	}
-
-	fmt.Printf("Get config - custom : %v \n", custom)
+	fmt.Printf("Get config - custom : %v\n", custom)
 	// print: Get config - custom : {{customConfigFromServer {value1 true 1234}}}
 
 	// Init server.
@@ -64,7 +62,7 @@ func main() {
 	imp.once, _ = config.Load(p.Name(), config.WithProvider(p.Name()))
 	imp.watch, _ = config.Load(p.Name(), config.WithProvider(p.Name()), config.WithWatch())
 
-	pb.RegisterGreeterService(s, imp)
+	pb.RegisterGreeterService(s.Service(" trpc.examples.config.Config"), imp)
 
 	// Serve and listen.
 	if err := s.Serve(); err != nil {
@@ -147,7 +145,7 @@ type greeterImpl struct {
 
 // SayHello say hello request. Rewrite SayHello to inform server config.
 func (g *greeterImpl) SayHello(_ context.Context, req *pb.HelloRequest) (*pb.HelloReply, error) {
-	fmt.Printf("trpc-go-server SayHello, req.msg:%s\n", req.Msg)
+	fmt.Printf("trpc-go-server SayHello, req.msg: %s\n", req.Msg)
 
 	if req.Msg == "change config" {
 		p.update()
@@ -158,7 +156,7 @@ func (g *greeterImpl) SayHello(_ context.Context, req *pb.HelloRequest) (*pb.Hel
 		fmt.Sprintf("\nload once config: %s", g.once.GetString("custom.test", "")) +
 		fmt.Sprintf("\nstart watch config: %s", g.watch.GetString("custom.test", ""))
 
-	fmt.Printf("trpc-go-server SayHello, rsp.msg:%s\n", rsp.Msg)
+	fmt.Printf("trpc-go-server SayHello, rsp.msg: %s\n", rsp.Msg)
 
 	return rsp, nil
 }

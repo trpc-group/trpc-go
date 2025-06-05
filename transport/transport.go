@@ -18,6 +18,7 @@ package transport
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"reflect"
 	"sync"
@@ -92,6 +93,9 @@ func RegisterFramerBuilder(name string, fb codec.FramerBuilder) {
 	if name == "" {
 		panic("transport: register framerBuilders name empty")
 	}
+	// Use fmt rather than log, because usually log package has not been initialized
+	// when framer builder is registered.
+	fmt.Printf("framerBuilder %s is registered\n", name)
 	framerBuilders[name] = fb
 }
 

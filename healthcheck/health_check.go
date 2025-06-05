@@ -12,6 +12,7 @@
 //
 
 // Package healthcheck is used to check service status.
+// See https://git.woa.com/trpc/trpc-proposal/blob/master/A18-health-check.md for more details.
 package healthcheck
 
 import (

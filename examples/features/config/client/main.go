@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"trpc.group/trpc-go/trpc-go/client"
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 var addr = "ip://127.0.0.1:8000"
@@ -37,7 +37,7 @@ func main() {
 	// Send request.
 	rsp, err := clientProxy.SayHello(ctx, req)
 	if err != nil {
-		fmt.Println("Say hi err:%v", err)
+		fmt.Printf("Say hi err: %v", err)
 		return
 	}
 	fmt.Printf("Get msg: %s\n", rsp.GetMsg())
@@ -54,7 +54,7 @@ func main() {
 	// Send request.
 	rsp, err = clientProxy.SayHello(ctx, req)
 	if err != nil {
-		fmt.Println("Say hi err:%v", err)
+		fmt.Printf("Say hi err: %v", err)
 		return
 	}
 	fmt.Printf("Get msg: %s\n", rsp.GetMsg())

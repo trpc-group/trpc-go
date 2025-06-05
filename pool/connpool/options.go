@@ -19,19 +19,34 @@ import (
 
 // Options indicates pool configuration.
 type Options struct {
-	MinIdle   int // Initialize the number of connections, ready for the next io.
-	MaxIdle   int // Maximum number of idle connections, 0 means no idle.
-	MaxActive int // Maximum number of active connections, 0 means no limit.
-	// Whether to wait when the maximum number of active connections is reached.
-	Wait               bool
-	IdleTimeout        time.Duration // idle connection timeout.
-	MaxConnLifetime    time.Duration // Maximum lifetime of the connection.
-	DialTimeout        time.Duration // Connection establishment timeout.
-	ForceClose         bool
-	Dial               DialFunc
-	Checker            HealthChecker
-	PushIdleConnToTail bool          // connection to ip will be push tail when ConnectionPool.put method is called
-	PoolIdleTimeout    time.Duration // ConnectionPool idle timeout
+	// Dial Initializes the connection.
+	Dial DialFunc
+	// Checker checks idle connection health.
+	Checker HealthChecker
+	// AdditionalCheckers are additional health checkers.
+	AdditionalCheckers []HealthChecker
+
+	// MinIdle is minimal number of connections, ready for the next io.
+	MinIdle int
+	// MaxIdle is maximum number of idle connections, 0 means no idle.
+	MaxIdle int
+	// MaxActive is maximum number of active connections, 0 means no limit.
+	MaxActive int
+	// Wait decides wait when the max number of active connections is reached or not.
+	Wait bool
+	// ForceClose closes the connection, suitable for streaming scenarios.
+	ForceClose bool
+	// connection to ip will be push tail when ConnectionPool.put method is called.
+	PushIdleConnToTail bool
+
+	// IdleTimeout is the idle timeout of connection.
+	IdleTimeout time.Duration
+	// MaxConnLifetime is the maximum lifetime of the connection.
+	MaxConnLifetime time.Duration
+	// DialTimeout is the timeout of connection establishment.
+	DialTimeout time.Duration
+	// PoolIdleTimeout is the idle timeout of pool.
+	PoolIdleTimeout time.Duration
 }
 
 // Option is the Options helper.
@@ -44,17 +59,17 @@ func WithMinIdle(n int) Option {
 	}
 }
 
-// WithMaxIdle returns an Option which sets the maximum number of idle connections.
-func WithMaxIdle(m int) Option {
+// WithMaxIdle returns an Option which sets the maximum number of idle connections. 0 means no idle number limit.
+func WithMaxIdle(i int) Option {
 	return func(o *Options) {
-		o.MaxIdle = m
+		o.MaxIdle = i
 	}
 }
 
-// WithMaxActive returns an Option which sets the maximum number of active connections.
-func WithMaxActive(s int) Option {
+// WithMaxActive returns an Option which sets the maximum number of active connections. 0 means no number limit.
+func WithMaxActive(a int) Option {
 	return func(o *Options) {
-		o.MaxActive = s
+		o.MaxActive = a
 	}
 }
 
@@ -106,6 +121,15 @@ func WithDialFunc(d DialFunc) Option {
 func WithHealthChecker(c HealthChecker) Option {
 	return func(o *Options) {
 		o.Checker = c
+	}
+}
+
+// WithAdditionalHealthChecker returns an Option which sets additional health checker.
+// The additional checker will be called after the main health checker.
+// This function can be called multiple times, the additional checkers will be used in order.
+func WithAdditionalHealthChecker(c ...HealthChecker) Option {
+	return func(o *Options) {
+		o.AdditionalCheckers = append(o.AdditionalCheckers, c...)
 	}
 }
 

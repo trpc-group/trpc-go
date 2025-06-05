@@ -1,0 +1,10 @@
+client:  # Backend configuration for client calls
+  timeout: 1000  # Maximum processing time for all backends
+  service:  # Configuration for a single backend
+    - name: trpc.examples.rspobsoleted.RspObsoletedExample  # Service name of the backend
+      namespace: Development  # Environment of the backend service
+      network: tcp  # Network type of the backend service, tcp or udp, configuration priority
+      protocol: trpc  # Application layer protocol, trpc or http
+      transport: tnet  # Need to delete this line when protocol is http, tnet does not support http protocol temporarily
+      target: ip://127.0.0.1:8000  # Service address for the request
+      timeout: 1000   # Maximum processing time for the request

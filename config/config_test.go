@@ -26,6 +26,7 @@ import (
 
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/config"
+	"trpc.group/trpc-go/trpc-go/errs"
 
 	trpc "trpc.group/trpc-go/trpc-go"
 )
@@ -117,8 +118,7 @@ func TestGetConfigInfo(t *testing.T) {
 	}
 	config.SetGlobalKV(c)
 	config.Register(c)
-
-	{
+	t.Run("GetYAML", func(t *testing.T) {
 		tmp := `
 age: 20
 name: 'foo'
@@ -131,22 +131,23 @@ name: 'foo'
 		assert.Nil(t, err)
 		assert.Equal(t, 20, v.Age)
 		assert.Equal(t, "foo", v.Name)
+
 		err = config.GetYAMLWithProvider("mockYAMLKey", v, "mock")
 		assert.Nil(t, err)
 		assert.Equal(t, 20, v.Age)
 		assert.Equal(t, "foo", v.Name)
+
 		err = config.GetYAMLWithProvider("mockYAMLKey", v, "mockNotExist")
 		assert.NotNil(t, err)
-	}
-
-	// Test GetJson
-	{
+	})
+	t.Run("GetJson", func(t *testing.T) {
 		tmp := &mockValue{
 			Age:  20,
 			Name: "foo",
 		}
 		tmpStr, err := json.Marshal(tmp)
 		assert.Nil(t, err)
+
 		err = c.Put(context.Background(), "mockJsonKey", string(tmpStr))
 		assert.Nil(t, err)
 
@@ -155,28 +156,21 @@ name: 'foo'
 		assert.Nil(t, err)
 		assert.Equal(t, 20, v.Age)
 		assert.Equal(t, "foo", v.Name)
+
 		err = config.GetJSONWithProvider("mockJsonKey", v, "mock")
 		assert.Nil(t, err)
 		assert.Equal(t, 20, v.Age)
 		assert.Equal(t, "foo", v.Name)
+
 		err = config.GetJSONWithProvider("mockJsonKey", v, "mockNotExist")
 		assert.NotNil(t, err)
-
-		codec := &config.JSONCodec{}
-		out := make(map[string]string)
-		codec.Unmarshal(tmpStr, &out)
-	}
-
-	// Test GetWithUnmarshal
-	{
-
+	})
+	t.Run("GetWithUnmarshal", func(t *testing.T) {
 		v := &mockValue{}
 		err := config.GetWithUnmarshal("mockJsonKey1", v, "json")
 		assert.NotNil(t, err)
-	}
-
-	// Test GetToml
-	{
+	})
+	t.Run("GetToml", func(t *testing.T) {
 		tmp := `
 age = 20
 name = "foo"
@@ -189,39 +183,39 @@ name = "foo"
 		assert.Nil(t, err)
 		assert.Equal(t, 20, v.Age)
 		assert.Equal(t, "foo", v.Name)
+
 		err = config.GetTOMLWithProvider("mockTomlKey", v, "mock")
 		assert.Nil(t, err)
 		assert.Equal(t, 20, v.Age)
 		assert.Equal(t, "foo", v.Name)
+
 		err = config.GetTOMLWithProvider("mockTomlKey", v, "mockNotExist")
 		assert.NotNil(t, err)
-	}
-
-	// Test GetString
-	{
+	})
+	t.Run("GetString", func(t *testing.T) {
 		mock := "foo"
 		c.Put(context.Background(), "mockString", mock)
 		val, err := config.GetString("mockString")
 		assert.Nil(t, err)
 		assert.Equal(t, mock, val)
+
 		_, err = config.GetString("mockString1")
 		assert.NotNil(t, err)
-	}
-	{
+	})
+	t.Run("GetInt", func(t *testing.T) {
 		mock := 1
 		c.Put(context.Background(), "mockInt", fmt.Sprint(mock))
 		val, err := config.GetInt("mockInt")
 		assert.Nil(t, err)
 		assert.Equal(t, mock, val)
+
 		_, err = config.GetInt("mockInt1")
 		assert.NotNil(t, err)
-	}
-
-	// Test Get
-	{
+	})
+	t.Run("Get", func(t *testing.T) {
 		c := config.Get("mock")
 		assert.NotNil(t, c)
-	}
+	})
 }
 
 // TestGetConfigGetDefault tests getting default value when
@@ -232,10 +226,7 @@ func TestGetConfigGetDefault(t *testing.T) {
 	}
 	config.SetGlobalKV(c)
 	config.Register(c)
-
-	// Test GetStringWithDefault
-	{
-		// get key successfully.
+	t.Run("GetStringWithDefault", func(t *testing.T) {
 		mock := "foo"
 		c.Put(context.Background(), "mockString", mock)
 		val := config.GetStringWithDefault("mockString", "otherValue")
@@ -245,10 +236,8 @@ func TestGetConfigGetDefault(t *testing.T) {
 		def := "myDefaultValue"
 		val = config.GetStringWithDefault("whatever", def)
 		assert.Equal(t, val, def)
-	}
-	// Test GetIntWithDefault
-	{
-		// get key successfully.
+	})
+	t.Run("GetIntWithDefault", func(t *testing.T) {
 		mockint := 555
 		c.Put(context.Background(), "mockInt", fmt.Sprint(mockint))
 		val := config.GetIntWithDefault("mockInt", 123)
@@ -265,55 +254,53 @@ func TestGetConfigGetDefault(t *testing.T) {
 		c.Put(context.Background(), "whatever", mockstr)
 		val = config.GetIntWithDefault("whatever", def)
 		assert.Equal(t, val, def)
-	}
+	})
 }
 
 func TestLoadYaml(t *testing.T) {
-	require := require.New(t)
 	err := config.Reload("../testdata/trpc_go.yaml", config.WithCodec("yaml"))
-	require.NotNil(err)
+	require.NotNil(t, err)
 
-	_, err = config.Load("../testdata/trpc_go.yaml.1", config.WithCodec("yaml"))
-	require.NotNil(err)
+	c, err := config.Load("../testdata/trpc_go.yaml.1", config.WithCodec("yaml"))
+	require.NotNil(t, err)
 
-	c, err := config.Load("../testdata/trpc_go.yaml", config.WithCodec("yaml"))
-	require.Nil(err, "failed to load config")
-	// out := &T{}
+	c, err = config.Load("../testdata/trpc_go.yaml", config.WithCodec("yaml"))
+	require.Nil(t, err, "failed to load config")
+
 	out := c.GetString("server.app", "")
 	t.Logf("return %+v", out)
-	require.Equal(out, "test", "app name is wrong")
+	require.Equal(t, out, "test", "app name is wrong")
 
 	buf := c.Bytes()
-	require.NotNil(buf)
+	require.NotNil(t, buf)
 	bytes.Contains(buf, []byte("test"))
 
 	err = config.Reload("../testdata/trpc_go.yaml")
-	require.Nil(err)
+	require.Nil(t, err)
 
-	require.Implements((*config.Config)(nil), c)
+	require.Implements(t, (*config.Config)(nil), c)
 }
 
 func TestLoadToml(t *testing.T) {
-	require := require.New(t)
 	rightPath := "../testdata/custom.toml"
 	wrongPath := "../testdata/custom.toml.1"
 
 	err := config.Reload(rightPath, config.WithCodec("toml"))
-	require.NotNil(err)
+	require.NotNil(t, err)
 
-	_, err = config.Load(wrongPath, config.WithCodec("toml"))
-	require.NotNil(err, "path not exist")
-	t.Logf("load with not exist path, err:%v", err)
+	c, err := config.Load(wrongPath, config.WithCodec("toml"))
+	require.NotNil(t, err, "path not exist")
+	t.Logf("load with not exist path, err: %v", err)
 
-	c, err := config.Load(rightPath, config.WithCodec("toml"))
-	require.Nil(err, "failed to load config")
-	// out := &T{}
+	c, err = config.Load(rightPath, config.WithCodec("toml"))
+	require.Nil(t, err, "failed to load config")
+
 	out := c.GetString("server.app", "")
 	t.Logf("return %s", out)
-	require.Equal(out, "test", "app name is wrong")
+	require.Equal(t, out, "test", "app name is wrong")
 
 	buf := c.Bytes()
-	require.NotNil(buf)
+	require.NotNil(t, buf)
 	bytes.Contains(buf, []byte("test"))
 
 	obj := struct {
@@ -325,288 +312,177 @@ func TestLoadToml(t *testing.T) {
 	}{}
 
 	err = c.Unmarshal(&obj)
-	require.Nil(err, "unmarshal should succ")
-	t.Logf("unmarshal struct:%+v", obj)
-	require.Equal(obj.Server.P, 1000)
-	require.Equal(len(obj.Server.Protocol), 2)
+	require.Nil(t, err, "unmarshal should succ")
+	t.Logf("unmarshal struct: %+v", obj)
+	require.Equal(t, obj.Server.P, 1000)
+	require.Equal(t, len(obj.Server.Protocol), 2)
 
 	err = config.Reload("../testdata/custom.toml", config.WithCodec("toml"))
-	require.Nil(err)
+	require.Nil(t, err)
 
-	require.Implements((*config.Config)(nil), c)
+	require.Implements(t, (*config.Config)(nil), c)
 }
 
 func TestLoadUnmarshal(t *testing.T) {
-	require := require.New(t)
-	config, err := config.Load("../testdata/trpc_go.yaml", config.WithCodec("yaml"))
-	require.Nil(err, "failed to load config")
-
+	c := mustLoad(t, "../testdata/trpc_go.yaml", config.WithCodec("yaml"))
 	out := &trpc.Config{}
-	err = config.Unmarshal(out)
-
-	require.Nil(err, "failed to load config")
+	err := c.Unmarshal(out)
+	require.Nil(t, err, "failed to load config")
 	t.Logf("return %+v", *out)
 }
 
 func TestLoadUnmarshalClient(t *testing.T) {
-	require := require.New(t)
-	config, err := config.Load("../testdata/client.yaml", config.WithCodec("yaml"))
-	require.Nil(err, "failed to load config")
+	c := mustLoad(t, "../testdata/trpc_go.yaml", config.WithCodec("yaml"))
 
 	out := client.DefaultClientConfig()
-	err = config.Unmarshal(&out)
+	err := c.Unmarshal(&out)
 	t.Logf("return %+v %s", out["Test.HelloServer"], err)
-	require.Nil(err, "failed to load client config")
+	require.Nil(t, err, "failed to load client config")
 }
 
 func TestGetString(t *testing.T) {
-	require := require.New(t)
-	c, err := config.Load("../testdata/trpc_go.yaml", config.WithCodec("yaml"))
-	require.Nil(err, "failed to load config")
-
-	out := c.GetString("server.app", "cc")
-	t.Logf("return %+v", out)
-	require.Equal("test", out, "app name is wrong")
-
-	out = c.GetString("server.app1", "cc")
-	t.Logf("return %+v", out)
-	require.Equal("cc", out, "app name is wrong")
-
-	out = c.GetString("server.admin.port", "cc")
-	t.Logf("return %+v", out)
-	require.Equal("9528", out, "app name is wrong")
-
-	out = c.GetString("server.admin", "cc")
-	t.Logf("return %+v", out)
-	require.Equal("cc", out, "app name is wrong")
+	c := mustLoad(t, "../testdata/trpc_go.yaml", config.WithCodec("yaml"))
+	t.Run("key is absent", func(t *testing.T) {
+		require.Equal(t, "cc", c.GetString("server.app1", "cc"), "app name is wrong")
+		require.Equal(t, "cc", c.GetString("server.admin", "cc"), "app name is wrong")
+	})
+	t.Run("key is present", func(t *testing.T) {
+		require.Equal(t, "test", c.GetString("server.app", "cc"), "app name is wrong")
+		require.Equal(t, "9528", c.GetString("server.admin.port", "cc"), "app name is wrong")
+	})
 }
 
 func TestGetBool(t *testing.T) {
-	require := require.New(t)
-	c, err := config.Load("../testdata/trpc_go.yaml", config.WithCodec("yaml"))
-	require.Nil(err, "failed to load config")
-
-	out := c.GetBool("server.admin_port123", false)
-	t.Logf("return %+v", out)
-	require.Equal(false, out)
-
-	out = c.GetBool("server.app", false)
-	t.Logf("return %+v", out)
-	require.Equal(false, out)
+	c := mustLoad(t, "../testdata/trpc_go.yaml", config.WithCodec("yaml"))
+	require.False(t, c.GetBool("server.admin_port123", false))
+	require.False(t, c.GetBool("server.app", false))
 }
 
 func TestGet(t *testing.T) {
-	require := require.New(t)
-	c, err := config.Load("../testdata/trpc_go.yaml", config.WithCodec("yaml"))
-	require.Nil(err, "failed to load config")
-
-	out := c.Get("server.admin_port123", 10001)
-	t.Logf("return %+v", out)
-	require.Equal(10001, out)
+	c := mustLoad(t, "../testdata/trpc_go.yaml", config.WithCodec("yaml"))
+	const defaultValue = 10001
+	require.Equal(t, defaultValue, c.Get("server.admin_port123", defaultValue))
 }
 
 func TestGetUint(t *testing.T) {
-	require := require.New(t)
-	c, err := config.Load("../testdata/trpc_go.yaml", config.WithCodec("yaml"))
-	require.Nil(err, "failed to load config")
+	c := mustLoad(t, "../testdata/trpc_go.yaml", config.WithCodec("yaml"))
 
-	{
+	t.Run("uint", func(t *testing.T) {
 		actual := uint(9528)
-		dft := uint(10001)
-
-		out := c.GetUint("server.admin.port", dft)
-		t.Logf("return %+v", out)
-		require.Equal(actual, out)
-
-		out = c.GetUint("server.admin_port123", dft)
-		t.Logf("return %+v", out)
-		require.Equal(dft, out)
-
-		out = c.GetUint("server.app", dft)
-		t.Logf("return %+v", out)
-		require.Equal(dft, out)
-	}
-
-	{
+		defaultValue := uint(10001)
+		require.Equal(t, actual, c.GetUint("server.admin.port", defaultValue))
+		require.Equal(t, defaultValue, c.GetUint("server.admin_port123", defaultValue))
+		require.Equal(t, defaultValue, c.GetUint("server.app", defaultValue))
+	})
+	t.Run("uint32", func(t *testing.T) {
 		actual := uint32(9528)
-		dft := uint32(10001)
-
-		out := c.GetUint32("server.admin.port", dft)
-		t.Logf("return %+v", out)
-		require.Equal(actual, out)
-
-		out = c.GetUint32("server.admin_port123", dft)
-		t.Logf("return %+v", out)
-		require.Equal(dft, out)
-
-		out = c.GetUint32("server.app", dft)
-		t.Logf("return %+v", out)
-		require.Equal(dft, out)
-	}
-
-	{
+		defaultValue := uint32(10001)
+		require.Equal(t, actual, c.GetUint32("server.admin.port", defaultValue))
+		require.Equal(t, defaultValue, c.GetUint32("server.admin_port123", defaultValue))
+		require.Equal(t, defaultValue, c.GetUint32("server.app", defaultValue))
+	})
+	t.Run("uint64", func(t *testing.T) {
 		actual := uint64(9528)
-		dft := uint64(10001)
-
-		out := c.GetUint64("server.admin.port", dft)
-		t.Logf("return %+v", out)
-		require.Equal(actual, out)
-
-		out = c.GetUint64("server.admin_port123", dft)
-		t.Logf("return %+v", out)
-		require.Equal(dft, out)
-
-		out = c.GetUint64("server.app", dft)
-		t.Logf("return %+v", out)
-		require.Equal(dft, out)
-	}
-
+		defaultValue := uint64(10001)
+		require.Equal(t, actual, c.GetUint64("server.admin.port", defaultValue))
+		require.Equal(t, defaultValue, c.GetUint64("server.admin_port123", defaultValue))
+		require.Equal(t, defaultValue, c.GetUint64("server.app", defaultValue))
+	})
 }
 
 func TestGetInt(t *testing.T) {
-	require := require.New(t)
-	c, err := config.Load("../testdata/trpc_go.yaml", config.WithCodec("yaml"))
-	require.Nil(err, "failed to load config")
-
-	{
+	c := mustLoad(t, "../testdata/trpc_go.yaml", config.WithCodec("yaml"))
+	t.Run("int", func(t *testing.T) {
 		actual := 9528
-		dft := 10001
-
-		out := c.GetInt("server.admin.port", dft)
-		t.Logf("return %+v", out)
-		require.Equal(actual, out)
-
-		out = c.GetInt("server.admin_port123", dft)
-		t.Logf("return %+v", out)
-		require.Equal(dft, out)
-
-		out = c.GetInt("server.app", dft)
-		t.Logf("return %+v", out)
-		require.Equal(dft, out)
-	}
-
-	{
+		defaultValue := 10001
+		require.Equal(t, actual, c.GetInt("server.admin.port", defaultValue))
+		require.Equal(t, defaultValue, c.GetInt("server.admin_port123", defaultValue))
+		require.Equal(t, defaultValue, c.GetInt("server.app", defaultValue))
+	})
+	t.Run("int32", func(t *testing.T) {
 		actual := int32(9528)
-		dft := int32(10001)
-
-		out := c.GetInt32("server.admin.port", dft)
-		t.Logf("return %+v", out)
-		require.Equal(actual, out)
-
-		out = c.GetInt32("server.admin_port123", dft)
-		t.Logf("return %+v", out)
-		require.Equal(dft, out)
-
-		out = c.GetInt32("server.app", dft)
-		t.Logf("return %+v", out)
-		require.Equal(dft, out)
-	}
-
-	{
+		defaultValue := int32(10001)
+		require.Equal(t, actual, c.GetInt32("server.admin.port", defaultValue))
+		require.Equal(t, defaultValue, c.GetInt32("server.admin_port123", defaultValue))
+		require.Equal(t, defaultValue, c.GetInt32("server.app", defaultValue))
+	})
+	t.Run("int64", func(t *testing.T) {
 		actual := int64(9528)
-		dft := int64(10001)
-
-		out := c.GetInt64("server.admin.port", dft)
-		t.Logf("return %+v", out)
-		require.Equal(actual, out)
-
-		out = c.GetInt64("server.admin_port123", dft)
-		t.Logf("return %+v", out)
-		require.Equal(dft, out)
-
-		out = c.GetInt64("server.app", dft)
-		t.Logf("return %+v", out)
-		require.Equal(dft, out)
-	}
-
+		defaultValue := int64(10001)
+		require.Equal(t, actual, c.GetInt64("server.admin.port", defaultValue))
+		require.Equal(t, defaultValue, c.GetInt64("server.admin_port123", defaultValue))
+		require.Equal(t, defaultValue, c.GetInt64("server.app", defaultValue))
+	})
 }
 
 func TestGetFloat(t *testing.T) {
-	require := require.New(t)
-	c, err := config.Load("../testdata/trpc_go.yaml", config.WithCodec("yaml"))
-	require.Nil(err, "failed to load config")
-
-	{
+	c := mustLoad(t, "../testdata/trpc_go.yaml", config.WithCodec("yaml"))
+	t.Run("float64", func(t *testing.T) {
 		actual := float64(9528)
-		dft := float64(1.0)
-
-		out := c.GetFloat64("server.admin.port", dft)
-		t.Logf("return %+v", out)
-		require.Equal(actual, out)
-
-		out = c.GetFloat64("server.admin_port123", dft)
-		t.Logf("return %+v", out)
-		require.Equal(dft, out)
-
-		out = c.GetFloat64("server.app", dft)
-		t.Logf("return %+v", out)
-		require.Equal(dft, out)
-
-	}
-
-	{
+		defaultValue := 1.0
+		require.Equal(t, actual, c.GetFloat64("server.admin.port", defaultValue))
+		require.Equal(t, defaultValue, c.GetFloat64("server.admin_port123", defaultValue))
+		require.Equal(t, defaultValue, c.GetFloat64("server.app", defaultValue))
+	})
+	t.Run("float32", func(t *testing.T) {
 		actual := float32(9528)
-		dft := float32(1.0)
-
-		out := c.GetFloat32("server.admin.port", dft)
-		t.Logf("return %+v", out)
-		require.Equal(actual, out)
-
-		out = c.GetFloat32("server.admin_port123", dft)
-		t.Logf("return %+v", out)
-		require.Equal(dft, out)
-
-		out = c.GetFloat32("server.app", dft)
-		t.Logf("return %+v", out)
-		require.Equal(dft, out)
-
-	}
+		defaultValue := float32(1.0)
+		require.Equal(t, actual, c.GetFloat32("server.admin.port", defaultValue))
+		require.Equal(t, defaultValue, c.GetFloat32("server.admin_port123", defaultValue))
+		require.Equal(t, defaultValue, c.GetFloat32("server.app", defaultValue))
+	})
 }
 
 func TestIsSet(t *testing.T) {
-	require := require.New(t)
-	c, err := config.Load("../testdata/trpc_go.yaml", config.WithCodec("yaml"))
-	require.Nil(err, "failed to load config")
-
-	out := c.IsSet("server.admin.port")
-	require.Equal(true, out)
-	out = c.IsSet("server.admin_port1")
-	require.Equal(false, out)
+	c := mustLoad(t, "../testdata/trpc_go.yaml", config.WithCodec("yaml"))
+	require.True(t, c.IsSet("server.admin.port"))
+	require.False(t, c.IsSet("server.admin_port1"))
 }
 
 func TestUnmarshal(t *testing.T) {
-	require := require.New(t)
-	c, err := config.Load("../testdata/trpc_go.yaml", config.WithCodec("yaml"), config.WithProvider("file"))
-	require.Nil(err, "failed to load config")
+	c := mustLoad(t, "../testdata/trpc_go.yaml", config.WithCodec("yaml"), config.WithProvider("file"))
 	var b struct {
 		Server struct {
 			App string
 		}
 	}
-	err = c.Unmarshal(&b)
-	require.Nil(err)
-	require.Equal("test", b.Server.App, "failed to read item")
+	err := c.Unmarshal(&b)
+	require.Nil(t, err)
+	require.Equal(t, "test", b.Server.App, "failed to read item")
+}
+
+func mustLoad(t *testing.T, path string, opts ...config.LoadOption) config.Config {
+	t.Helper()
+
+	c, err := config.Load(path, opts...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
 }
 
 func TestLoad(t *testing.T) {
-	c, err := config.Load("../testdata/trpc_go.yaml2", config.WithCodec("yaml"), config.WithProvider("file"))
-	assert.NotNil(t, err)
-	assert.Nil(t, c)
-
-	c, err = config.Load("../testdata/trpc_go.yaml", config.WithCodec("yaml1"))
-	assert.NotNil(t, err)
-	assert.Nil(t, c)
-
-	c, err = config.Load("../testdata/trpc_go.yaml", config.WithProvider("etcd"))
-	assert.NotNil(t, err)
-	assert.Nil(t, c)
+	t.Run("nonexistent config path", func(t *testing.T) {
+		c, err := config.Load("../testdata/trpc_go.yaml2", config.WithCodec("yaml"), config.WithProvider("file"))
+		require.Contains(t, errs.Msg(err), "failed to load")
+		require.Nil(t, c)
+	})
+	t.Run("nonexistent codec ", func(t *testing.T) {
+		c, err := config.Load("../testdata/trpc_go.yaml", config.WithCodec("yaml1"))
+		require.ErrorIs(t, err, config.ErrCodecNotExist)
+		require.Nil(t, c)
+	})
+	t.Run("nonexistent provider", func(t *testing.T) {
+		c, err := config.Load("../testdata/trpc_go.yaml", config.WithProvider("etcd"))
+		require.ErrorIs(t, err, config.ErrProviderNotExist)
+		require.Nil(t, c)
+	})
 }
 
 func TestProvider(t *testing.T) {
-	require := require.New(t)
 	p := &config.FileProvider{}
-	require.Equal("file", p.Name())
+	require.Equal(t, "file", p.Name())
+
 	config.RegisterProvider(p)
-	pp := config.GetProvider("file")
-	require.Equal(p, pp)
+	require.Equal(t, p, config.GetProvider("file"))
 }

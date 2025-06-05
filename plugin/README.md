@@ -1,10 +1,12 @@
 English | [中文](README.zh_CN.md)
 
+[TOC]
+
 # Plugin
 
 tRPC-Go is designed with a plugin architecture concept, which allows the framework to connect with various ecosystems through plugins, providing openness and extensibility.
 The plugin package is used to manage plugins that need to be loaded based on configurations.
-Plugins that do not rely on configuration are relatively simple, such as [codec plugins](/codec/README.md), which will not be discussed here.
+Plugins that do not rely on configuration are relatively simple, such as [codec plugins](../codec/README.md), which will not be discussed here.
 Therefore, we will first introduce the design of the plugin package and then explain how to develop a plugin that needs to be loaded based on configuration.
 
 ## Design of the `plugin` package
@@ -43,33 +45,34 @@ According to their functions, the framework provides the following five types of
 
 ## How to develop a plugin that needs to be loaded based on configuration
 
-Developing a plugin that needs to be loaded based on configuration usually involves implementing the plugin and configuring the plugin. [A runnable specific example](/examples/features/plugin)
+Developing a plugin that needs to be loaded based on configuration usually involves implementing the plugin and configuring the plugin. [A runnable specific example](../examples/features/plugin)
 
 ### Implementing the plugin
 
 1. The plugin implements the `plugin.Factory` interface.
 
-```go
-// Factory is a unified abstract for the plugin factory. External plugins need to implement this interface to generate specific plugins and register them in specific plugin types.
-type Factory interface {
-    // Type is the type of the plugin, such as selector, log, config, tracing.
-    Type() string
-    // Setup loads the plugin based on the configuration node. Users need to define the specific plugin configuration data structure first.
-    Setup(name string, configDec Decoder) error
-}
-```
+    ```go
+    // Factory is a unified abstract for the plugin factory. External plugins need to implement this interface to generate specific plugins and register them in specific plugin types.
+    type Factory interface {
+        // Type is the type of the plugin, such as selector, log, config, tracing.
+        Type() string
+        // Setup loads the plugin based on the configuration node. Users need to define the specific plugin configuration data structure first.
+        Setup(name string, configDec Decoder) error
+    }
+    ```
 
 2. The plugin calls `plugin.Register` to register itself with the `plugin` package.
 
-```go
-// Register registers the plugin factory. You can specify the plugin name yourself, and different factory instances can be registered for the same implementation with different configurations.
-func Register(name string, p Factory)
-```
+    ```go
+    // Register registers the plugin factory. You can specify the plugin name yourself, and different factory instances can be registered for the same implementation with different configurations.
+    func Register(name string, p Factory)
+    ```
 
 ### Configuring the plugin
 
 1. Import the plugin's package in the `main` package.
 2. Configure the plugin under the `plugins` field in the configuration file. The configuration file format is:
+
 ```yaml
 # Plugin configuration
 plugins:
@@ -92,6 +95,7 @@ plugins:
       # Plugin detailed configuration, please refer to the instructions of each plugin for details
       ....
 ```
+
 The above configuration defines two plugin types and four plugins.
 There are logger1 and logger2 plugins under the log type.
 There are local-file and remote-file plugins under the config type.
@@ -128,10 +132,23 @@ The framework will first ensure that all strong dependencies are satisfied, and 
 For example, in the following example, the plugin initialization strongly depends on the selector type plugin a and weakly depends on the config type plugin b.
 
 ```go
+// Depender is a "strong dependency" interface.
+// If plugin a "strongly" depends on plugin b, then b must exist,
+// a will be initialized after b is initialized.
 func (p *Plugin) DependsOn() []string {
+    // DependsOn returns a list of plugins that are relied upon.
+    // The list elements are in the format of "type-name" such as [ "selector-polaris" ].
+    // In particular, "type-*" represents all plugins of this type such as ["selector-*"], version >= 0.19.0..
     return []string{"selector-a"}
 }
+
+// FlexDepender is a "weak dependency" interface.
+// If plugin a "weakly" depends on plugin b, and b does exist,
+// then a will be initialized after b is initialized.
 func (p *Plugin) FlexDependsOn() []string {
+    // FlexDependsOn returns a list of plugins that are relied upon.
+    // The list elements are in the format of "type-name" such as [ "selector-polaris" ].
+    // In particular, "type-*" represents all plugins of this type such as ["selector-*"], version >= 0.19.0..
     return []string{"config-b"}
 }
 ```

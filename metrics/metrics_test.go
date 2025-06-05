@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"trpc.group/trpc-go/trpc-go/metrics"
 )
 
@@ -182,6 +183,39 @@ func TestSetGauge(t *testing.T) {
 			metrics.SetGauge(tt.args.key, tt.args.value)
 		})
 	}
+}
+
+func TestGaugeAdd(t *testing.T) {
+	metrics.RegisterMetricsSink(metrics.NewConsoleSink())
+	g := newGauge(metrics.Gauge("abc"))
+	g.Set(3.2)
+	g.Add(4.2)
+	g.Add(5.2)
+}
+
+type gauge struct {
+	ig  metrics.IGauge
+	mu  sync.Mutex
+	val float64
+}
+
+func newGauge(ig metrics.IGauge) *gauge {
+	return &gauge{ig: ig}
+}
+
+func (g *gauge) Set(v float64) {
+	g.mu.Lock()
+	g.val = v
+	g.ig.Set(g.val)
+	g.mu.Unlock()
+
+}
+
+func (g *gauge) Add(v float64) {
+	g.mu.Lock()
+	g.val += v
+	g.ig.Set(g.val)
+	g.mu.Unlock()
 }
 
 func TestRecordTimer(t *testing.T) {

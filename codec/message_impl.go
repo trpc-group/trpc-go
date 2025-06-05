@@ -15,6 +15,7 @@ package codec
 
 import (
 	"context"
+	"errors"
 	"net"
 	"strings"
 	"time"
@@ -259,10 +260,16 @@ func (m *msg) WithClientRPCName(s string) {
 }
 
 func (m *msg) updateMethodNameUsingRPCName(s string) {
+	// If rpc name is of trpc format, retrieve method name from rpc name
+	// according to https://git.woa.com/trpc/trpc-proposal/blob/master/A15-metrics-rules.md.
 	if rpcNameIsTRPCForm(s) {
 		m.WithCalleeMethod(methodFromRPCName(s))
 		return
 	}
+	// Otherwise set method name as rpc name if the original value is empty.
+	// Reference:
+	//  https://git.woa.com/trpc/trpc-proposal/blob/master/A15-metrics-rules.md
+	//  https://git.woa.com/trpc/trpc-proposal/merge_requests/90
 	if m.CalleeMethod() == "" {
 		m.WithCalleeMethod(s)
 	}
@@ -360,15 +367,24 @@ func (m *msg) ServerRspErr() *errs.Error {
 	if m.serverRspErr == nil {
 		return nil
 	}
+	// First, perform a quick check using type assertion,
+	// then use errors.As for a more thorough check.
 	e, ok := m.serverRspErr.(*errs.Error)
-	if !ok {
-		return &errs.Error{
-			Type: errs.ErrorTypeBusiness,
-			Code: errs.RetUnknown,
-			Msg:  m.serverRspErr.Error(),
-		}
+	if ok {
+		return e
 	}
-	return e
+	if errors.As(m.serverRspErr, &e) {
+		// If it is not *err.Error itself,
+		// but it is a wrapped *err.Error, preserve the wrapped message.
+		var err errs.Error
+		if e != nil {
+			err = *e // Make a copy instead of modifying the original *err.Error.
+		}
+		err.Msg = m.serverRspErr.Error()
+		return &err
+	}
+	// m.serverRspErr is neither of type *errs.Error, nor is it a wrapped *errs.Error.
+	return errs.New(errs.RetUnknown, m.serverRspErr.Error()).(*errs.Error)
 }
 
 // WithServerRspErr sets server response error.
@@ -391,28 +407,28 @@ func (m *msg) ClientRspErr() error {
 	return m.clientRspErr
 }
 
-// WithClientRspErr sets client response err, this method will called
+// WithClientRspErr sets client response err, this method will called.
 // when client parse response package.
 func (m *msg) WithClientRspErr(e error) {
 	m.clientRspErr = e
 }
 
-// ServerReqHead returns the package head of request
+// ServerReqHead returns the package head of request.
 func (m *msg) ServerReqHead() interface{} {
 	return m.serverReqHead
 }
 
-// WithServerReqHead sets the package head of request
+// WithServerReqHead sets the package head of request.
 func (m *msg) WithServerReqHead(h interface{}) {
 	m.serverReqHead = h
 }
 
-// ServerRspHead returns the package head of response
+// ServerRspHead returns the package head of response.
 func (m *msg) ServerRspHead() interface{} {
 	return m.serverRspHead
 }
 
-// WithServerRspHead sets the package head returns to upstream
+// WithServerRspHead sets the package head returns to upstream.
 func (m *msg) WithServerRspHead(h interface{}) {
 	m.serverRspHead = h
 }
@@ -579,9 +595,17 @@ func (m *msg) CallType() RequestType {
 	return m.callType
 }
 
-// WithNewMessage create a new empty message, and put it into ctx,
+// WithNewMessage creates a new empty message, retrieves it from the message pool,
+// and associates it with the provided context.
+//
+// Important: The returned message is obtained from a pool to optimize memory usage.
+// Users are responsible for manually invoking codec.PutBackMessage(msg) after use.
+// Failure to return the message to the pool doesn't result in a traditional memory leak,
+// where memory is never reclaimed. Instead, it may lead to a gradual increase in memory
+// footprint over time, as messages are not being recycled as efficiently. This can
+// eventually lead to higher than normal memory consumption, although the memory
+// may still be eventually released.
 func WithNewMessage(ctx context.Context) (context.Context, Msg) {
-
 	m := msgPool.Get().(*msg)
 	ctx = context.WithValue(ctx, ContextKeyMessage, m)
 	m.context = ctx
@@ -589,7 +613,7 @@ func WithNewMessage(ctx context.Context) (context.Context, Msg) {
 }
 
 // PutBackMessage return struct Message to sync pool,
-// and reset all the members of Message to default
+// and reset all the members of Message to default.
 func PutBackMessage(sourceMsg Msg) {
 	m, ok := sourceMsg.(*msg)
 	if !ok {
@@ -601,104 +625,107 @@ func PutBackMessage(sourceMsg Msg) {
 
 // WithCloneContextAndMessage creates a new context, then copy the message of current context
 // into new context, this method will return the new context and message for stream mod.
-func WithCloneContextAndMessage(ctx context.Context) (context.Context, Msg) {
-	newMsg := msgPool.Get().(*msg)
+//
+// Important: The returned message is obtained from a pool to optimize memory usage.
+// Users are responsible for manually invoking codec.PutBackMessage(msg) after use.
+// Failure to return the message to the pool doesn't result in a traditional memory leak,
+// where memory is never reclaimed. Instead, it may lead to a gradual increase in memory
+// footprint over time, as messages are not being recycled as efficiently. This can
+// eventually lead to higher than normal memory consumption, although the memory
+// may still be eventually released.
+func WithCloneContextAndMessage(oldCtx context.Context) (context.Context, Msg) {
 	newCtx := context.Background()
-	val := ctx.Value(ContextKeyMessage)
-	m, ok := val.(*msg)
-	if !ok {
-		newCtx = context.WithValue(newCtx, ContextKeyMessage, newMsg)
-		newMsg.context = newCtx
-		return newCtx, newMsg
+	newMsg := msgPool.Get().(*msg)
+	if oldMsg, ok := oldCtx.Value(ContextKeyMessage).(*msg); ok {
+		copyCommonMessage(oldMsg, newMsg)
+		copyServerToServerMessage(oldMsg, newMsg)
 	}
 	newCtx = context.WithValue(newCtx, ContextKeyMessage, newMsg)
 	newMsg.context = newCtx
-	copyCommonMessage(m, newMsg)
-	copyServerToServerMessage(m, newMsg)
 	return newCtx, newMsg
 }
 
 // copyCommonMessage copy common data of message.
-func copyCommonMessage(m *msg, newMsg *msg) {
+func copyCommonMessage(oldMsg *msg, newMsg *msg) {
 	// Do not copy compress type here, as it will cause subsequence RPC calls to inherit the upstream
 	// compress type which is not the expected behavior. Compress type should not be propagated along
 	// the entire RPC invocation chain.
-	newMsg.frameHead = m.frameHead
-	newMsg.requestTimeout = m.requestTimeout
-	newMsg.serializationType = m.serializationType
-	newMsg.serverRPCName = m.serverRPCName
-	newMsg.clientRPCName = m.clientRPCName
-	newMsg.serverReqHead = m.serverReqHead
-	newMsg.serverRspHead = m.serverRspHead
-	newMsg.dyeing = m.dyeing
-	newMsg.dyeingKey = m.dyeingKey
-	newMsg.serverMetaData = m.serverMetaData.Clone()
-	newMsg.logger = m.logger
-	newMsg.namespace = m.namespace
-	newMsg.envName = m.envName
-	newMsg.setName = m.setName
-	newMsg.envTransfer = m.envTransfer
-	newMsg.commonMeta = m.commonMeta.Clone()
+	newMsg.frameHead = oldMsg.frameHead
+	newMsg.requestTimeout = oldMsg.requestTimeout
+	newMsg.serializationType = oldMsg.serializationType
+	newMsg.serverRPCName = oldMsg.serverRPCName
+	newMsg.clientRPCName = oldMsg.clientRPCName
+	newMsg.serverReqHead = oldMsg.serverReqHead
+	newMsg.serverRspHead = oldMsg.serverRspHead
+	newMsg.dyeing = oldMsg.dyeing
+	newMsg.dyeingKey = oldMsg.dyeingKey
+	newMsg.serverMetaData = oldMsg.serverMetaData.Clone()
+	newMsg.logger = oldMsg.logger
+	newMsg.namespace = oldMsg.namespace
+	newMsg.envName = oldMsg.envName
+	newMsg.setName = oldMsg.setName
+	newMsg.envTransfer = oldMsg.envTransfer
+	newMsg.commonMeta = oldMsg.commonMeta.Clone()
 }
 
-// copyClientMessage copy the message transferred from server to client.
-func copyServerToClientMessage(m *msg, newMsg *msg) {
-	newMsg.clientMetaData = m.serverMetaData.Clone()
-	// clone this message for downstream client, so caller is equal to callee.
-	newMsg.callerServiceName = m.calleeServiceName
-	newMsg.callerApp = m.calleeApp
-	newMsg.callerServer = m.calleeServer
-	newMsg.callerService = m.calleeService
-	newMsg.callerMethod = m.calleeMethod
+// copyServerToClientMessage copy the message transferred from server to client.
+func copyServerToClientMessage(oldMsg *msg, newMsg *msg) {
+	newMsg.clientMetaData = oldMsg.serverMetaData.Clone()
+	// Clone this message for downstream client, so caller is equal to callee.
+	newMsg.callerServiceName = oldMsg.calleeServiceName
+	newMsg.callerApp = oldMsg.calleeApp
+	newMsg.callerServer = oldMsg.calleeServer
+	newMsg.callerService = oldMsg.calleeService
+	newMsg.callerMethod = oldMsg.calleeMethod
 }
 
-func copyServerToServerMessage(m *msg, newMsg *msg) {
-	newMsg.callerServiceName = m.callerServiceName
-	newMsg.callerApp = m.callerApp
-	newMsg.callerServer = m.callerServer
-	newMsg.callerService = m.callerService
-	newMsg.callerMethod = m.callerMethod
+func copyServerToServerMessage(oldMsg *msg, newMsg *msg) {
+	newMsg.callerServiceName = oldMsg.callerServiceName
+	newMsg.callerApp = oldMsg.callerApp
+	newMsg.callerServer = oldMsg.callerServer
+	newMsg.callerService = oldMsg.callerService
+	newMsg.callerMethod = oldMsg.callerMethod
 
-	newMsg.calleeServiceName = m.calleeServiceName
-	newMsg.calleeService = m.calleeService
-	newMsg.calleeApp = m.calleeApp
-	newMsg.calleeServer = m.calleeServer
-	newMsg.calleeMethod = m.calleeMethod
+	newMsg.calleeServiceName = oldMsg.calleeServiceName
+	newMsg.calleeService = oldMsg.calleeService
+	newMsg.calleeApp = oldMsg.calleeApp
+	newMsg.calleeServer = oldMsg.calleeServer
+	newMsg.calleeMethod = oldMsg.calleeMethod
 }
 
 // WithCloneMessage copy a new message and put into context, each rpc call should
 // create a new message, this method will be called by client stub.
+//
+// Important: The returned message is obtained from a pool to optimize memory usage.
+// Users are responsible for manually invoking codec.PutBackMessage(msg) after use.
+// Failure to return the message to the pool doesn't result in a traditional memory leak,
+// where memory is never reclaimed. Instead, it may lead to a gradual increase in memory
+// footprint over time, as messages are not being recycled as efficiently. This can
+// eventually lead to higher than normal memory consumption, although the memory
+// may still be eventually released.
 func WithCloneMessage(ctx context.Context) (context.Context, Msg) {
 	newMsg := msgPool.Get().(*msg)
-	val := ctx.Value(ContextKeyMessage)
-	m, ok := val.(*msg)
-	if !ok {
-		ctx = context.WithValue(ctx, ContextKeyMessage, newMsg)
-		newMsg.context = ctx
-		return ctx, newMsg
+	if oldMsg, ok := ctx.Value(ContextKeyMessage).(*msg); ok {
+		copyCommonMessage(oldMsg, newMsg)
+		copyServerToClientMessage(oldMsg, newMsg)
 	}
 	ctx = context.WithValue(ctx, ContextKeyMessage, newMsg)
 	newMsg.context = ctx
-	copyCommonMessage(m, newMsg)
-	copyServerToClientMessage(m, newMsg)
 	return ctx, newMsg
 }
 
 // Message returns the message of context.
 func Message(ctx context.Context) Msg {
-	val := ctx.Value(ContextKeyMessage)
-	m, ok := val.(*msg)
-	if !ok {
-		return &msg{context: ctx}
+	if m, ok := ctx.Value(ContextKeyMessage).(*msg); ok {
+		return m
 	}
-	return m
+	return &msg{context: ctx}
 }
 
 // EnsureMessage returns context and message, if there is a message in context,
 // returns the original one, if not, returns a new one.
 func EnsureMessage(ctx context.Context) (context.Context, Msg) {
-	val := ctx.Value(ContextKeyMessage)
-	if m, ok := val.(*msg); ok {
+	if m, ok := ctx.Value(ContextKeyMessage).(*msg); ok {
 		return ctx, m
 	}
 	return WithNewMessage(ctx)
@@ -738,46 +765,8 @@ func getAppServerService(s string) (app, server, service string) {
 }
 
 // methodFromRPCName returns the method parsed from rpc string.
+// Reference:
+// https://git.woa.com/trpc/trpc-proposal/blob/master/A15-metrics-rules.md
 func methodFromRPCName(s string) string {
 	return s[strings.LastIndex(s, "/")+1:]
-}
-
-// rpcNameIsTRPCForm checks whether the given string is of trpc form.
-// It is equivalent to:
-//
-//	var r = regexp.MustCompile(`^/[^/.]+\.[^/]+/[^/.]+$`)
-//
-//	func rpcNameIsTRPCForm(s string) bool {
-//		return r.MatchString(s)
-//	}
-//
-// But regexp is much slower than the current version.
-// Refer to BenchmarkRPCNameIsTRPCForm in message_bench_test.go.
-func rpcNameIsTRPCForm(s string) bool {
-	if len(s) == 0 {
-		return false
-	}
-	if s[0] != '/' { // ^/
-		return false
-	}
-	const start = 1
-	firstDot := strings.Index(s[start:], ".")
-	if firstDot == -1 || firstDot == 0 { // [^.]+\.
-		return false
-	}
-	if strings.Contains(s[start:start+firstDot], "/") { // [^/]+\.
-		return false
-	}
-	secondSlash := strings.Index(s[start+firstDot:], "/")
-	if secondSlash == -1 || secondSlash == 1 { // [^/]+/
-		return false
-	}
-	if start+firstDot+secondSlash == len(s)-1 { // The second slash should not be the last character.
-		return false
-	}
-	const offset = 1
-	if strings.ContainsAny(s[start+firstDot+secondSlash+offset:], "/.") { // [^/.]+$
-		return false
-	}
-	return true
 }

@@ -19,11 +19,11 @@ import (
 	"strconv"
 	"time"
 
-	"trpc.group/trpc-go/trpc-go/internal/report"
-	"trpc.group/trpc-go/trpc-go/log/rollwriter"
-
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"trpc.group/trpc-go/trpc-go/internal/report"
+	"trpc.group/trpc-go/trpc-go/log/rollwriter"
 )
 
 var defaultConfig = []OutputConfig{
@@ -33,12 +33,6 @@ var defaultConfig = []OutputConfig{
 		Formatter: "console",
 	},
 }
-
-// Some ZapCore constants.
-const (
-	ConsoleZapCore = "console"
-	FileZapCore    = "file"
-)
 
 // Levels is the map from string to zapcore.Level.
 var Levels = map[string]zapcore.Level{
@@ -75,21 +69,31 @@ func NewZapLog(c Config) Logger {
 
 // NewZapLogWithCallerSkip creates a trpc default Logger from zap.
 func NewZapLogWithCallerSkip(cfg Config, callerSkip int) Logger {
-	var (
-		cores  []zapcore.Core
-		levels []zap.AtomicLevel
-	)
+	cores := make([]zapcore.Core, 0, len(cfg))
+	levels := make([]zap.AtomicLevel, 0, len(cfg))
 	for _, c := range cfg {
-		writer := GetWriter(c.Writer)
-		if writer == nil {
-			panic("log: writer core: " + c.Writer + " no registered")
+		var (
+			core  zapcore.Core
+			level zap.AtomicLevel
+			err   error
+		)
+		// The CoreLevelNewer interface always takes a higher precedence.
+		if coreLevelNewer, ok := GetCoreLevelNewer(c.Writer); ok {
+			core, level, err = coreLevelNewer.NewCoreLevel(c)
+		} else if coreNewer, ok := GetCoreNewer(c.Writer); ok {
+			core, err = coreNewer.New(c)
+			level = zap.NewAtomicLevelAt(zapcore.LevelOf(core))
+		} else {
+			panic(fmt.Sprintf("log: getting CoreNewer failed: %s has not been registered yet", c.Writer))
 		}
-		decoder := &Decoder{OutputConfig: &c}
-		if err := writer.Setup(c.Writer, decoder); err != nil {
-			panic("log: writer core: " + c.Writer + " setup fail: " + err.Error())
+		if err != nil {
+			panic(fmt.Sprintf("log: newing core from %s config failed: %v", c.Writer, err))
 		}
-		cores = append(cores, decoder.Core)
-		levels = append(levels, decoder.ZapLevel)
+		if c.LoggerName != "" {
+			core = core.With([]zapcore.Field{zap.String("logger_name", c.LoggerName)})
+		}
+		cores = append(cores, core)
+		levels = append(levels, level)
 	}
 	return &zapLog{
 		levels: levels,
@@ -119,30 +123,23 @@ func newEncoder(c *OutputConfig) zapcore.Encoder {
 	if c.EnableColor {
 		encoderCfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	}
-	if newFormatEncoder, ok := formatEncoders[c.Formatter]; ok {
-		return newFormatEncoder(encoderCfg)
+	switch c.Formatter {
+	case "console":
+		return zapcore.NewConsoleEncoder(encoderCfg)
+	case "json":
+		return zapcore.NewJSONEncoder(encoderCfg)
+	default:
+		return zapcore.NewConsoleEncoder(encoderCfg)
 	}
-	// Defaults to console encoder.
-	return zapcore.NewConsoleEncoder(encoderCfg)
-}
-
-var formatEncoders = map[string]NewFormatEncoder{
-	"console": zapcore.NewConsoleEncoder,
-	"json":    zapcore.NewJSONEncoder,
-}
-
-// NewFormatEncoder is the function type for creating a format encoder out of an encoder config.
-type NewFormatEncoder func(zapcore.EncoderConfig) zapcore.Encoder
-
-// RegisterFormatEncoder registers a NewFormatEncoder with the specified formatName key.
-// The existing formats include "console" and "json", but you can override these format encoders
-// or provide a new custom one.
-func RegisterFormatEncoder(formatName string, newFormatEncoder NewFormatEncoder) {
-	formatEncoders[formatName] = newFormatEncoder
 }
 
 // GetLogEncoderKey gets user defined log output name, uses defKey if empty.
+// If key is "none", return empty string to disable the corresponding field.
 func GetLogEncoderKey(defKey, key string) string {
+	const none = "none"
+	if key == none {
+		return ""
+	}
 	if key == "" {
 		return defKey
 	}
@@ -168,6 +165,7 @@ func newFileCore(c *OutputConfig) (zapcore.Core, zap.AtomicLevel, error) {
 	if c.WriteConfig.RollType != RollBySize {
 		opts = append(opts, rollwriter.WithRotationTime(c.WriteConfig.TimeUnit.Format()))
 	}
+
 	writer, err := rollwriter.NewRollWriter(c.WriteConfig.Filename, opts...)
 	if err != nil {
 		return nil, zap.AtomicLevel{}, err
@@ -252,6 +250,114 @@ func defaultTimeFormat(t time.Time) []byte {
 	return buf
 }
 
+// ZapLogWrapper delegates zapLogger which was introduced in this
+// [issue](https://git.woa.com/trpc-go/trpc-go/issues/260).
+// By ZapLogWrapper proxy, we can add a layer to the debug series function calls, so that the caller
+// information can be set correctly.
+type ZapLogWrapper struct {
+	l *zapLog
+}
+
+// GetLogger returns interval zapLog.
+func (z *ZapLogWrapper) GetLogger() Logger {
+	return z.l
+}
+
+// Trace logs to TRACE log. Arguments are handled in the manner of fmt.Println.
+func (z *ZapLogWrapper) Trace(args ...interface{}) {
+	z.l.Trace(args...)
+}
+
+// Tracef logs to TRACE log. Arguments are handled in the manner of fmt.Printf.
+func (z *ZapLogWrapper) Tracef(format string, args ...interface{}) {
+	z.l.Tracef(format, args...)
+}
+
+// Debug logs to DEBUG log. Arguments are handled in the manner of fmt.Println.
+func (z *ZapLogWrapper) Debug(args ...interface{}) {
+	z.l.Debug(args...)
+}
+
+// Debugf logs to DEBUG log. Arguments are handled in the manner of fmt.Printf.
+func (z *ZapLogWrapper) Debugf(format string, args ...interface{}) {
+	z.l.Debugf(format, args...)
+}
+
+// Info logs to INFO log. Arguments are handled in the manner of fmt.Println.
+func (z *ZapLogWrapper) Info(args ...interface{}) {
+	z.l.Info(args...)
+}
+
+// Infof logs to INFO log. Arguments are handled in the manner of fmt.Printf.
+func (z *ZapLogWrapper) Infof(format string, args ...interface{}) {
+	z.l.Infof(format, args...)
+}
+
+// Warn logs to WARNING log. Arguments are handled in the manner of fmt.Println.
+func (z *ZapLogWrapper) Warn(args ...interface{}) {
+	z.l.Warn(args...)
+}
+
+// Warnf logs to WARNING log. Arguments are handled in the manner of fmt.Printf.
+func (z *ZapLogWrapper) Warnf(format string, args ...interface{}) {
+	z.l.Warnf(format, args...)
+}
+
+// Error logs to ERROR log. Arguments are handled in the manner of fmt.Println.
+func (z *ZapLogWrapper) Error(args ...interface{}) {
+	z.l.Error(args...)
+}
+
+// Errorf logs to ERROR log. Arguments are handled in the manner of fmt.Printf.
+func (z *ZapLogWrapper) Errorf(format string, args ...interface{}) {
+	z.l.Errorf(format, args...)
+}
+
+// Fatal logs to FATAL log. Arguments are handled in the manner of fmt.Println.
+func (z *ZapLogWrapper) Fatal(args ...interface{}) {
+	z.l.Fatal(args...)
+}
+
+// Fatalf logs to FATAL log. Arguments are handled in the manner of fmt.Printf.
+func (z *ZapLogWrapper) Fatalf(format string, args ...interface{}) {
+	z.l.Fatalf(format, args...)
+}
+
+// Sync calls the zap logger's Sync method, and flushes any buffered log entries.
+// Applications should take care to call Sync before exiting.
+func (z *ZapLogWrapper) Sync() error {
+	return z.l.Sync()
+}
+
+// SetLevel set output log level.
+func (z *ZapLogWrapper) SetLevel(output string, level Level) {
+	z.l.SetLevel(output, level)
+}
+
+// GetLevel gets output log level.
+func (z *ZapLogWrapper) GetLevel(output string) Level {
+	return z.l.GetLevel(output)
+}
+
+// WithFields set some user defined data to logs, such as uid, imei, etc.
+// Use this function at the beginning of each request. The returned new Logger should be used to
+// print logs.
+// Fields must be paired.
+// Deprecated: use With instead.
+func (z *ZapLogWrapper) WithFields(fields ...string) Logger {
+	return z.With(convertTo(fields...)...)
+}
+
+// With add user defined fields to Logger. Fields support multiple values.
+func (z *ZapLogWrapper) With(fields ...Field) Logger {
+	return z.l.With(fields...)
+}
+
+// WithOptions creates a new logger with the provided additional options.
+func (z *ZapLogWrapper) WithOptions(opts ...Option) Logger {
+	return &ZapLogWrapper{l: z.l.WithOptions(opts...).(*zapLog)}
+}
+
 // zapLog is a Logger implementation based on zaplogger.
 type zapLog struct {
 	levels []zap.AtomicLevel
@@ -269,6 +375,23 @@ func (l *zapLog) WithOptions(opts ...Option) Logger {
 	}
 }
 
+// WithFields set some user defined data to logs, such as uid, imei, etc.
+// Use this function at the beginning of each request. The returned new Logger should be used to
+// print logs.
+// Fields must be paired.
+// Deprecated: use With instead.
+func (l *zapLog) WithFields(fields ...string) Logger {
+	return l.With(convertTo(fields...)...)
+}
+
+func convertTo(ss ...string) []Field {
+	fields := make([]Field, len(ss)/2)
+	for i := range fields {
+		fields[i] = Field{Key: ss[2*i], Value: ss[2*i+1]}
+	}
+	return fields
+}
+
 // With add user defined fields to Logger. Fields support multiple values.
 func (l *zapLog) With(fields ...Field) Logger {
 	zapFields := make([]zap.Field, len(fields))
@@ -276,9 +399,12 @@ func (l *zapLog) With(fields ...Field) Logger {
 		zapFields[i] = zap.Any(fields[i].Key, fields[i].Value)
 	}
 
-	return &zapLog{
-		levels: l.levels,
-		logger: l.logger.With(zapFields...)}
+	// By ZapLogWrapper proxy, we can add a layer to the debug series function calls, so that the
+	// caller information can be set correctly.
+	return &ZapLogWrapper{
+		l: &zapLog{
+			levels: l.levels,
+			logger: l.logger.With(zapFields...)}}
 }
 
 func getLogMsg(args ...interface{}) string {
@@ -297,84 +423,96 @@ func getLogMsgf(format string, args ...interface{}) string {
 // Trace logs to TRACE log. Arguments are handled in the manner of fmt.Println.
 func (l *zapLog) Trace(args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.DebugLevel) {
-		l.logger.Debug(getLogMsg(args...))
+		args, fields := pickZapFields(args)
+		l.logger.Debug(getLogMsg(args...), fields...)
 	}
 }
 
 // Tracef logs to TRACE log. Arguments are handled in the manner of fmt.Printf.
 func (l *zapLog) Tracef(format string, args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.DebugLevel) {
-		l.logger.Debug(getLogMsgf(format, args...))
+		args, fields := pickZapFields(args)
+		l.logger.Debug(getLogMsgf(format, args...), fields...)
 	}
 }
 
 // Debug logs to DEBUG log. Arguments are handled in the manner of fmt.Println.
 func (l *zapLog) Debug(args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.DebugLevel) {
-		l.logger.Debug(getLogMsg(args...))
+		args, fields := pickZapFields(args)
+		l.logger.Debug(getLogMsg(args...), fields...)
 	}
 }
 
 // Debugf logs to DEBUG log. Arguments are handled in the manner of fmt.Printf.
 func (l *zapLog) Debugf(format string, args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.DebugLevel) {
-		l.logger.Debug(getLogMsgf(format, args...))
+		args, fields := pickZapFields(args)
+		l.logger.Debug(getLogMsgf(format, args...), fields...)
 	}
 }
 
 // Info logs to INFO log. Arguments are handled in the manner of fmt.Println.
 func (l *zapLog) Info(args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.InfoLevel) {
-		l.logger.Info(getLogMsg(args...))
+		args, fields := pickZapFields(args)
+		l.logger.Info(getLogMsg(args...), fields...)
 	}
 }
 
 // Infof logs to INFO log. Arguments are handled in the manner of fmt.Printf.
 func (l *zapLog) Infof(format string, args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.InfoLevel) {
-		l.logger.Info(getLogMsgf(format, args...))
+		args, fields := pickZapFields(args)
+		l.logger.Info(getLogMsgf(format, args...), fields...)
 	}
 }
 
 // Warn logs to WARNING log. Arguments are handled in the manner of fmt.Println.
 func (l *zapLog) Warn(args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.WarnLevel) {
-		l.logger.Warn(getLogMsg(args...))
+		args, fields := pickZapFields(args)
+		l.logger.Warn(getLogMsg(args...), fields...)
 	}
 }
 
 // Warnf logs to WARNING log. Arguments are handled in the manner of fmt.Printf.
 func (l *zapLog) Warnf(format string, args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.WarnLevel) {
-		l.logger.Warn(getLogMsgf(format, args...))
+		args, fields := pickZapFields(args)
+		l.logger.Warn(getLogMsgf(format, args...), fields...)
 	}
 }
 
 // Error logs to ERROR log. Arguments are handled in the manner of fmt.Println.
 func (l *zapLog) Error(args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.ErrorLevel) {
-		l.logger.Error(getLogMsg(args...))
+		args, fields := pickZapFields(args)
+		l.logger.Error(getLogMsg(args...), fields...)
 	}
 }
 
 // Errorf logs to ERROR log. Arguments are handled in the manner of fmt.Printf.
 func (l *zapLog) Errorf(format string, args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.ErrorLevel) {
-		l.logger.Error(getLogMsgf(format, args...))
+		args, fields := pickZapFields(args)
+		l.logger.Error(getLogMsgf(format, args...), fields...)
 	}
 }
 
 // Fatal logs to FATAL log. Arguments are handled in the manner of fmt.Println.
 func (l *zapLog) Fatal(args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.FatalLevel) {
-		l.logger.Fatal(getLogMsg(args...))
+		args, fields := pickZapFields(args)
+		l.logger.Fatal(getLogMsg(args...), fields...)
 	}
 }
 
 // Fatalf logs to FATAL log. Arguments are handled in the manner of fmt.Printf.
 func (l *zapLog) Fatalf(format string, args ...interface{}) {
 	if l.logger.Core().Enabled(zapcore.FatalLevel) {
-		l.logger.Fatal(getLogMsgf(format, args...))
+		args, fields := pickZapFields(args)
+		l.logger.Fatal(getLogMsgf(format, args...), fields...)
 	}
 }
 
@@ -418,4 +556,23 @@ func CustomTimeFormat(t time.Time, format string) string {
 // Deprecated: Use https://pkg.go.dev/time#Time.AppendFormat instead.
 func DefaultTimeFormat(t time.Time) []byte {
 	return defaultTimeFormat(t)
+}
+
+func pickZapFields(args []interface{}) ([]interface{}, []zapcore.Field) {
+	var fields []zapcore.Field
+	var size int
+	for idx, arg := range args {
+		if field, ok := arg.(zapcore.Field); ok {
+			fields = append(fields, field)
+			continue
+		}
+		if size != idx { // Only make copies when there are `zapcore.Field`s present.
+			args[size] = arg
+		}
+		size++
+	}
+	for i := size; i < len(args); i++ {
+		args[i] = nil
+	}
+	return args[:size], fields
 }

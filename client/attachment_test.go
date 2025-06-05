@@ -16,7 +16,6 @@ package client
 import (
 	"bytes"
 	"context"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -26,13 +25,36 @@ import (
 )
 
 func TestAttachment(t *testing.T) {
-	attm := NewAttachment(bytes.NewReader([]byte("attachment")))
-	require.Equal(t, attachment.NoopAttachment{}, attm.Response())
-	msg := codec.Message(context.Background())
-	setAttachment(msg, &attm.attachment)
-	attcher, ok := attachment.ClientRequestAttachment(msg)
-	require.True(t, ok)
-	bts, err := io.ReadAll(attcher)
-	require.Nil(t, err)
-	require.Equal(t, []byte("attachment"), bts)
+	t.Run("sizer interface hasn't been implemented", func(t *testing.T) {
+		want := []byte("attachment")
+
+		attm := NewAttachment(bytes.NewBuffer(want))
+		require.Equal(t, attachment.NoopAttachment{}, attm.Response())
+
+		msg := codec.Message(context.Background())
+		setAttachment(msg, &attm.attachment)
+		a, err := attachment.ClientRequestSizedAttachment(msg)
+		require.Nil(t, err)
+		require.EqualValues(t, len(want), a.Size())
+
+		got := make([]byte, len(want))
+		require.Nil(t, a.ReadAll(got))
+		require.Equal(t, got, []byte("attachment"))
+	})
+	t.Run("sizer interface has been implemented", func(t *testing.T) {
+		want := []byte("attachment")
+		attm := NewAttachment(bytes.NewReader(want))
+		require.Equal(t, attachment.NoopAttachment{}, attm.Response())
+
+		msg := codec.Message(context.Background())
+		setAttachment(msg, &attm.attachment)
+		a, err := attachment.ClientRequestSizedAttachment(msg)
+		require.Nil(t, err)
+		require.EqualValues(t, len(want), a.Size())
+
+		got := make([]byte, len(want))
+		require.Nil(t, a.ReadAll(got))
+		require.Equal(t, got, []byte("attachment"))
+	})
+
 }

@@ -20,7 +20,7 @@ type Pattern struct {
 	*httprule.PathTemplate
 }
 
-// Parse parses the url path into a *Pattern. It should only be used by trpc-cmdline.
+// Parse parses the url path into a *Pattern. It should only be used by trpc-go-cmdline.
 func Parse(urlPath string) (*Pattern, error) {
 	tpl, err := httprule.Parse(urlPath)
 	if err != nil {

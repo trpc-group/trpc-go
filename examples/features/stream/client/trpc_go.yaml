@@ -5,7 +5,7 @@ global:                             # global config.
 client:                                            # configuration for client calls.
   timeout: 1000                                    # maximum request processing time for all backends.
   service:                                         # configuration for a single backend.
-    - name: trpc.examples.stream.TestStream           # backend service name.
+    - name: trpc.examples.stream.TestStream        # backend service name.
       namespace: Development                       # backend service environment.
       network: tcp                                 # backend service network type, tcp or udp, configuration takes precedence.
       protocol: trpc                               # application layer protocol, trpc or http.

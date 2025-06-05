@@ -11,69 +11,29 @@
 //
 //
 
-package log_test
+package log
 
 import (
 	"testing"
 	"time"
 
-	"trpc.group/trpc-go/trpc-go/log"
+	"github.com/stretchr/testify/assert"
+	"gopkg.in/yaml.v3"
 )
-
-var defaultConfig = []log.OutputConfig{
-	{
-		Writer:    "console",
-		Level:     "debug",
-		Formatter: "console",
-		FormatConfig: log.FormatConfig{
-			TimeFmt: "2006.01.02 15:04:05",
-		},
-	},
-	{
-		Writer:    "file",
-		Level:     "info",
-		Formatter: "json",
-		WriteConfig: log.WriteConfig{
-			Filename:   "trpc_size.log",
-			RollType:   "size",
-			MaxAge:     7,
-			MaxBackups: 10,
-			MaxSize:    100,
-		},
-		FormatConfig: log.FormatConfig{
-			TimeFmt: "2006.01.02 15:04:05",
-		},
-	},
-	{
-		Writer:    "file",
-		Level:     "info",
-		Formatter: "json",
-		WriteConfig: log.WriteConfig{
-			Filename:   "trpc_time.log",
-			RollType:   "time",
-			MaxAge:     7,
-			MaxBackups: 10,
-			MaxSize:    100,
-			TimeUnit:   log.Day,
-		},
-		FormatConfig: log.FormatConfig{
-			TimeFmt: "2006-01-02 15:04:05",
-		},
-	},
-}
 
 func TestTimeUnit_Format(t *testing.T) {
 	tests := []struct {
 		name string
-		tr   log.TimeUnit
+		tr   TimeUnit
 		want string
 	}{
-		{"Minute", log.Minute, ".%Y%m%d%H%M"},
-		{"Hour", log.Hour, ".%Y%m%d%H"},
-		{"Day", log.Day, ".%Y%m%d"},
-		{"Month", log.Month, ".%Y%m"},
-		{"Year", log.Year, ".%Y"},
-		{"default", log.TimeUnit("xxx"), ".%Y%m%d"},
+		{"Minute", Minute, ".%Y%m%d%H%M"},
+		{"Hour", Hour, ".%Y%m%d%H"},
+		{"Day", Day, ".%Y%m%d"},
+		{"Month", Month, ".%Y%m"},
+		{"Year", Year, ".%Y"},
+		{"strftime format", "%Y-%m-%d-%H-%M", ".%Y-%m-%d-%H-%M"},
+		{"default", TimeUnit(""), ".%Y%m%d"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -87,15 +47,15 @@ func TestTimeUnit_Format(t *testing.T) {
 func TestTimeUnit_RotationGap(t *testing.T) {
 	tests := []struct {
 		name string
-		tr   log.TimeUnit
+		tr   TimeUnit
 		want time.Duration
 	}{
-		{"Minute", log.Minute, time.Minute},
-		{"Hour", log.Hour, time.Hour},
-		{"Day", log.Day, time.Hour * 24},
-		{"Month", log.Month, time.Hour * 24 * 30},
-		{"Year", log.Year, time.Hour * 24 * 365},
-		{"default", log.TimeUnit("xxx"), time.Hour * 24},
+		{"Minute", Minute, time.Minute},
+		{"Hour", Hour, time.Hour},
+		{"Day", Day, time.Hour * 24},
+		{"Month", Month, time.Hour * 24 * 30},
+		{"Year", Year, time.Hour * 24 * 365},
+		{"default", TimeUnit("xxx"), time.Hour * 24},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -104,4 +64,28 @@ func TestTimeUnit_RotationGap(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConfig_LogName(t *testing.T) {
+	yamlData := `
+writer: "console"
+writer_config:
+  log_path: "/var/log/app.log"
+formatter: "json"
+formatter_config:
+  message_key: S
+level: "info"
+caller_skip: 2
+enable_color: true
+logger_name: "test"
+`
+	var config OutputConfig
+	err := yaml.Unmarshal([]byte(yamlData), &config)
+	assert.NoError(t, err)
+	assert.Equal(t, "console", config.Writer)
+	assert.Equal(t, "json", config.Formatter)
+	assert.Equal(t, "info", config.Level)
+	assert.Equal(t, 2, config.CallerSkip)
+	assert.Equal(t, true, config.EnableColor)
+	assert.Equal(t, "test", config.LoggerName)
 }

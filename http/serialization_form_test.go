@@ -169,7 +169,8 @@ func TestMarshal(t *testing.T) {
 			"name": "haha",
 		},
 	}
-	_, err = s.Marshal(nestedMap)
+	buf, err = s.Marshal(nestedMap)
+	require.NotNil(buf)
 	require.Nil(err)
 }
 
@@ -220,4 +221,62 @@ func TestDecoderPanic(t *testing.T) {
 	}
 	req := &msg{}
 	require.Nil(t, s.Unmarshal([]byte("xx]"), req))
+}
+
+func TestSerializationTypeForm(t *testing.T) {
+	s := codec.GetSerializer(codec.SerializationTypeForm)
+	serialization, ok := s.(*http.FormSerialization)
+	if ok {
+		serialization.MapType = true
+	}
+	case1 := map[string]map[int]map[uint8]string{
+		"key1": {
+			1: {
+				1: "value1",
+			},
+		},
+	}
+	data, err := serialization.Marshal(case1)
+	require.Nil(t, err)
+	require.Equal(t, "key1.1.1=value1", string(data))
+
+	case2 := map[string][]int{
+		"key2": []int{1, 2, 3, 4},
+	}
+	data, err = serialization.Marshal(case2)
+	require.Nil(t, err)
+	require.Equal(t, "key2=1&key2=2&key2=3&key2=4", string(data))
+
+	case3 := map[string][][]int{
+		"key3": [][]int{
+			{1, 2},
+			{5, 6},
+		},
+	}
+	data, err = serialization.Marshal(case3)
+	require.Nil(t, err)
+	require.Equal(t, "key3%5B0%5D%5B0%5D=1&key3%5B0%5D%5B1%5D=2&key3%5B1%5D%5B0%5D=5&key3%5B1%5D%5B1%5D=6", string(data))
+
+	case4 := map[string]string{
+		"key4": "123",
+	}
+	data, err = serialization.Marshal(case4)
+	require.Nil(t, err)
+	require.Equal(t, "key4=123", string(data))
+
+	case5 := map[string]map[float32]string{
+		"key5": {
+			1.2: "123",
+		},
+	}
+	data, err = serialization.Marshal(case5)
+	require.Nil(t, err)
+
+	a := struct {
+		OrderID string                 `json:"order_id"`
+		Maps    map[string]interface{} `json:"maps"`
+	}{OrderID: "123", Maps: map[string]interface{}{"order_id": "123", "a": "c"}}
+	data, err = codec.Marshal(codec.SerializationTypeForm, a)
+	require.Nil(t, err)
+
 }

@@ -20,18 +20,61 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"syscall"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/admin"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/server"
 	"trpc.group/trpc-go/trpc-go/transport"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestHooksRestart(t *testing.T) {
+	// If the process is started by graceful restart,
+	// exit here in case of infinite loop.
+	if len(os.Getenv(transport.EnvGraceRestart)) > 0 {
+		t.SkipNow()
+	}
+	s := &server.Server{}
+	hookCalled := false
+	s.RegisterBeforeGracefulRestart(func() {
+		hookCalled = true
+	})
+	name := "trpc.test.helloworld.Greeter1" + t.Name()
+	service := server.New(server.WithAddress("127.0.0.1:0"),
+		server.WithNetwork("tcp"),
+		server.WithProtocol("trpc"),
+		server.WithServiceName(name))
+
+	s.AddService(name, service)
+	require.Nil(t, s.Register(&GreeterServerServiceDesc, &GreeterServerImpl{}))
+	go func() {
+		require.Nil(t, s.Serve())
+	}()
+	time.Sleep(time.Second * 1)
+	pid := os.Getpid()
+
+	// Enable gracefulRestart.
+	s.SetDisableGracefulRestart(false)
+	// Send graceful restart signal.
+	syscall.Kill(pid, syscall.SIGUSR2)
+	time.Sleep(time.Second * 5)
+	require.True(t, hookCalled)
+
+	hookCalled = false
+	// Disable gracefulRestart.
+	s.SetDisableGracefulRestart(true)
+	// Send graceful restart signal.
+	syscall.Kill(pid, syscall.SIGUSR2)
+	time.Sleep(time.Second * 5)
+	require.False(t, hookCalled)
+
+	require.Nil(t, s.Close(nil))
+}
 
 func TestStartNewProcess(t *testing.T) {
 	// If the process is started by graceful restart,
@@ -49,7 +92,7 @@ func TestStartNewProcess(t *testing.T) {
 		admin.WithTLS(cfg.Server.Admin.EnableTLS),
 	}
 
-	adminService := admin.NewServer(opts...)
+	adminService := admin.NewTrpcAdminServer(opts...)
 	s.AddService(admin.ServiceName, adminService)
 
 	service := server.New(server.WithAddress("127.0.0.1:9080"),
@@ -58,10 +101,10 @@ func TestStartNewProcess(t *testing.T) {
 		server.WithServiceName("trpc.test.helloworld.Greeter1"))
 
 	s.AddService("trpc.test.helloworld.Greeter1", service)
-	err := s.Register(nil, nil)
+	require.Nil(t, s.Register(nil, nil))
 
 	impl := &GreeterServerImpl{}
-	err = s.Register(&GreeterServerServiceDesc, impl)
+	require.Nil(t, s.Register(&GreeterServerServiceDesc, impl))
 	go s.Serve()
 	time.Sleep(time.Second * 1)
 
@@ -74,12 +117,11 @@ func TestStartNewProcess(t *testing.T) {
 		cpid, err := s.StartNewProcess("-test.run=Test[^StartNewProcess$]")
 		assert.Nil(t, err)
 		assert.NotEqual(t, fpid, cpid)
-		t.Logf("fpid:%v, cpid:%v", fpid, cpid)
+		t.Logf("fpid: %v, cpid: %v", fpid, cpid)
 	}
 	// Sleep 10s, let the parent process rewrite test coverage. The child process will exit quickly.
 	time.Sleep(time.Second * 10)
-	err = s.Close(nil)
-	assert.Nil(t, err)
+	require.Nil(t, s.Close(nil))
 }
 
 func TestCloseOldListenerDuringHotRestart(t *testing.T) {
@@ -115,7 +157,7 @@ func TestCloseOldListenerDuringHotRestart(t *testing.T) {
 		cpid, err := s.StartNewProcess("-test.run=^TestCloseOldListenerDuringHotRestart$")
 		require.Nil(t, err)
 		require.NotEqual(t, fpid, cpid)
-		t.Logf("fpid:%v, cpid:%v", fpid, cpid)
+		t.Logf("fpid: %v, cpid: %v", fpid, cpid)
 		time.Sleep(time.Second)
 		// Child will not be up in this test case, so trying to connect won't work.
 		_, err = net.Dial("tcp", ln.Addr().String())

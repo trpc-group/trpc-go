@@ -26,6 +26,8 @@ type Attribute struct {
 const (
 	// TRPCAttributeRPCName is used to set the RPCName attribute of span.
 	TRPCAttributeRPCName = "__@*TRPCAttribute(RPCName)*@__"
+	// TRPCAttributeStreamID is used to set the StreamID attribute of span.
+	TRPCAttributeStreamID = "__@*TRPCAttribute(StreamID)*@__"
 	// TRPCAttributeError is used to set the Error attribute of span.
 	TRPCAttributeError = "__@*TRPCAttribute(Error)*@__"
 	// TRPCAttributeResponseSize is used to set the ResponseSize attribute of span.

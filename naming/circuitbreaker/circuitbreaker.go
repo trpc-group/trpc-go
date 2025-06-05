@@ -56,12 +56,6 @@ func Get(name string) CircuitBreaker {
 	return c
 }
 
-func unregisterForTesting(name string) {
-	lock.Lock()
-	delete(circuitbreakers, name)
-	lock.Unlock()
-}
-
 // NoopCircuitBreaker is a noop circuit breaker.
 type NoopCircuitBreaker struct{}
 

@@ -22,7 +22,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/internal/attachment"
 	"trpc.group/trpc-go/trpc-go/server"
@@ -31,28 +31,34 @@ import (
 func TestGetClientRequestAttachment(t *testing.T) {
 	t.Run("nil message", func(t *testing.T) {
 		require.Panics(t, func() {
-			attachment.ClientRequestAttachment(nil)
+			_, _ = attachment.ClientRequestSizedAttachment(nil)
 		})
 	})
 	t.Run("empty message", func(t *testing.T) {
 		msg := trpc.Message(context.Background())
-		_, ok := attachment.ClientRequestAttachment(msg)
-		require.False(t, ok)
+		a, err := attachment.ClientRequestSizedAttachment(msg)
+		require.Nil(t, err)
+		require.Empty(t, a)
 	})
-	t.Run("message contains nil attachment", func(t *testing.T) {
+	t.Run("message contains nil SizedAttachment", func(t *testing.T) {
 		msg := trpc.Message(context.Background())
 		msg.WithCommonMeta(codec.CommonMeta{attachment.ClientAttachmentKey{}: nil})
-		_, ok := attachment.ClientRequestAttachment(msg)
-		require.False(t, ok)
+		a, err := attachment.ClientRequestSizedAttachment(msg)
+		require.Nil(t, err)
+		require.Empty(t, a)
 	})
-	t.Run("message contains non-empty Request attachment", func(t *testing.T) {
+	t.Run("message contains non-empty Request SizedAttachment", func(t *testing.T) {
 		msg := trpc.Message(context.Background())
-		want := bytes.NewReader([]byte("attachment"))
-		msg.WithCommonMeta(codec.CommonMeta{attachment.ClientAttachmentKey{}: &attachment.Attachment{Request: want}})
-		got, ok := attachment.ClientRequestAttachment(msg)
-		require.True(t, ok)
+		want := []byte("SizedAttachment")
+		msg.WithCommonMeta(codec.CommonMeta{attachment.ClientAttachmentKey{}: &attachment.Attachment{Request: bytes.NewReader(want)}})
+
+		a, err := attachment.ClientRequestSizedAttachment(msg)
+		require.Nil(t, err)
+
+		got := make([]byte, len(want))
+		require.Nil(t, a.ReadAll(got))
 		if !reflect.DeepEqual(got, want) {
-			t.Errorf("ServerResponseAttachment() = %v, want %v", got, want)
+			t.Errorf("ClientRequestSizedAttachment() = %v, want %v", got, want)
 		}
 	})
 }
@@ -60,28 +66,33 @@ func TestGetClientRequestAttachment(t *testing.T) {
 func TestGetServerResponseAttachment(t *testing.T) {
 	t.Run("nil message", func(t *testing.T) {
 		require.Panics(t, func() {
-			attachment.ServerResponseAttachment(nil)
+			_, _ = attachment.ServerResponseSizedAttachment(nil)
 		})
 	})
 	t.Run("empty message", func(t *testing.T) {
 		msg := trpc.Message(context.Background())
-		_, ok := attachment.ServerResponseAttachment(msg)
-		require.False(t, ok)
+		a, err := attachment.ServerResponseSizedAttachment(msg)
+		require.Nil(t, err)
+		require.Empty(t, a)
 	})
-	t.Run("message contains nil attachment", func(t *testing.T) {
+	t.Run("message contains nil SizedAttachment", func(t *testing.T) {
 		msg := trpc.Message(context.Background())
 		msg.WithCommonMeta(codec.CommonMeta{attachment.ClientAttachmentKey{}: nil})
-		_, ok := attachment.ClientRequestAttachment(msg)
-		require.False(t, ok)
+		a, err := attachment.ServerResponseSizedAttachment(msg)
+		require.Nil(t, err)
+		require.Empty(t, a)
 	})
-	t.Run("message contains non-empty response attachment", func(t *testing.T) {
+	t.Run("message contains non-empty response SizedAttachment", func(t *testing.T) {
 		msg := trpc.Message(context.Background())
-		want := bytes.NewReader([]byte("attachment"))
-		msg.WithCommonMeta(codec.CommonMeta{attachment.ServerAttachmentKey{}: &attachment.Attachment{Response: want}})
-		got, ok := attachment.ServerResponseAttachment(msg)
-		require.True(t, ok)
+		want := []byte("SizedAttachment")
+		msg.WithCommonMeta(codec.CommonMeta{attachment.ServerAttachmentKey{}: &attachment.Attachment{Response: bytes.NewReader(want)}})
+		a, err := attachment.ServerResponseSizedAttachment(msg)
+		require.Nil(t, err)
+
+		got := make([]byte, len(want))
+		require.Nil(t, a.ReadAll(got))
 		if !reflect.DeepEqual(got, want) {
-			t.Errorf("ServerResponseAttachment() = %v, want %v", got, want)
+			t.Errorf("ServerResponseSizedAttachment() = %v, want %v", got, want)
 		}
 	})
 }
@@ -90,18 +101,18 @@ func TestSetClientResponseAttachment(t *testing.T) {
 	msg := trpc.Message(context.Background())
 	var a attachment.Attachment
 	msg.WithCommonMeta(codec.CommonMeta{attachment.ClientAttachmentKey{}: &a})
-	attachment.SetClientResponseAttachment(msg, []byte("attachment"))
+	attachment.SetClientResponseAttachment(msg, []byte("SizedAttachment"))
 	bts, err := io.ReadAll(a.Response)
 
 	require.Nil(t, err)
-	require.Equal(t, []byte("attachment"), bts)
+	require.Equal(t, []byte("SizedAttachment"), bts)
 }
 
 func TestSetServerAttachment(t *testing.T) {
 	msg := trpc.Message(context.Background())
-	attachment.SetServerRequestAttachment(msg, []byte("attachment"))
+	attachment.SetServerRequestAttachment(msg, []byte("SizedAttachment"))
 	bts, err := io.ReadAll(server.GetAttachment(msg).Request())
 
 	require.Nil(t, err)
-	require.Equal(t, []byte("attachment"), bts)
+	require.Equal(t, []byte("SizedAttachment"), bts)
 }

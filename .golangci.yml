@@ -1,34 +1,49 @@
 linters-settings:
+  funlen:
+    lines: 80
+    statements: 80
+  goconst:
+    min-len: 2
+    min-occurrences: 2
   gocyclo:
     min-complexity: 20
-  goliddjoijnt:
+  goimports:
+    local-prefixes: git.code.oa.com
+  golint:
     min-confidence: 0
-  revive:
-    rules:
-      - name: package-comments
-      - name: exported
-        arguments:
-          - disableStutteringCheck
-
-issues:
-  include:
-    - EXC0012 # exported should have comment
-    - EXC0013 # package comment should be of the form
-    - EXC0014 # comment on exported should be of the form
-    - EXC0015 # should have a package comment
+  govet:
+    check-shadowing: true
+  lll:
+    line-length: 120
+  errcheck: 
+    check-type-assertions: true
 
 linters:
   disable-all: true
   enable:
-    - govet 
-    - goimports
-    - gofmt
-    - revive
+    - bodyclose
+    - deadcode
+    - funlen
+    - goconst
     - gocyclo
-    - gosec
+    - gofmt
     - ineffassign
+    - staticcheck
+    - structcheck
+    - typecheck
+    - goimports
+    - golint
+    - gosimple
+    - govet
+    - lll
+    - rowserrcheck
+    - errcheck
+    - unused
+    - varcheck
 
 run:
-  skip-files:
-    - ".*.pb.go"
-    - ".*_mock.go"
+  skip-dirs:
+      # - test/testdata_etc
+
+service:
+  golangci-lint-version: 1.23.x

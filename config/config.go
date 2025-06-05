@@ -182,7 +182,8 @@ func GetUnmarshaler(name string) Unmarshaler {
 }
 
 var (
-	configMap = make(map[string]KVConfig)
+	kvConfigs        = make(map[string]KVConfig)
+	kvConfigsRWMutex = sync.RWMutex{}
 )
 
 // KVConfig defines a kv config interface.
@@ -194,16 +195,16 @@ type KVConfig interface {
 
 // Register registers a kv config by its name.
 func Register(c KVConfig) {
-	lock.Lock()
-	configMap[c.Name()] = c
-	lock.Unlock()
+	kvConfigsRWMutex.Lock()
+	kvConfigs[c.Name()] = c
+	kvConfigsRWMutex.Unlock()
 }
 
 // Get returns a kv config by name.
 func Get(name string) KVConfig {
-	lock.RLock()
-	c := configMap[name]
-	lock.RUnlock()
+	kvConfigsRWMutex.RLock()
+	c := kvConfigs[name]
+	kvConfigsRWMutex.RUnlock()
 	return c
 }
 
@@ -283,6 +284,19 @@ func (kv *noopKV) Del(ctx context.Context, key string, opts ...Option) error {
 	return nil
 }
 
+// Loader defines the common interface of parsing config.
+// Deprecated: This interface is currently not utilized by the framework, and you should not rely on it.
+// If you need to perform mocking in your unit testing, please register your custom `codec` and `provider`
+// and utilize `config.WithCodec` and `config.WithProvider` to perform the mocking.
+// Further reading: https://github.com/golang/go/wiki/CodeReviewComments#interfaces
+type Loader interface {
+	// Load returns the config specified by input parameter.
+	Load(string) (Config, error)
+
+	// Reload reloads config.
+	Reload(string) error
+}
+
 // Config defines the common config interface. We can
 // implement different config center by this interface.
 type Config interface {
@@ -351,7 +365,7 @@ type ProviderCallback func(string, []byte)
 
 // DataProvider defines common data provider interface.
 // we can implement this interface to define different
-// data provider( such as file, TConf, ETCD, configmap)
+// data provider (such as file, TConf, ETCD, configMap)
 // and parse config data to standard format( such as json,
 // toml, yaml, etc.) by codec.
 type DataProvider interface {
@@ -365,6 +379,23 @@ type DataProvider interface {
 	// Watch watches config changing. The change will
 	// be handled by callback function.
 	Watch(ProviderCallback)
+}
+
+// ProviderCallbackWithError is a callback function designed for providers to manage
+// configuration changes.
+//
+// Unlike ProviderCallback, this function explicitly returns an error if one occurs
+// during the handling process.
+type ProviderCallbackWithError func(string, []byte) error
+
+// DataProviderWithError offers a Watch interface that takes a callback
+// function capable of returning an error.
+//
+// Once the DataProviderWithError interface is implemented, DataProviderWithError.WatchWithError
+// will be used instead of DataProvider.Watch.
+type DataProviderWithError interface {
+	// WatchWithError accepts a callback function that explicitly returns an error.
+	WatchWithError(ProviderCallbackWithError)
 }
 
 // Codec defines codec interface.
@@ -391,22 +422,22 @@ func GetProvider(name string) DataProvider {
 }
 
 var (
-	codecMap = make(map[string]Codec)
-	lock     = sync.RWMutex{}
+	codecs        = make(map[string]Codec)
+	codecsRWMutex = sync.RWMutex{}
 )
 
 // RegisterCodec registers codec by its name.
 func RegisterCodec(c Codec) {
-	lock.Lock()
-	codecMap[c.Name()] = c
-	lock.Unlock()
+	codecsRWMutex.Lock()
+	codecs[c.Name()] = c
+	codecsRWMutex.Unlock()
 }
 
 // GetCodec returns the codec by name.
 func GetCodec(name string) Codec {
-	lock.RLock()
-	c := codecMap[name]
-	lock.RUnlock()
+	codecsRWMutex.RLock()
+	c := codecs[name]
+	codecsRWMutex.RUnlock()
 	return c
 }
 

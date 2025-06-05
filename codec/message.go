@@ -71,7 +71,7 @@ const (
 	ServiceSectionLength = 4
 )
 
-// Msg defines core message data for multi protocol, business protocol
+// Msg defines core message data for Multi-protocol, business protocol
 // should set this message when packing and unpacking data.
 type Msg interface {
 	// Context returns rpc context
@@ -166,7 +166,7 @@ type Msg interface {
 	// but for client, is its own service.
 	WithCallerService(string)
 
-	// WithCallerMethod sets caller method, For server this mothod is upstream mothod,
+	// WithCallerMethod sets caller method, For server this method is upstream method,
 	// but for client, is its own method.
 	WithCallerMethod(string)
 
@@ -226,10 +226,10 @@ type Msg interface {
 	// but for client, is downstream's method.
 	CalleeMethod() string
 
-	// CalleeContainerName sets callee container name.
+	// CalleeContainerName returns callee container name.
 	CalleeContainerName() string
 
-	// WithCalleeContainerName return callee container name.
+	// WithCalleeContainerName sets callee container name.
 	WithCalleeContainerName(string)
 
 	// WithServerMetaData sets server meta data.
@@ -313,7 +313,7 @@ type Msg interface {
 	// WithStreamID sets stream id.
 	WithStreamID(uint32)
 
-	// StreamID return stream id.
+	// StreamID returns stream id.
 	StreamID() uint32
 
 	// StreamFrame sets stream frame.

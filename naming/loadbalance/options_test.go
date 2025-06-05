@@ -24,17 +24,22 @@ import (
 func TestOptions(t *testing.T) {
 	opts := &Options{}
 	ctx := context.Background()
-	WithContext(ctx)(opts)
-	WithNamespace("ns")(opts)
-	WithInterval(time.Second * 2)(opts)
-	WithKey("hash key")(opts)
-	WithReplicas(2)(opts)
-	WithLoadBalanceType("hash")(opts)
 
+	WithContext(ctx)(opts)
 	assert.Equal(t, opts.Ctx, ctx)
+
+	WithNamespace("ns")(opts)
 	assert.Equal(t, opts.Namespace, "ns")
+
+	WithInterval(time.Second * 2)(opts)
 	assert.Equal(t, opts.Interval, time.Second*2)
+
+	WithKey("hash key")(opts)
 	assert.Equal(t, opts.Key, "hash key")
+
+	WithReplicas(2)(opts)
 	assert.Equal(t, opts.Replicas, 2)
+
+	WithLoadBalanceType("hash")(opts)
 	assert.Equal(t, opts.LoadBalanceType, "hash")
 }

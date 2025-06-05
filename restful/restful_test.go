@@ -21,30 +21,38 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
+	"net"
 	"net/http"
+	"net/textproto"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
-	"github.com/valyala/fasthttp"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	"trpc.group/trpc-go/trpc-go/filter"
 	thttp "trpc.group/trpc-go/trpc-go/http"
 	"trpc.group/trpc-go/trpc-go/restful"
 	"trpc.group/trpc-go/trpc-go/server"
 	bpb "trpc.group/trpc-go/trpc-go/testdata/restful/bookstore"
 	hpb "trpc.group/trpc-go/trpc-go/testdata/restful/helloworld"
-	"trpc.group/trpc-go/trpc-go/transport"
 )
 
 // helloworld service impl
-type greeterServerImpl struct{}
+type greeterServerImpl struct {
+	sleepTime time.Duration
+}
 
 func (s *greeterServerImpl) SayHello(ctx context.Context, req *hpb.HelloRequest) (*hpb.HelloReply, error) {
+	time.Sleep(s.sleepTime)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	rsp := &hpb.HelloReply{}
 	if req.Name != "xyz" {
 		return nil, errors.New("test error")
@@ -54,11 +62,15 @@ func (s *greeterServerImpl) SayHello(ctx context.Context, req *hpb.HelloRequest)
 }
 
 func TestHelloworldService(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	addr := fmt.Sprintf("http://%s", ln.Addr())
+	defer ln.Close()
 	// service registration
 	s := &server.Server{}
 	service := server.New(
-		server.WithAddress("127.0.0.1:6677"),
-		server.WithServiceName("trpc.test.helloworld.Service"),
+		server.WithListener(ln),
+		server.WithServiceName("trpc.test.helloworld.Service"+t.Name()),
 		server.WithNetwork("tcp"),
 		server.WithProtocol("restful"),
 		server.WithRESTOptions(
@@ -114,10 +126,10 @@ func TestHelloworldService(t *testing.T) {
 	data := `{"name": "xyz"}`
 	buf := bytes.Buffer{}
 	gBuf := gzip.NewWriter(&buf)
-	_, err := gBuf.Write([]byte(data))
+	_, err = gBuf.Write([]byte(data))
 	require.Nil(t, err)
 	gBuf.Close()
-	req, err := http.NewRequest("POST", "http://127.0.0.1:6677/v1/foobar", &buf)
+	req, err := http.NewRequest(http.MethodPost, addr+"/v1/foobar", &buf)
 	require.Nil(t, err)
 	req.Header.Add("Content-Type", "anything")
 	req.Header.Add("Content-Encoding", "gzip")
@@ -141,7 +153,7 @@ func TestHelloworldService(t *testing.T) {
 	require.Equal(t, respBody.Message, "test")
 
 	// test matching all by query params
-	req2, err := http.NewRequest("GET", "http://127.0.0.1:6677/v2/bar?name=xyz", nil)
+	req2, err := http.NewRequest(http.MethodGet, addr+"/v2/bar?name=xyz", nil)
 	require.Nil(t, err)
 	resp2, err := http.DefaultClient.Do(req2)
 	require.Nil(t, err)
@@ -153,9 +165,13 @@ func TestHelloworldService(t *testing.T) {
 }
 
 func TestHeaderMatcher(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	addr := fmt.Sprintf("http://%s", ln.Addr())
+	defer ln.Close()
 	// service registration
 	s := &server.Server{}
-	service := server.New(server.WithAddress("127.0.0.1:6678"),
+	service := server.New(server.WithListener(ln),
 		server.WithServiceName("test"),
 		server.WithNetwork("tcp"),
 		server.WithProtocol("restful"),
@@ -176,7 +192,7 @@ func TestHeaderMatcher(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// test header matcher error
-	req, err := http.NewRequest("POST", "http://127.0.0.1:6678/v1/foobar",
+	req, err := http.NewRequest(http.MethodPost, addr+"/v1/foobar",
 		bytes.NewBuffer([]byte(`{"name": "xyz"}`)))
 	require.Nil(t, err)
 	resp, err := http.DefaultClient.Do(req)
@@ -186,10 +202,14 @@ func TestHeaderMatcher(t *testing.T) {
 }
 
 func TestResponseHandler(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	addr := fmt.Sprintf("http://%s", ln.Addr())
+	defer ln.Close()
 	// service registration
 	s := &server.Server{}
 	service := server.New(
-		server.WithAddress("127.0.0.1:6679"),
+		server.WithListener(ln),
 		server.WithServiceName("test.ResponseHandler"),
 		server.WithNetwork("tcp"),
 		server.WithProtocol("restful"),
@@ -217,13 +237,52 @@ func TestResponseHandler(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// test response handler error
-	req, err := http.NewRequest("POST", "http://127.0.0.1:6679/v1/foobar",
+	req, err := http.NewRequest(http.MethodPost, addr+"/v1/foobar",
 		bytes.NewBuffer([]byte(`{"name": "xyz"}`)))
 	require.Nil(t, err)
 	resp, err := http.DefaultClient.Do(req)
 	require.Nil(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+}
+
+func TestRestfulRequestTimeout(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	addr := fmt.Sprintf("http://%s", ln.Addr())
+	defer ln.Close()
+	s := &server.Server{}
+	serviceName := "trpc.test.helloworld.Service_" + t.Name()
+	service := server.New(
+		server.WithListener(ln),
+		server.WithServiceName("trpc.test.helloworld.Service"+t.Name()),
+		server.WithNetwork("tcp"),
+		server.WithProtocol("restful"),
+		// Only with this line, the rsp.StatusCode will be http.StatusOK.
+		server.WithDisableRequestTimeout(true),
+	)
+	s.AddService(serviceName, service)
+	const requestTimeout = time.Millisecond
+	hpb.RegisterGreeterService(s, &greeterServerImpl{
+		sleepTime: requestTimeout * 10,
+	})
+
+	go func() {
+		s.Serve()
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	data := []byte(`{"name": "xyz"}`)
+	require.Nil(t, err)
+	req, err := http.NewRequest(http.MethodPost, addr+"/v1/foobar", bytes.NewBuffer(data))
+	require.Nil(t, err)
+	req.Header.Add(textproto.CanonicalMIMEHeaderKey(thttp.TrpcTimeout), "1")
+
+	cli := http.Client{}
+	rsp, err := cli.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rsp.StatusCode)
 }
 
 // bookstore service impl
@@ -493,12 +552,16 @@ func httpNewRequest(t *testing.T, method, url string, body io.Reader, contentTyp
 }
 
 func TestBookstoreService(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	addr := fmt.Sprintf("http://%s", ln.Addr())
+	defer ln.Close()
 	// service registration
 	s := &server.Server{}
-	service := server.New(server.WithAddress("127.0.0.1:6666"),
-		server.WithServiceName("trpc.test.bookstore.Bookstore"),
+	service := server.New(server.WithListener(ln),
+		server.WithServiceName("trpc.test.bookstore.Bookstore"+t.Name()),
 		server.WithProtocol("restful"))
-	s.AddService("trpc.test.bookstore.Bookstore", service)
+	s.AddService("trpc.test.bookstore.Bookstore"+t.Name(), service)
 	bpb.RegisterBookstoreService(s, &bookstoreServiceImpl{})
 
 	// start server
@@ -517,13 +580,13 @@ func TestBookstoreService(t *testing.T) {
 		desc              string
 	}{
 		{
-			httpRequest: httpNewRequest(t, "GET", "http://127.0.0.1:6666/shelves", nil,
+			httpRequest: httpNewRequest(t, http.MethodGet, addr+"/shelves", nil,
 				"application/json"),
 			respStatusCode: http.StatusOK,
 			desc:           "test listing shelves",
 		},
 		{
-			httpRequest: httpNewRequest(t, "POST", "http://127.0.0.1:6666/shelf", bytes.NewBuffer([]byte(
+			httpRequest: httpNewRequest(t, http.MethodPost, addr+"/shelf", bytes.NewBuffer([]byte(
 				`{"shelf":{"id":2,"theme":"shelf_2"}}`)), "application/json"),
 			respStatusCode: http.StatusCreated,
 			expectShelves: map[int64]*bpb.Shelf{
@@ -539,13 +602,13 @@ func TestBookstoreService(t *testing.T) {
 			desc: "test creating a shelf",
 		},
 		{
-			httpRequest: httpNewRequest(t, "POST", "http://127.0.0.1:6666/shelf", bytes.NewBuffer([]byte(
+			httpRequest: httpNewRequest(t, http.MethodPost, addr+"/shelf", bytes.NewBuffer([]byte(
 				`{"shelf":{"id":2,"theme":"shelf_02"}}`)), "application/json"),
 			respStatusCode: http.StatusConflict,
 			desc:           "test creating dup shelf",
 		},
 		{
-			httpRequest: httpNewRequest(t, "DELETE", "http://127.0.0.1:6666/shelf/2",
+			httpRequest: httpNewRequest(t, http.MethodDelete, addr+"/shelf/2",
 				nil, "application/json"),
 			respStatusCode: http.StatusNoContent,
 			expectShelves: map[int64]*bpb.Shelf{
@@ -559,20 +622,20 @@ func TestBookstoreService(t *testing.T) {
 			desc: "test deleting a shelf",
 		},
 		{
-			httpRequest: httpNewRequest(t, "DELETE", "http://127.0.0.1:6666/shelf/2",
+			httpRequest: httpNewRequest(t, http.MethodDelete, addr+"/shelf/2",
 				nil, "application/json"),
 			respStatusCode: http.StatusNotFound,
 			desc:           "test deleting a shelf non exists",
 		},
 		{
-			httpRequest: httpNewRequest(t, "POST", "http://127.0.0.1:6666/anything",
+			httpRequest: httpNewRequest(t, http.MethodPost, addr+"/anything",
 				nil, "application/json"),
 			respStatusCode: http.StatusNotFound,
 			desc:           "test invalid url path",
 		},
 		{
-			httpRequest: httpNewRequest(t, "POST",
-				"http://127.0.0.1:6666/shelf/theme/shelf_2?shelf.theme=x&shelf.id=2", nil,
+			httpRequest: httpNewRequest(t, http.MethodPost,
+				addr+"/shelf/theme/shelf_2?shelf.theme=x&shelf.id=2", nil,
 				"application/json"),
 			respStatusCode: http.StatusCreated,
 			expectShelves: map[int64]*bpb.Shelf{
@@ -588,20 +651,20 @@ func TestBookstoreService(t *testing.T) {
 			desc: "test creating a shelf with query params",
 		},
 		{
-			httpRequest: httpNewRequest(t, "POST",
-				"http://127.0.0.1:6666/shelf/theme/shelf_2?anything=2",
+			httpRequest: httpNewRequest(t, http.MethodPost,
+				addr+"/shelf/theme/shelf_2?anything=2",
 				nil, "application/json"),
 			respStatusCode: http.StatusBadRequest,
 			desc:           "test creating a shelf with invalid query params",
 		},
 		{
-			httpRequest: httpNewRequest(t, "POST", "http://127.0.0.1:6666/book/shelf/1",
+			httpRequest: httpNewRequest(t, http.MethodPost, addr+"/book/shelf/1",
 				bytes.NewBuffer([]byte("anything")), "application/json"),
 			respStatusCode: http.StatusBadRequest,
 			desc:           "test creating a book with invalid body data",
 		},
 		{
-			httpRequest: httpNewRequest(t, "PATCH", "http://127.0.0.1:6666/book/shelfid/1/bookid/1",
+			httpRequest: httpNewRequest(t, http.MethodPatch, addr+"/book/shelfid/1/bookid/1",
 				bytes.NewBuffer([]byte(`{"author":"anonymous","content":{"summary":"life of a hero"}}`)),
 				"application/json"),
 			respStatusCode: http.StatusAccepted,
@@ -619,7 +682,7 @@ func TestBookstoreService(t *testing.T) {
 			desc: "test updating a book",
 		},
 		{
-			httpRequest: httpNewRequest(t, "POST", "http://127.0.0.1:6666/book/shelf/2",
+			httpRequest: httpNewRequest(t, http.MethodPost, addr+"/book/shelf/2",
 				strings.NewReader("id=2&author=author_2&title=title_2&content.summary=whatever"),
 				"application/x-www-form-urlencoded"),
 			respStatusCode: http.StatusCreated,
@@ -638,7 +701,7 @@ func TestBookstoreService(t *testing.T) {
 			desc: "test posting form to create book",
 		},
 		{
-			httpRequest: httpNewRequest(t, "POST", "http://127.0.0.1:6666/book/shelf/2",
+			httpRequest: httpNewRequest(t, http.MethodPost, addr+"/book/shelf/2",
 				strings.NewReader("id=3&author=author_3&title=title_3&content.summary=whatever"),
 				"application/x-www-form-urlencoded; charset=UTF-8"),
 			respStatusCode: http.StatusCreated,
@@ -661,7 +724,7 @@ func TestBookstoreService(t *testing.T) {
 			desc: "test posting form to create book",
 		},
 		{
-			httpRequest: httpNewRequest(t, "PATCH", "http://127.0.0.1:6666/book/shelfid/2",
+			httpRequest: httpNewRequest(t, http.MethodPatch, addr+"/book/shelfid/2",
 				bytes.NewBuffer([]byte(`[{"id":"2", "author":"author_2"},{"id":"3", "author":"author_3"}]`)),
 				"application/json"),
 			respStatusCode: http.StatusAccepted,
@@ -686,150 +749,27 @@ func TestBookstoreService(t *testing.T) {
 		cli := http.Client{}
 		resp, err := cli.Do(req)
 		require.Nil(t, err, test.desc)
+		log.Printf("%+v\n", resp)
+		bs, _ := io.ReadAll(resp.Body)
+		log.Println(string(bs))
 		require.Equal(t, test.respStatusCode, resp.StatusCode, test.desc)
-
 		if resp.StatusCode > 200 && resp.StatusCode < 300 {
 			require.Equal(t, "", cmp.Diff(shelves, test.expectShelves, protocmp.Transform()), test.desc)
 			require.Equal(t, "", cmp.Diff(shelf2Books, test.expectShelf2Books, protocmp.Transform()), test.desc)
 		}
+		log.Println("--------------------")
 	}
-}
-
-func TestBasedOnFastHTTP(t *testing.T) {
-	// replace server transport based on fasthttp
-	transport.RegisterServerTransport("restful_based_on_fasthttp",
-		thttp.NewRESTServerTransport(true))
-
-	// service registration
-	s := &server.Server{}
-	service := server.New(server.WithAddress("127.0.0.1:45678"),
-		server.WithServiceName("trpc.test.helloworld.FastHTTP"),
-		server.WithProtocol("restful_based_on_fasthttp"),
-		server.WithRESTOptions(
-			restful.WithFastHTTPHeaderMatcher(
-				func(ctx context.Context, requestCtx *fasthttp.RequestCtx, serviceName string,
-					methodName string) (context.Context, error) {
-					return context.Background(), nil
-				},
-			),
-			restful.WithFastHTTPRespHandler(
-				func(
-					ctx context.Context,
-					requestCtx *fasthttp.RequestCtx,
-					resp proto.Message,
-					body []byte,
-				) error {
-					if string(requestCtx.Request.Header.Peek("Accept-Encoding")) != "gzip" {
-						return errors.New("test error")
-					}
-					writeCloser, err := (&restful.GZIPCompressor{}).
-						Compress(requestCtx.Response.BodyWriter())
-					if err != nil {
-						return err
-					}
-					defer writeCloser.Close()
-					requestCtx.Response.Header.Set("Content-Encoding", "gzip")
-					requestCtx.Response.Header.Set("Content-Type", "application/json")
-					writeCloser.Write(body)
-					return nil
-				},
-			),
-			restful.WithFastHTTPErrorHandler(
-				func(ctx context.Context, requestCtx *fasthttp.RequestCtx, err error) {
-					requestCtx.Response.SetStatusCode(http.StatusInternalServerError)
-					requestCtx.Response.Header.Set("Content-Type", "application/json")
-					requestCtx.Write([]byte(`{"massage":"test error"}`))
-				},
-			),
-		),
-	)
-	s.AddService("trpc.test.helloworld.FastHTTP", service)
-	hpb.RegisterGreeterService(s, &greeterServerImpl{})
-
-	// start server
-	go func() {
-		err := s.Serve()
-		require.Nil(t, err)
-	}()
-
-	time.Sleep(100 * time.Millisecond)
-
-	// create restful request
-	data := `{"name": "xyz"}`
-	buf := bytes.Buffer{}
-	gBuf := gzip.NewWriter(&buf)
-	_, err := gBuf.Write([]byte(data))
-	require.Nil(t, err)
-	gBuf.Close()
-	req, err := http.NewRequest("POST", "http://127.0.0.1:45678/v1/foobar", &buf)
-	require.Nil(t, err)
-	req.Header.Add("Content-Type", "anything")
-	req.Header.Add("Content-Encoding", "gzip")
-	req.Header.Add("Accept-Encoding", "gzip")
-
-	// send restful request
-	cli := http.Client{}
-	resp, err := cli.Do(req)
-	require.Nil(t, err)
-	defer resp.Body.Close()
-	require.Equal(t, resp.StatusCode, http.StatusOK)
-	reader, err := gzip.NewReader(resp.Body)
-	require.Nil(t, err)
-	bodyBytes, err := io.ReadAll(reader)
-	require.Nil(t, err)
-	type responseBody struct {
-		Message string `json:"message"`
-	}
-	respBody := &responseBody{}
-	json.Unmarshal(bodyBytes, respBody)
-	require.Equal(t, respBody.Message, "test")
-
-	// test matching all by query params
-	req2, err := http.NewRequest("GET", "http://127.0.0.1:45678/v2/bar?name=xyz", nil)
-	require.Nil(t, err)
-	resp2, err := http.DefaultClient.Do(req2)
-	require.Nil(t, err)
-	defer resp2.Body.Close()
-	require.Equal(t, resp2.StatusCode, http.StatusOK)
-
-	// test response content-type
-	require.Equal(t, resp2.Header.Get("Content-Type"), "application/json")
-
-	// test server error
-	req3, err := http.NewRequest("GET", "http://127.0.0.1:45678/v2/bar?name=anything", nil)
-	require.Nil(t, err)
-	resp3, err := http.DefaultClient.Do(req3)
-	require.Nil(t, err)
-	defer resp3.Body.Close()
-	require.Equal(t, resp3.StatusCode, http.StatusInternalServerError)
-
-	// test err handler
-	data4 := `{"name": "abc"}`
-	buf4 := bytes.Buffer{}
-	gBuf4 := gzip.NewWriter(&buf4)
-	_, err = gBuf4.Write([]byte(data4))
-	require.Nil(t, err)
-	gBuf4.Close()
-	req4, err := http.NewRequest("POST", "http://127.0.0.1:45678/v1/foobar", &buf4)
-	require.Nil(t, err)
-	req4.Header.Add("Content-Type", "anything")
-	req4.Header.Add("Content-Encoding", "gzip")
-	req4.Header.Add("Accept-Encoding", "gzip")
-	cli4 := http.Client{}
-	resp4, err := cli4.Do(req4)
-	require.Nil(t, err)
-	defer resp4.Body.Close()
-	require.Equal(t, resp4.StatusCode, http.StatusInternalServerError)
-	bodyBytes4, err := io.ReadAll(resp4.Body)
-	require.Nil(t, err)
-	require.Equal(t, bodyBytes4, []byte(`{"massage":"test error"}`))
 }
 
 func TestDiscardUnknownParams(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	addr := fmt.Sprintf("http://%s", ln.Addr())
+	defer ln.Close()
 	// service registration
 	s := &server.Server{}
 	service := server.New(
-		server.WithAddress("127.0.0.1:6680"),
+		server.WithListener(ln),
 		server.WithServiceName("trpc.test.helloworld.GreeterDiscardUnknownParams"),
 		server.WithNetwork("tcp"),
 		server.WithProtocol("restful"),
@@ -849,7 +789,7 @@ func TestDiscardUnknownParams(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// unknown query params
-	req, err := http.NewRequest("GET", "http://127.0.0.1:6680/v2/bar?name=xyz&unknown_arg=anything", nil)
+	req, err := http.NewRequest(http.MethodGet, addr+"/v2/bar?name=xyz&unknown_arg=anything", nil)
 	require.Nil(t, err)
 	resp, err := http.DefaultClient.Do(req)
 	require.Nil(t, err)
@@ -859,10 +799,14 @@ func TestDiscardUnknownParams(t *testing.T) {
 }
 
 func TestMultipleServiceBinding(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	addr := fmt.Sprintf("http://%s", ln.Addr())
+	defer ln.Close()
 	s := &server.Server{}
 	serviceName := "trpc.test.helloworld.TestMultipleServiceBinding"
 	service := server.New(
-		server.WithAddress("127.0.0.1:6681"),
+		server.WithListener(ln),
 		server.WithServiceName(serviceName),
 		server.WithNetwork("tcp"),
 		server.WithProtocol("restful"),
@@ -883,7 +827,7 @@ func TestMultipleServiceBinding(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Test service 1.
-	req, err := http.NewRequest("GET", "http://127.0.0.1:6681/v2/bar?name=xyz", nil)
+	req, err := http.NewRequest(http.MethodGet, addr+"/v2/bar?name=xyz", nil)
 	require.Nil(t, err)
 	resp, err := http.DefaultClient.Do(req)
 	require.Nil(t, err)
@@ -891,11 +835,50 @@ func TestMultipleServiceBinding(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Test service 2.
-	req2, err := http.NewRequest("GET", "http://127.0.0.1:6681/shelves", nil)
+	req2, err := http.NewRequest(http.MethodGet, addr+"/shelves", nil)
 	require.Nil(t, err)
 	resp2, err := http.DefaultClient.Do(req2)
 	require.Nil(t, err)
 	defer resp2.Body.Close()
 	require.Equal(t, http.StatusOK, resp2.StatusCode)
 	require.Nil(t, s.Close(nil))
+}
+
+func TestRESTfulRspTypeAssertion(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	addr := fmt.Sprintf("http://%s", ln.Addr())
+	defer ln.Close()
+	s := &server.Server{}
+	serviceName := "trpc.test.helloworld." + t.Name()
+	type someCustomType struct {
+		SomeField string
+	}
+	service := server.New(
+		server.WithListener(ln),
+		server.WithServiceName(serviceName),
+		server.WithNetwork("tcp"),
+		server.WithProtocol("restful"),
+		server.WithNamedFilter("custom_rsp_type",
+			func(ctx context.Context, req interface{}, next filter.ServerHandleFunc) (rsp interface{}, err error) {
+				_, _ = next(ctx, req)
+				return &someCustomType{"hello"}, nil
+			}),
+	)
+	s.AddService(serviceName, service)
+	hpb.RegisterGreeterService(s, &greeterServerImpl{})
+	go func() {
+		err := s.Serve()
+		require.Nil(t, err)
+	}()
+	time.Sleep(100 * time.Millisecond)
+	req, err := http.NewRequest(http.MethodGet, addr+"/v2/bar?name=xyz", nil)
+	require.Nil(t, err)
+	resp, err := http.DefaultClient.Do(req)
+	require.Nil(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	bs, err := io.ReadAll(resp.Body)
+	require.Nil(t, err)
+	t.Logf("response: %q\n", bs)
 }

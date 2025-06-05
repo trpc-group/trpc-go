@@ -29,9 +29,9 @@ func TestWithSkipServe(t *testing.T) {
 		WithConfigPath(testConfigPath),
 	}
 	t.Run("enable SkipServe option", func(t *testing.T) {
-		require.True(t, NewServer(append(opts, WithSkipServe(true))...).config.skipServe)
+		require.True(t, NewTrpcAdminServer(append(opts, WithSkipServe(true))...).config.skipServe)
 	})
 	t.Run("disable SkipServe option", func(t *testing.T) {
-		require.False(t, NewServer(append(opts, WithSkipServe(false))...).config.skipServe)
+		require.False(t, NewTrpcAdminServer(append(opts, WithSkipServe(false))...).config.skipServe)
 	})
 }

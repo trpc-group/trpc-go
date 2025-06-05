@@ -42,7 +42,7 @@ const (
 const (
 	// maxInitWindowSize maximum initial window size.
 	maxInitWindowSize uint32 = math.MaxUint32
-	// defaultInitwindowSize default initialization window size.
+	// defaultInitWindowSize default initialization window size.
 	defaultInitWindowSize uint32 = 65535
 )
 

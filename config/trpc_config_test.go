@@ -22,8 +22,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/log"
 )
@@ -121,15 +123,6 @@ func Test_search(t *testing.T) {
 	}
 }
 
-func TestTrpcConfig_Load(t *testing.T) {
-	t.Run("parse failed", func(t *testing.T) {
-		c, err := newTrpcConfig("../testdata/trpc_go.yaml")
-		require.Nil(t, err)
-		c.decoder = &TomlCodec{}
-		err = c.Load()
-		require.Contains(t, errs.Msg(err), "failed to parse")
-	})
-}
 func TestYamlCodec_Unmarshal(t *testing.T) {
 	t.Run("interface", func(t *testing.T) {
 		var tt interface{}
@@ -139,6 +132,16 @@ func TestYamlCodec_Unmarshal(t *testing.T) {
 	t.Run("map[string]interface{}", func(t *testing.T) {
 		tt := map[string]interface{}{}
 		require.NotNil(t, GetCodec("yaml").Unmarshal([]byte("[1, 2]"), &tt))
+	})
+}
+
+func TestTrpcConfig_Load(t *testing.T) {
+	t.Run("parse failed", func(t *testing.T) {
+		c, err := newTrpcConfig("../testdata/trpc_go.yaml")
+		require.Nil(t, err)
+		c.decoder = &TomlCodec{}
+		err = c.Load()
+		require.Contains(t, errs.Msg(err), "failed to parse")
 	})
 }
 
@@ -160,7 +163,7 @@ password: ${pwd}
 
 func TestCodecUnmarshalDstMustBeMap(t *testing.T) {
 	filePath := t.TempDir() + "/conf.map"
-	require.Nil(t, os.WriteFile(filePath, []byte{}, 0600))
+	require.Nil(t, os.WriteFile(filePath, []byte{}, 0644))
 	RegisterCodec(dstMustBeMapCodec{})
 	_, err := DefaultConfigLoader.Load(filePath, WithCodec(dstMustBeMapCodec{}.Name()))
 	require.Nil(t, err)
@@ -206,13 +209,13 @@ func TestWatch(t *testing.T) {
 	p.Set("key", []byte(`key: value`))
 	ops := []LoadOption{WithProvider(p.Name()), WithCodec("yaml"), WithWatch()}
 	c1, err := DefaultConfigLoader.Load("key", ops...)
-	require.Nilf(t, err, "first load config:%+v", c1)
+	require.Nilf(t, err, "first load config: %+v", c1)
 	require.True(t, c1.IsSet("key"), "first load config key exist")
 	require.Equal(t, c1.Get("key", "default"), "value", "first load config get key value")
 
 	var c2 Config
 	c2, err = DefaultConfigLoader.Load("key", ops...)
-	require.Nil(t, err, "second load config:%+v", c2)
+	require.Nil(t, err, "second load config: %+v", c2)
 	require.Equal(t, c1, c2, "first and second load config not equal")
 	require.True(t, c2.IsSet("key"), "second load config key exist")
 	require.Equal(t, c2.Get("key", "default"), "value", "second load config get key value")
@@ -261,6 +264,54 @@ func TestWatch(t *testing.T) {
 	require.Equal(t, c2.Get("key", "default"), "value2", "after update config and config get value")
 }
 
+func TestWatchWithError(t *testing.T) {
+	p := &withErrorProvider{}
+	RegisterProvider(p)
+	path := "some_path"
+	require.Nil(t, p.Set(path, nil))
+	hook := func(m WatchMessage) error {
+		return errors.New("always fail")
+	}
+	_, err := DefaultConfigLoader.Load(path, WithProvider(p.Name()), WithWatch(), WithWatchHookWithError(hook))
+	require.Nil(t, err)
+	require.NotNil(t, p.Set(path, nil))
+}
+
+var providerWithErrorName = "with_error_provider"
+
+type withErrorProvider struct {
+	values    sync.Map
+	callbacks []ProviderCallbackWithError
+}
+
+func (p *withErrorProvider) Name() string {
+	return providerWithErrorName
+}
+
+func (p *withErrorProvider) Read(s string) ([]byte, error) {
+	if v, ok := p.values.Load(s); ok {
+		return v.([]byte), nil
+	}
+	return nil, fmt.Errorf("not found config")
+}
+
+func (*withErrorProvider) Watch(ProviderCallback) {
+	// No-op.
+}
+
+func (p *withErrorProvider) WatchWithError(cb ProviderCallbackWithError) {
+	p.callbacks = append(p.callbacks, cb)
+}
+
+func (p *withErrorProvider) Set(key string, v []byte) error {
+	p.values.Store(key, v)
+	var err error
+	for _, callback := range p.callbacks {
+		err = multierror.Append(err, callback(key, v)).ErrorOrNil()
+	}
+	return err
+}
+
 var _ DataProvider = (*manualTriggerWatchProvider)(nil)
 
 type manualTriggerWatchProvider struct {
@@ -283,6 +334,7 @@ func (m *manualTriggerWatchProvider) Watch(callback ProviderCallback) {
 	m.callbacks = append(m.callbacks, callback)
 }
 
+// 修改配置
 func (m *manualTriggerWatchProvider) Set(key string, v []byte) {
 	m.values.Store(key, v)
 	for _, callback := range m.callbacks {

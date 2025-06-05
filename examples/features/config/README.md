@@ -8,18 +8,18 @@ In this example, the code specifically demonstrates how the server reads a custo
 * Start server.
 
 ```shell
-$ go run server/main.go -conf server/trpc_go.yaml
+go run server/main.go -conf server/trpc_go.yaml
 ```
 
 * Start client.
 
 ```shell
-$ go run client/main.go
+go run client/main.go
 ```
 
 * Server output
 
-```
+```log
 Get config - custom : {{customConfigFromServer {value1 true 1234}}} 
 test : customConfigFromServer 
 key1 : value1 
@@ -33,6 +33,6 @@ trpc-go-server SayHello, rsp.msg:trpc-go-server response: Hello trpc-go-client. 
 
 * Client output
 
-```
+```log
 Get msg: trpc-go-server response: Hello trpc-go-client. Custom config from server: customConfigFromServer
 ```

@@ -21,18 +21,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
-
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/filter"
+	iserver "trpc.group/trpc-go/trpc-go/internal/local/server"
+	inaming "trpc.group/trpc-go/trpc-go/internal/naming"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 	"trpc.group/trpc-go/trpc-go/naming/selector"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 	"trpc.group/trpc-go/trpc-go/transport"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	_ "trpc.group/trpc-go/trpc-go"
 )
@@ -140,7 +141,7 @@ func TestClient(t *testing.T) {
 	// test setting CallType in opts
 	// updateMsg will then update CallType in msg
 	ctx = context.Background()
-	head := &trpcpb.RequestProtocol{}
+	head := &trpc.RequestProtocol{}
 	ctx, msg = codec.WithNewMessage(ctx)
 	require.Nil(t, cli.Invoke(ctx, reqBody, rspBody, client.WithTarget("ip://127.0.0.1:8080"),
 		client.WithProtocol("fake"),
@@ -148,6 +149,53 @@ func TestClient(t *testing.T) {
 		client.WithReqHead(head),
 	))
 	require.Equal(t, msg.CallType(), codec.SendOnly)
+
+	// test setting invalid tag in opts
+	ctx = context.Background()
+	head = &trpc.RequestProtocol{}
+	ctx, _ = codec.WithNewMessage(ctx)
+	require.NotNil(t, cli.Invoke(ctx, reqBody, rspBody, client.WithTarget("ip://127.0.0.1:8080"),
+		client.WithProtocol("fake"),
+		client.WithReqHead(head),
+		client.WithTag("Non-existed"),
+	))
+}
+
+func TestBroadcastClient(t *testing.T) {
+	ctx := context.Background()
+	codec.RegisterSerializer(0, &codec.NoopSerialization{})
+	codec.Register("fake", nil, &fakeCodec{})
+
+	bc := client.NewBroadcastClient[codec.Body]()
+
+	reqBody := &codec.Body{Data: []byte("body")}
+	rsps, err := bc.BroadcastInvoke(ctx, reqBody,
+		client.WithTarget("fake://broadcast.service"),
+		client.WithProtocol("fake"),
+	)
+	require.Nil(t, err)
+	expectedRsps := [3]client.BroadcastRsp[codec.Body]{
+		{
+			Node: &registry.Node{Address: "127.0.0.1:8080"},
+			Rsp:  &codec.Body{Data: []byte("body")},
+			Err:  nil,
+		},
+		{
+			Node: &registry.Node{Address: "127.0.0.1:8081"},
+			Rsp:  &codec.Body{Data: []byte("body")},
+			Err:  nil,
+		},
+		{
+			Node: &registry.Node{Address: "127.0.0.1:8082"},
+			Rsp:  &codec.Body{Data: []byte("body")},
+			Err:  nil,
+		},
+	}
+	for i := 0; i < len(rsps); i++ {
+		require.Equal(t, expectedRsps[i].Node.Address, rsps[i].Node.Address, "Address mismatch at index %d", i)
+		require.Equal(t, expectedRsps[i].Rsp, rsps[i].Rsp, "Rsp mismatch at index %d", i)
+		require.Equal(t, expectedRsps[i].Err, rsps[i].Err, "Err mismatch at index %d", i)
+	}
 }
 
 func TestClientFail(t *testing.T) {
@@ -201,6 +249,7 @@ func TestClientFail(t *testing.T) {
 	reqBody = &codec.Body{Data: []byte("businessfail")}
 	err = cli.Invoke(ctx, reqBody, rspBody, client.WithTarget("ip://127.0.0.1:8080"),
 		client.WithProtocol("fake"), client.WithSerializationType(codec.SerializationTypeNoop))
+	assert.NotNil(t, err)
 
 	reqBody = &codec.Body{Data: []byte("msgfail")}
 	err = cli.Invoke(ctx, reqBody, rspBody, client.WithTarget("ip://127.0.0.1:8080"),
@@ -232,6 +281,92 @@ func TestClientFail(t *testing.T) {
 
 }
 
+func TestBroadcastClientFail(t *testing.T) {
+	ctx := context.Background()
+	codec.RegisterSerializer(0, &codec.NoopSerialization{})
+	codec.Register("fake", nil, &fakeCodec{})
+
+	bc := client.NewBroadcastClient[codec.Body]()
+
+	reqBody := &codec.Body{Data: []byte("body")}
+	rsps, err := bc.BroadcastInvoke(ctx, reqBody,
+		client.WithTarget("fake://broadcast.emptyList.service"),
+		client.WithProtocol("fake"),
+	)
+	require.Nil(t, rsps)
+	require.Error(t, err)
+
+	reqBody = &codec.Body{Data: []byte("body")}
+	rsps, err = bc.BroadcastInvoke(ctx, reqBody,
+		client.WithTarget("fake://broadcast.noList.service"),
+		client.WithProtocol("fake"),
+	)
+	require.Nil(t, rsps)
+	require.Error(t, err)
+
+	reqBody = &codec.Body{Data: []byte("body")}
+	rsps, err = bc.BroadcastInvoke(ctx, reqBody,
+		client.WithTarget("fake://broadcast.wrongList.service"),
+		client.WithProtocol("fake"),
+	)
+	require.Nil(t, rsps)
+	require.Error(t, err)
+
+	reqFialedBody := &codec.Body{Data: []byte("nilrsp")}
+	rsps, err = bc.BroadcastInvoke(ctx, reqFialedBody,
+		client.WithTarget("fake://broadcast.service"),
+		client.WithProtocol("fake"),
+	)
+	require.NotNil(t, rsps)
+	require.Nil(t, err)
+	for i := 0; i < len(rsps); i++ {
+		require.Equal(t, &codec.Body{Data: []byte(nil)}, rsps[i].Rsp, "Rsp mismatch at index %d", i)
+		require.Nil(t, err)
+	}
+
+	reqFialedBody = &codec.Body{Data: []byte("callfail")}
+	rsps, err = bc.BroadcastInvoke(ctx, reqFialedBody,
+		client.WithTarget("fake://broadcast.service"),
+		client.WithProtocol("fake"),
+	)
+	require.NotNil(t, rsps)
+	require.Error(t, err)
+	for i := 0; i < len(rsps); i++ {
+		require.Equal(t, &codec.Body{Data: []byte(nil)}, rsps[i].Rsp, "Rsp mismatch at index %d", i)
+		require.NotNil(t, err, rsps[i].Err, "Err mismatch at index %d", i)
+	}
+
+	reqFialedBody = &codec.Body{Data: []byte("one_fail")}
+	rsps, err = bc.BroadcastInvoke(ctx, reqFialedBody,
+		client.WithTarget("fake://broadcast.service"),
+		client.WithProtocol("fake"),
+	)
+	require.NotNil(t, rsps)
+	require.Error(t, err)
+	expectedRsps := [3]client.BroadcastRsp[codec.Body]{
+		{
+			Node: &registry.Node{Address: "127.0.0.1:8080"},
+			Rsp:  &codec.Body{Data: []byte(nil)},
+			Err:  errors.New("transport call fail"),
+		},
+		{
+			Node: &registry.Node{Address: "127.0.0.1:8081"},
+			Rsp:  &codec.Body{Data: []byte("one_fail")},
+			Err:  nil,
+		},
+		{
+			Node: &registry.Node{Address: "127.0.0.1:8082"},
+			Rsp:  &codec.Body{Data: []byte("one_fail")},
+			Err:  nil,
+		},
+	}
+	for i := 0; i < len(rsps); i++ {
+		require.Equal(t, expectedRsps[i].Node.Address, rsps[i].Node.Address, "Address mismatch at index %d", i)
+		require.Equal(t, expectedRsps[i].Rsp, rsps[i].Rsp, "Rsp mismatch at index %d", i)
+		require.Equal(t, expectedRsps[i].Err, rsps[i].Err, "Err mismatch at index %d", i)
+	}
+}
+
 func TestClientAddrResolve(t *testing.T) {
 	ctx := context.Background()
 	codec.RegisterSerializer(0, &codec.NoopSerialization{})
@@ -256,13 +391,14 @@ func TestClientAddrResolve(t *testing.T) {
 
 	// test target with hostname schema
 	nctx, _ = codec.WithNewMessage(ctx)
-	_ = cli.Invoke(nctx, reqBody, rspBody, client.WithTarget("ip://www.qq.com:8080"), client.WithProtocol("fake"))
+	err := cli.Invoke(nctx, reqBody, rspBody, client.WithTarget("ip://www.qq.com:8080"), client.WithProtocol("fake"))
+	require.Nil(t, err)
 	assert.Nil(t, codec.Message(nctx).RemoteAddr())
 
 	// test calling target with ip schema failure
 	nctx, msg := codec.WithNewMessage(ctx)
 	reqBody = &codec.Body{Data: []byte("callfail")}
-	err := cli.Invoke(nctx, reqBody, rspBody, client.WithTarget("ip://127.0.0.1:8080"), client.WithProtocol("fake"))
+	err = cli.Invoke(nctx, reqBody, rspBody, client.WithTarget("ip://127.0.0.1:8080"), client.WithProtocol("fake"))
 	assert.NotNil(t, err)
 	assert.Equal(t, "127.0.0.1:8080", msg.RemoteAddr().String())
 
@@ -290,7 +426,7 @@ func TestTimeout(t *testing.T) {
 	require.NotNil(t, err)
 	e, ok := err.(*errs.Error)
 	require.True(t, ok)
-	require.Equal(t, errs.RetClientTimeout, e.Code)
+	require.Equal(t, int32(errs.RetClientTimeout), e.Code)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
@@ -301,7 +437,8 @@ func TestTimeout(t *testing.T) {
 	require.NotNil(t, err)
 	e, ok = err.(*errs.Error)
 	require.True(t, ok)
-	require.Equal(t, errs.RetClientFullLinkTimeout, e.Code)
+	require.Equal(t, int32(errs.RetClientFullLinkTimeout), e.Code)
+
 }
 
 func TestSameCalleeMultiServiceName(t *testing.T) {
@@ -329,6 +466,7 @@ func TestSameCalleeMultiServiceName(t *testing.T) {
 	msg.WithCalleeServiceName(callee)
 	require.NotNil(t, client.DefaultClient.Invoke(ctx, nil, nil, client.WithServiceName(serviceNames[0])))
 	require.Equal(t, codec.CompressTypeSnappy, msg.CompressType())
+
 	ctx, msg = codec.EnsureMessage(context.Background())
 	msg.WithCalleeServiceName(callee)
 	require.NotNil(t, client.DefaultClient.Invoke(ctx, nil, nil, client.WithServiceName(serviceNames[2])))
@@ -409,6 +547,73 @@ func TestFixTimeout(t *testing.T) {
 			client.WithProtocol(protocol))
 		require.Equal(t, errs.RetClientFullLinkTimeout, errs.Code(err))
 	})
+
+	t.Run("RetClientTimeout", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		err := cli.Invoke(ctx,
+			&codec.Body{Data: []byte("timeout")}, rspBody,
+			client.WithTarget(target),
+			client.WithTimeout(0),
+			client.WithProtocol(protocol))
+		require.NotNil(t, err)
+		e, ok := err.(*errs.Error)
+		require.True(t, ok)
+		require.Equal(t, int32(errs.RetClientTimeout), e.Code)
+	})
+}
+
+func TestMethodTimeout(t *testing.T) {
+	newInt := func(i int) *int { return &i }
+	require.Nil(t, client.RegisterClientConfig(t.Name(), &client.BackendConfig{
+		Callee:      t.Name(),
+		ServiceName: t.Name(),
+		Timeout:     200,
+		Method: map[string]*client.MethodConfig{
+			"M1": {Timeout: newInt(100)},
+			"M2": {Timeout: newInt(300)},
+		},
+	}))
+
+	ctx, msg := codec.EnsureMessage(context.Background())
+	msg.WithCalleeServiceName(t.Name())
+	invoke := func(method string, opts ...client.Option) {
+		msg.WithCalleeMethod(method)
+		require.Nil(t, client.New().Invoke(ctx, nil, nil, append(opts, client.WithFilter(
+			func(ctx context.Context, req, rsp interface{}, next filter.ClientHandleFunc) error {
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-time.After(time.Second):
+					return errors.New("wait ctx done timeout")
+				}
+			}))...))
+	}
+
+	t.Run("method_timeout_not_configured", func(t *testing.T) {
+		start := time.Now()
+		invoke("M0")
+		require.InDelta(t, time.Millisecond*200, time.Since(start), float64(time.Millisecond*170))
+	})
+
+	t.Run("method_timeout_is_less_than_service_timeout", func(t *testing.T) {
+		start := time.Now()
+		invoke("M1")
+		require.InDelta(t, time.Millisecond*100, time.Since(start), float64(time.Millisecond*170))
+	})
+
+	t.Run("method_timeout_is_greater_than_service_timeout", func(t *testing.T) {
+		start := time.Now()
+		invoke("M2")
+		require.InDelta(t, time.Millisecond*300, time.Since(start), float64(time.Millisecond*170))
+	})
+
+	t.Run("client_options_has_highest_priority", func(t *testing.T) {
+		const timeout = time.Millisecond * 400
+		start := time.Now()
+		invoke("M2", client.WithTimeout(timeout))
+		require.InDelta(t, timeout, time.Since(start), float64(time.Millisecond*170))
+	})
 }
 
 func TestSelectorRemoteAddrUseUserProvidedParser(t *testing.T) {
@@ -434,6 +639,47 @@ func TestSelectorRemoteAddrUseUserProvidedParser(t *testing.T) {
 	require.NotNil(t, addr)
 	require.Equal(t, t.Name(), addr.Network())
 	require.Equal(t, t.Name(), addr.String())
+}
+
+func TestClientLocalScope(t *testing.T) {
+	ctx := context.Background()
+	iserver.Register(
+		pb.GreeterServer_ServiceDesc.ServiceName,
+		pb.GreeterServer_ServiceDesc.Methods[0].Name,
+		func(ctx context.Context, f iserver.FilterFunc) (interface{}, error) {
+			return pb.GreeterServer_ServiceDesc.Methods[0].Func(&testServer{}, ctx, f)
+		},
+		iserver.Options{
+			Protocol: "trpc",
+			ServerCodecGetter: func() codec.Codec {
+				return trpc.DefaultServerCodec
+			},
+		},
+	)
+	p := pb.NewGreeterClientProxy(
+		client.WithScope("local"),
+		client.WithServiceName(pb.GreeterServer_ServiceDesc.ServiceName),
+		client.WithProtocol("trpc"),
+	)
+	msg := "hello world"
+	// Test scope "local".
+	rsp, err := p.SayHello(ctx, &pb.HelloRequest{Msg: msg})
+	require.NoError(t, err)
+	require.Equal(t, msg, rsp.Msg)
+
+	// Test scope "all".
+	rsp, err = p.SayHello(ctx, &pb.HelloRequest{Msg: msg}, client.WithScope("all"))
+	require.NoError(t, err)
+	require.Equal(t, msg, rsp.Msg)
+}
+
+type testServer struct{}
+
+func (s *testServer) SayHello(ctx context.Context, req *pb.HelloRequest) (*pb.HelloReply, error) {
+	return &pb.HelloReply{Msg: req.Msg}, nil
+}
+func (s *testServer) SayHi(ctx context.Context, req *pb.HelloRequest) (*pb.HelloReply, error) {
+	return &pb.HelloReply{Msg: req.Msg}, nil
 }
 
 type multiplexedTransport struct {
@@ -474,6 +720,18 @@ func (c *fakeTransport) RoundTrip(ctx context.Context, req []byte,
 	if string(req) == "nilrsp" {
 		return nil, nil
 	}
+
+	if string(req) == "one_fail" {
+		opts := &transport.RoundTripOptions{}
+		for _, o := range roundTripOpts {
+			o(opts)
+		}
+		if opts.Address == "127.0.0.1:8080" {
+			return nil, errors.New("transport call fail")
+		}
+		return req, nil
+	}
+
 	return req, nil
 }
 
@@ -545,6 +803,59 @@ func (c *fakeSelector) Select(serviceName string, opt ...selector.Option) (*regi
 		return &registry.Node{
 			Network: "unknown",
 			Address: "127.0.0.1:8080",
+		}, nil
+	}
+
+	if serviceName == "broadcast.service" {
+		list1 := make([]*registry.Node, 0, 3)
+		list1 = append(list1, &registry.Node{
+			Address: "127.0.0.1:8080",
+		})
+		list1 = append(list1, &registry.Node{
+			Address: "127.0.0.1:8081",
+		})
+		list1 = append(list1, &registry.Node{
+			Address: "127.0.0.1:8082",
+		})
+
+		return &registry.Node{
+			Network: "unknown",
+			Address: "127.0.0.1:8080",
+			Metadata: map[string]interface{}{
+				inaming.BroadcastNodeListKey: list1,
+			},
+		}, nil
+	}
+
+	if serviceName == "broadcast.emptyList.service" {
+		return &registry.Node{
+			Network: "unknown",
+			Address: "127.0.0.1:8080",
+			Metadata: map[string]interface{}{
+				inaming.BroadcastNodeListKey: []registry.Node{},
+			},
+		}, nil
+	}
+
+	if serviceName == "broadcast.noList.service" {
+		return &registry.Node{
+			Network:  "unknown",
+			Address:  "127.0.0.1:8080",
+			Metadata: map[string]interface{}{},
+		}, nil
+	}
+
+	if serviceName == "broadcast.wrongList.service" {
+		return &registry.Node{
+			Network: "unknown",
+			Address: "127.0.0.1:8080",
+			Metadata: map[string]interface{}{
+				inaming.BroadcastNodeListKey: []string{
+					"127.0.0.1:8080",
+					"127.0.0.1:8081",
+					"127.0.0.1:8082",
+				},
+			},
 		}, nil
 	}
 

@@ -20,12 +20,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/BurntSushi/toml"
-	"github.com/spf13/cast"
-	yaml "gopkg.in/yaml.v3"
 	"trpc.group/trpc-go/trpc-go/internal/expandenv"
-
 	"trpc.group/trpc-go/trpc-go/log"
+
+	"github.com/BurntSushi/toml"
+	"github.com/hashicorp/go-multierror"
+	"github.com/spf13/cast"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -63,7 +64,11 @@ func (loader *TrpcConfigLoader) Load(path string, opts ...LoadOption) (Config, e
 	w := &watcher{}
 	i, loaded := loader.watchers.LoadOrStore(c.p, w)
 	if !loaded {
-		c.p.Watch(w.watch)
+		if pe, ok := c.p.(DataProviderWithError); ok {
+			pe.WatchWithError(w.watchWithError)
+		} else {
+			c.p.Watch(w.watch)
+		}
 	} else {
 		w = i.(*watcher)
 	}
@@ -166,11 +171,21 @@ func (w *watcher) getOrCreate(path string) *set {
 	return i.(*set)
 }
 
-// watch func
-func (w *watcher) watch(path string, data []byte) {
+// watchWithError returns the watch error explicitly.
+func (w *watcher) watchWithError(path string, data []byte) error {
 	if v := w.get(path); v != nil {
-		v.watch(data)
+		return v.watch(data)
 	}
+	return nil
+}
+
+// watch is used as a callback function to the data provider's Watch implementation.
+// This function ignores the returned error, whereas watchWithError explicitly
+// returns the error.
+// Therefore, watch will be used in DataProvider.Watch, and watchWithError will be
+// used in DataProviderWithError.WatchWithError.
+func (w *watcher) watch(path string, data []byte) {
+	w.watchWithError(path, data)
 }
 
 // set manages configs with same provider and name with different type
@@ -212,7 +227,7 @@ func (s *set) getOrStore(tc *TrpcConfig) *TrpcConfig {
 }
 
 // watch data change, delete no watch model config and update watch model config and target notify
-func (s *set) watch(data []byte) {
+func (s *set) watch(data []byte) error {
 	var items []*TrpcConfig
 	var del []*TrpcConfig
 	s.mutex.Lock()
@@ -226,14 +241,14 @@ func (s *set) watch(data []byte) {
 	s.items = items
 	s.mutex.Unlock()
 
+	var err error
 	for _, item := range items {
-		err := item.doWatch(data)
-		item.notify(data, err)
+		err = multierror.Append(err, item.notify(data, item.doWatch(data))).ErrorOrNil()
 	}
-
 	for _, item := range del {
-		item.notify(data, nil)
+		err = multierror.Append(err, item.notify(data, nil)).ErrorOrNil()
 	}
+	return err
 }
 
 // defaultNotifyChange default hook for notify config changed
@@ -269,15 +284,10 @@ type TrpcConfig struct {
 
 	// because function is not support comparable in singleton, so the following options work only for the first load
 	watch     bool
-	watchHook func(message WatchMessage)
+	watchHook func(message WatchMessage) error
 
 	mutex sync.RWMutex
 	value *entity // store config value
-}
-
-type entity struct {
-	raw  []byte      // current binary data
-	data interface{} // unmarshal type to use point type, save latest no error data
 }
 
 func newEntity() *entity {
@@ -286,13 +296,20 @@ func newEntity() *entity {
 	}
 }
 
+// entity data struct
+type entity struct {
+	raw  []byte      // current binary data
+	data interface{} // unmarshal type to use point type, save latest no error data
+}
+
 func newTrpcConfig(path string, opts ...LoadOption) (*TrpcConfig, error) {
 	c := &TrpcConfig{
 		path:    path,
 		p:       GetProvider("file"),
 		decoder: GetCodec("yaml"),
-		watchHook: func(message WatchMessage) {
+		watchHook: func(message WatchMessage) error {
 			defaultWatchHook(message)
+			return nil
 		},
 	}
 	for _, o := range opts {
@@ -312,7 +329,7 @@ func newTrpcConfig(path string, opts ...LoadOption) (*TrpcConfig, error) {
 	c.msg.Watch = c.watch
 
 	// since reflect.String() cannot uniquely identify a type, this id is used as a preliminary judgment basis
-	const idFormat = "provider:%s path:%s codec:%s env:%t watch:%t"
+	const idFormat = "provider: %s path: %s codec: %s env: %t watch: %t"
 	c.id = fmt.Sprintf(idFormat, c.p.Name(), c.path, c.decoder.Name(), c.expandEnv, c.watch)
 	return c, nil
 }
@@ -361,12 +378,12 @@ func (c *TrpcConfig) set(data []byte) error {
 	e.raw = data
 	err := c.decoder.Unmarshal(data, &e.data)
 	if err != nil {
-		return fmt.Errorf("trpc/config: failed to parse:%w, id:%s", err, c.id)
+		return fmt.Errorf("trpc/config: failed to parse: %w, id: %s", err, c.id)
 	}
 	c.value = e
 	return nil
 }
-func (c *TrpcConfig) notify(data []byte, err error) {
+func (c *TrpcConfig) notify(data []byte, err error) error {
 	m := c.msg
 
 	m.Value = data
@@ -374,7 +391,7 @@ func (c *TrpcConfig) notify(data []byte, err error) {
 		m.Error = err
 	}
 
-	c.watchHook(m)
+	return c.watchHook(m)
 }
 
 // Load loads config.
@@ -408,7 +425,8 @@ func (c *TrpcConfig) Get(key string, defaultValue interface{}) interface{} {
 	return defaultValue
 }
 
-// Unmarshal deserializes the config into input param.
+// Unmarshal deserializes the config into out.
+// And promises out is always map[string]interface{} once Load or ReLoad is called successfully.
 func (c *TrpcConfig) Unmarshal(out interface{}) error {
 	return c.decoder.Unmarshal(c.get().raw, out)
 }
@@ -533,7 +551,7 @@ func (c *TrpcConfig) search(key string) (interface{}, bool) {
 	subkeys := strings.Split(key, ".")
 	value, err := search(unmarshalledData, subkeys)
 	if err != nil {
-		log.Debugf("trpc config: search key %s failed: %+v", key, err)
+		log.Tracef("trpc config: search key %s failed: %+v", key, err)
 		return value, false
 	}
 

@@ -16,74 +16,56 @@
 package packetbuffer
 
 import (
-	"fmt"
 	"io"
-	"net"
-
-	"trpc.group/trpc-go/trpc-go/internal/allocator"
 )
 
-// New creates a packet buffer with specific packet connection and size.
-func New(conn net.PacketConn, size int) *PacketBuffer {
-	buf, i := allocator.Malloc(size)
-	return &PacketBuffer{
-		buf:      buf,
-		conn:     conn,
-		toBeFree: i,
-	}
-}
-
-// PacketBuffer encapsulates a packet connection and implements the io.Reader interface.
+// PacketBuffer a variable-sized buffer of bytes.
 type PacketBuffer struct {
-	buf      []byte
-	toBeFree interface{}
-	conn     net.PacketConn
-	raddr    net.Addr
-	r, w     int
+	buf         []byte // contents are the bytes buf[read : write]
+	read, write int    // read at &buf[read], write at &buf[write]
 }
 
-// Read reads data from the packet. Continuous reads cannot cross between multiple packet only if Close is called.
-func (pb *PacketBuffer) Read(p []byte) (n int, err error) {
-	if len(p) == 0 {
-		return 0, nil
-	}
-	if pb.w == 0 {
-		n, raddr, err := pb.conn.ReadFrom(pb.buf)
-		if err != nil {
-			return 0, err
-		}
-		pb.w = n
-		pb.raddr = raddr
-	}
-	n = copy(p, pb.buf[pb.r:pb.w])
-	if n == 0 {
+// New return a PacketBuffer.
+func New(buf []byte) *PacketBuffer {
+	return &PacketBuffer{buf: buf}
+}
+
+// Read try gets len(b) data from buffer, the current position is
+// advanced by `n` bytes returned. It returns the number of bytes
+// read (0 <= n <= len(b)), if Read returns n < len(b) or buf is
+// empty return io.EOF.
+func (r *PacketBuffer) Read(b []byte) (int, error) {
+	if r.write == r.read {
 		return 0, io.EOF
 	}
-	pb.r += n
-	return n, nil
-}
-
-// Next is used to distinguish continuous logic reads. It indicates that the reading on current packet has finished.
-// If there remains data unconsumed, Next returns an error and discards the remaining data.
-func (pb *PacketBuffer) Next() error {
-	if pb.w == 0 {
-		return nil
-	}
 	var err error
-	if remain := pb.w - pb.r; remain != 0 {
-		err = fmt.Errorf("packet data is not drained, the remaining %d will be dropped", remain)
+	if r.write-r.read < len(b) {
+		err = io.EOF
 	}
-	pb.r, pb.w = 0, 0
-	pb.raddr = nil
-	return err
+	n := copy(b, r.buf[r.read:r.write])
+	r.read += n
+	return n, err
 }
 
-// CurrentPacketAddr returns current packet's remote address.
-func (pb *PacketBuffer) CurrentPacketAddr() net.Addr {
-	return pb.raddr
+// UnRead returns the number of bytes between the read
+// position and the write position of the buffer.
+func (r *PacketBuffer) UnRead() int {
+	return r.write - r.read
 }
 
-// Close closes this buffer and releases resource.
-func (pb *PacketBuffer) Close() {
-	allocator.Free(pb.toBeFree)
+// Reset reset the read/write position of the buffer.
+func (r *PacketBuffer) Reset() {
+	r.read = 0
+	r.write = 0
+}
+
+// Advance advance the write position of the buffer.
+func (r *PacketBuffer) Advance(n int) {
+	r.write += n
+}
+
+// Bytes returns a slice starting at the write position and
+// the end of the buffer.
+func (r *PacketBuffer) Bytes() []byte {
+	return r.buf[r.write:]
 }

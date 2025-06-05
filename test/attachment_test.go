@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"testing"
 	"time"
@@ -26,13 +27,12 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/server"
 	testpb "trpc.group/trpc-go/trpc-go/test/protocols"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 )
 
 // tRPC-Go implementation:
@@ -152,17 +152,51 @@ func (s *TestSuite) TestAttachment() {
 		require.Nil(t, err)
 		require.Empty(t, bts)
 	})
+	// https://cs.opensource.google/go/go/+/refs/tags/go1.17.1:src/math/const.go;l=40
+	const bitsPerWord = 32 << (^uint(0) >> 63) // 32 or 64
+	s.T().Run("very large client attachment", func(t *testing.T) {
+		if bitsPerWord == 32 {
+			s.T().Skip("only test in 64-bit machine")
+		}
+		veryLagerAttachment := bytes.Repeat([]byte("a"), math.MaxUint32+1)
+		s.startServer(&TRPCService{})
+		t.Cleanup(func() { s.closeServer(nil) })
+		a := client.NewAttachment(bytes.NewReader(veryLagerAttachment))
+		c := s.newTRPCClient()
+		_, err := c.EmptyCall(context.Background(), &testpb.Empty{}, client.WithAttachment(a))
+		require.Equal(t, errs.RetClientEncodeFail, errs.Code(err))
+		require.Contains(t, errs.Msg(err), "attachment len overflows uint32")
+	})
+	s.T().Run("very large server attachment", func(t *testing.T) {
+		if bitsPerWord == 32 {
+			s.T().Skip("only test in 64-bit machine")
+		}
+		veryLagerAttachment := bytes.Repeat([]byte("a"), math.MaxUint32+1)
+		s.startServer(&TRPCService{EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			msg := trpc.Message(ctx)
+			a := server.GetAttachment(msg)
+			a.SetResponse(bytes.NewReader(veryLagerAttachment))
+			return &testpb.Empty{}, nil
+		}}, server.WithTimeout(1*time.Minute))
+		t.Cleanup(func() { s.closeServer(nil) })
+
+		c := s.newTRPCClient()
+		a := client.NewAttachment(bytes.NewReader([]byte("")))
+		_, err := c.EmptyCall(context.Background(), &testpb.Empty{}, client.WithAttachment(a))
+		require.Equalf(t, errs.RetClientReadFrameErr, errs.Code(err),
+			"service:trpc.testing.end2end.TestTRPC encode fail:attachment len overflows uint32")
+	})
 }
 
 // 这里通过测试用例来展示其他可行方法，并讨论各种方法的优点和缺点，包括以下方法：
-// 1. trans_info 字段透传
+// 1. trans_info 字段透传 https://iwiki.woa.com/pages/viewpage.action?pageId=284269846
 // 2. client 指定空序列化方式
-// 3. server 自定义桩代码透传数据
+// 3. server 自定义桩代码透传数据 https://iwiki.woa.com/pages/viewpage.action?pageId=253291617
 // 4. pb3 中 byte 定义字段加上相关减少拷贝的函数 https://learn.microsoft.com/en-us/aspnet/core/grpc/performance?view=aspnetcore-7.0#binary-payloads
-// 5. streaming
+// 5. streaming https://iwiki.woa.com/pages/viewpage.action?pageId=284289215
 
 // 1. trans_info 字段透传。
-// 框架支持在 client 和 server 之间透传字段，并在整个调用链路自动透传下去。
+// 框架支持在 client 和 server 之间透传字段，并在整个调用链路自动透传下去。https://iwiki.woa.com/pages/viewpage.action?pageId=284269846
 // 因为 trans_info 声明为 pb 中的 map<string, bytes> 类型，所以二进制文件不可避免的需要被序列化/反序列化。
 //
 // 请求协议头
@@ -192,7 +226,7 @@ func (s *TestSuite) TestTransInfo() {
 
 	// When a client invokes Echo with MetaData
 	c := s.newTRPCClient()
-	head := &trpcpb.ResponseProtocol{}
+	head := &trpc.ResponseProtocol{}
 	_, err := c.UnaryCall(
 		trpc.BackgroundContext(),
 		s.defaultSimpleRequest,
@@ -217,7 +251,7 @@ func (s *TestSuite) TestTransInfo() {
 	)
 
 	// Then the request shouldn't send to server, because encoding FrameHead is failed
-	require.Equal(s.T(), errs.RetClientEncodeFail, errs.Code(err))
+	require.Equal(s.T(), errs.RetClientEncodeFail, errs.Code(err), "full err: %+v", err)
 	require.Contains(s.T(), err.Error(), "head len overflows uint16")
 }
 
@@ -346,7 +380,7 @@ func testTRPCServiceUnaryCallHandler(svr interface{}, ctx context.Context, f ser
 // 减少拷贝的其他技术：
 // Arena:
 // proposal: arena: new package providing memory arenas https://github.com/golang/go/issues/51317
-// How to reuse []byte field when unmarshalling? https://github.com/golang/protobuf/issues/1495
+// How to reuse []byte field when unmarshaling? https://github.com/golang/protobuf/issues/1495
 // C++ Arena Allocation Guide https://protobuf.dev/reference/cpp/arenas/
 // Zero Copy:
 // Opensource C++ zero-copy API:  https://github.com/protocolbuffers/protobuf/issues/1896

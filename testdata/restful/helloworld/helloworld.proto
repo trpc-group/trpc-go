@@ -37,6 +37,9 @@ service Greeter {
       additional_bindings: {
         get: "/v2/bar"
       }
+      additional_bindings: {
+        get: "/v3/qux/{id}"
+      }
     };
   }
 }
@@ -44,6 +47,7 @@ service Greeter {
 // Hello 请求
 message HelloRequest {
   string name = 1;
+  int32 id = 38;
   NestedOuter single_nested = 2;
   bytes primitive_bytes_value = 3;
   bool primitive_bool_value = 4;

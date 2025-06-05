@@ -21,15 +21,29 @@ import (
 )
 
 func init() {
-	RegisterSerializer(&ProtoSerializer{})
+	protoSerializerNames := []string{
+		"application/octet-stream",
+		"application/protobuf",
+		"application/x-protobuf",
+		"application/pb",
+		"application/proto"}
+	for _, name := range protoSerializerNames {
+		RegisterSerializer(&ProtoSerializer{protoSerializerName: name})
+	}
 }
 
 var (
 	errNotProtoMessageType = errors.New("type is not proto.Message")
 )
 
-// ProtoSerializer is used for content-Type: application/octet-stream.
-type ProtoSerializer struct{}
+// By default, ProtoSerializer.Name() and ProtoSerializer.ContentType() return defaultProtoSerializerName.
+const defaultProtoSerializerName = "application/octet-stream"
+
+// ProtoSerializer is used for content-Type: application/octet-stream,
+// application/protobuf, application/x-protobuf, application/pb, application/proto.
+type ProtoSerializer struct {
+	protoSerializerName string
+}
 
 // Marshal implements Serializer.
 func (*ProtoSerializer) Marshal(v interface{}) ([]byte, error) {
@@ -73,11 +87,17 @@ func assertProtoMessage(v interface{}) (proto.Message, bool) {
 }
 
 // Name implements Serializer.
-func (*ProtoSerializer) Name() string {
-	return "application/octet-stream"
+func (ps *ProtoSerializer) Name() string {
+	if ps.protoSerializerName == "" {
+		ps.protoSerializerName = defaultProtoSerializerName
+	}
+	return ps.protoSerializerName
 }
 
 // ContentType implements Serializer.
-func (*ProtoSerializer) ContentType() string {
-	return "application/octet-stream"
+func (ps *ProtoSerializer) ContentType() string {
+	if ps.protoSerializerName == "" {
+		ps.protoSerializerName = defaultProtoSerializerName
+	}
+	return ps.protoSerializerName
 }

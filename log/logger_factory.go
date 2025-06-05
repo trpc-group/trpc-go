@@ -25,8 +25,8 @@ import (
 )
 
 func init() {
-	RegisterWriter(OutputConsole, DefaultConsoleWriterFactory)
-	RegisterWriter(OutputFile, DefaultFileWriterFactory)
+	RegisterCoreLevelNewer(ConsoleZapCore, &writerFactory{name: ConsoleZapCore, factory: DefaultConsoleWriterFactory})
+	RegisterCoreLevelNewer(FileZapCore, &writerFactory{name: FileZapCore, factory: DefaultFileWriterFactory})
 	Register(defaultLoggerName, NewZapLog(defaultConfig))
 	plugin.Register(defaultLoggerName, DefaultLogFactory)
 }
@@ -110,7 +110,7 @@ type Decoder struct {
 func (d *Decoder) Decode(cfg interface{}) error {
 	output, ok := cfg.(**OutputConfig)
 	if !ok {
-		return fmt.Errorf("decoder config type:%T invalid, not **OutputConfig", cfg)
+		return fmt.Errorf("decoder config type: %T invalid, not **OutputConfig", cfg)
 	}
 	*output = d.OutputConfig
 	return nil
@@ -118,7 +118,8 @@ func (d *Decoder) Decode(cfg interface{}) error {
 
 // Factory is the log plugin factory.
 // When server start, the configuration is feed to Factory to generate a log instance.
-type Factory struct{}
+type Factory struct {
+}
 
 // Type returns the log plugin type.
 func (f *Factory) Type() string {

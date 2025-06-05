@@ -27,10 +27,10 @@ import (
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/attachment"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/transport"
 
-	"google.golang.org/protobuf/proto"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
+	"github.com/golang/protobuf/proto"
 )
 
 func init() {
@@ -51,6 +51,9 @@ var (
 
 	// DefaultMaxFrameSize is the default max size of frame including attachment,
 	// which can be modified if size of the packet is bigger than this.
+	// The reason for having this maximum limit is to prevent malicious attacks
+	// through large packets. The value of 10MB has been determined through
+	// collaborative discussions among multiple languages.
 	DefaultMaxFrameSize = 10 * 1024 * 1024
 )
 
@@ -61,12 +64,17 @@ var (
 )
 
 type errFrameTooLarge struct {
-	maxFrameSize int
+	frameSize      int64
+	headerSize     int64
+	bodySize       int64
+	attachmentSize int64
+	maxFrameSize   int
 }
 
 // Error implements the error interface and returns the description of the errFrameTooLarge.
 func (e *errFrameTooLarge) Error() string {
-	return fmt.Sprintf("frame len is larger than MaxFrameSize(%d)", e.maxFrameSize)
+	return fmt.Sprintf("frameSize(%d) = headerSize(%d) + bodySize(%d) + attachmentSize(%d) "+
+		"is larger than MaxFrameSize(%d)", e.frameSize, e.headerSize, e.bodySize, e.attachmentSize, e.maxFrameSize)
 }
 
 // frequently used const variables
@@ -75,16 +83,17 @@ const (
 	UserIP      = "trpc-user-ip"    // user ip
 	EnvTransfer = "trpc-env"        // env info
 
-	ProtocolName = "trpc" // protocol name
+	ProtocolName = protocol.TRPC // protocol name
 )
 
 // trpc protocol codec
+// protocol design doc: https://git.woa.com/trpc/trpc-protocol/blob/master/docs/protocol_design.md
 const (
-	// frame head format：
-	// v0：
+	// frame head format:
+	// v0:
 	// 2 bytes magic + 1 byte frame type + 1 byte stream frame type + 4 bytes total len
 	// + 2 bytes pb header len + 4 bytes stream id + 2 bytes reserved
-	// v1：
+	// v1:
 	// 2 bytes magic + 1 byte frame type + 1 byte stream frame type + 4 bytes total len
 	// + 2 bytes pb header len + 4 bytes stream id + 1 byte protocol version + 1 byte reserved
 	frameHeadLen       = uint16(16)       // total length of frame head: 16 bytes
@@ -106,7 +115,7 @@ type FrameHead struct {
 
 func newDefaultUnaryFrameHead() *FrameHead {
 	return &FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_UNARY_FRAME), // default unary
+		FrameType:       uint8(TrpcDataFrameType_TRPC_UNARY_FRAME), // default unary
 		ProtocolVersion: curProtocolVersion,
 	}
 }
@@ -123,18 +132,23 @@ func (h *FrameHead) extract(buf []byte) {
 }
 
 // construct constructs bytes data for the whole frame.
-func (h *FrameHead) construct(header, body, attachment []byte) ([]byte, error) {
+func (h *FrameHead) construct(header, body []byte, a *attachment.SizedAttachment) ([]byte, error) {
 	headerLen := len(header)
 	if headerLen > math.MaxUint16 {
 		return nil, errHeadOverflowsUint16
 	}
-	attachmentLen := int64(len(attachment))
+	attachmentLen := a.Size()
 	if attachmentLen > math.MaxUint32 {
 		return nil, errAttachmentOverflowsUint32
 	}
 	totalLen := int64(frameHeadLen) + int64(headerLen) + int64(len(body)) + attachmentLen
 	if totalLen > int64(DefaultMaxFrameSize) {
-		return nil, &errFrameTooLarge{maxFrameSize: DefaultMaxFrameSize}
+		return nil, &errFrameTooLarge{
+			frameSize:      totalLen,
+			headerSize:     int64(frameHeadLen) + int64(headerLen),
+			bodySize:       int64(len(body)),
+			attachmentSize: attachmentLen,
+			maxFrameSize:   DefaultMaxFrameSize}
 	}
 	if totalLen > math.MaxUint32 {
 		return nil, errHeadOverflowsUint32
@@ -142,7 +156,7 @@ func (h *FrameHead) construct(header, body, attachment []byte) ([]byte, error) {
 
 	// construct the buffer
 	buf := make([]byte, totalLen)
-	binary.BigEndian.PutUint16(buf[:2], uint16(trpcpb.TrpcMagic_TRPC_MAGIC_VALUE))
+	binary.BigEndian.PutUint16(buf[:2], uint16(TrpcMagic_TRPC_MAGIC_VALUE))
 	buf[2] = h.FrameType
 	buf[3] = h.StreamFrameType
 	binary.BigEndian.PutUint32(buf[4:8], uint32(totalLen))
@@ -154,16 +168,20 @@ func (h *FrameHead) construct(header, body, attachment []byte) ([]byte, error) {
 	frameHeadLen := int(frameHeadLen)
 	copy(buf[frameHeadLen:frameHeadLen+headerLen], header)
 	copy(buf[frameHeadLen+headerLen:frameHeadLen+headerLen+len(body)], body)
-	copy(buf[frameHeadLen+headerLen+len(body):], attachment)
+	if err := a.ReadAll(buf[frameHeadLen+headerLen+len(body):]); err != nil {
+		return nil, fmt.Errorf("reading from attachment: %w", err)
+	}
 	return buf, nil
 }
 
-func (h *FrameHead) isStream() bool {
-	return trpcpb.TrpcDataFrameType(h.FrameType) == trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME
+// IsStream returns whether the current frame is a stream frame.
+func (h *FrameHead) IsStream() bool {
+	return TrpcDataFrameType(h.FrameType) == TrpcDataFrameType_TRPC_STREAM_FRAME
 }
 
-func (h *FrameHead) isUnary() bool {
-	return trpcpb.TrpcDataFrameType(h.FrameType) == trpcpb.TrpcDataFrameType_TRPC_UNARY_FRAME
+// IsUnary returns whether the current frame is a unary frame.
+func (h *FrameHead) IsUnary() bool {
+	return TrpcDataFrameType(h.FrameType) == TrpcDataFrameType_TRPC_UNARY_FRAME
 }
 
 // upgradeProtocol upgrades protocol and sets stream id and request id.
@@ -185,15 +203,6 @@ func (fb *FramerBuilder) New(reader io.Reader) codec.Framer {
 	}
 }
 
-// Parse implement multiplexed.FrameParser interface.
-func (fb *FramerBuilder) Parse(rc io.Reader) (vid uint32, buf []byte, err error) {
-	buf, err = fb.New(rc).ReadFrame()
-	if err != nil {
-		return 0, nil, err
-	}
-	return binary.BigEndian.Uint32(buf[10:14]), buf, nil
-}
-
 // framer is an implementation of codec.Framer.
 // Used for trpc protocol.
 type framer struct {
@@ -211,9 +220,16 @@ func (f *framer) ReadFrame() ([]byte, error) {
 		return nil, fmt.Errorf("trpc framer: read frame header num %d != %d, invalid", num, int(frameHeadLen))
 	}
 	magic := binary.BigEndian.Uint16(f.header[:2])
-	if magic != uint16(trpcpb.TrpcMagic_TRPC_MAGIC_VALUE) {
+	expectedMagic := uint16(TrpcMagic_TRPC_MAGIC_VALUE)
+	if magic != expectedMagic {
 		return nil, fmt.Errorf(
-			"trpc framer: read framer head magic %d != %d, not match", magic, uint16(trpcpb.TrpcMagic_TRPC_MAGIC_VALUE))
+			"trpc framer: read framer head magic %d != %d, not match for the first two bytes of the TRPC packet, "+
+				"the expected trpc protocol is not detected; received bytes are %d (hex: 0x%x, ASCII: '%c%c'), "+
+				"possible causes include: an HTTP response from the gateway, an incorrect protocol packet, or "+
+				"corrupted response bytes that do not conform to any valid protocol",
+			magic, expectedMagic,
+			magic, magic, f.header[0], f.header[1],
+		)
 	}
 	totalLen := binary.BigEndian.Uint32(f.header[4:8])
 	if totalLen < uint32(frameHeadLen) {
@@ -245,6 +261,77 @@ func (f *framer) IsSafe() bool {
 	return true
 }
 
+// UpdateMsg implements codec.Decoder.
+func (f *framer) UpdateMsg(res interface{}, msg codec.Msg) error {
+	r, ok := res.(*FrameResponse)
+	if !ok {
+		return errors.New("update msg invalid rsp type")
+	}
+	if r.frameHead.IsStream() {
+		return nil
+	}
+
+	// create response protocol head
+	var rsp *ResponseProtocol
+	if msg.ClientRspHead() != nil {
+		// client rsp head not being nil means it's created on purpose and set to
+		// record response protocol head
+		response, ok := msg.ClientRspHead().(*ResponseProtocol)
+		if !ok {
+			return errors.New("client decode rsp head type invalid")
+		}
+		rsp = response
+		copyRspHead(rsp, r.packetHead)
+	} else {
+		// client rsp head being nil means no need to record backend response protocol head
+		rsp = r.packetHead
+		// save the new client rsp head
+		msg.WithClientRspHead(rsp)
+	}
+	return updateMsg(msg, r.frameHead, rsp, r.frame[uint32(len(r.frame))-r.packetHead.AttachmentSize:])
+}
+
+// Decode implements codec.Decoder.
+// It separates the whole data frame from io reader.
+func (f *framer) Decode() (codec.TransportResponseFrame, error) {
+	rspBuf, err := f.ReadFrame()
+	if err != nil {
+		return nil, err
+	}
+
+	frameHead := newDefaultUnaryFrameHead()
+	frameHead.extract(rspBuf)
+	if frameHead.IsStream() {
+		return &FrameResponse{frameHead: frameHead, frame: rspBuf}, nil
+	}
+
+	packetHead := &ResponseProtocol{}
+
+	// Do not return error when frameHead.HeaderLen == 0, because it may be 0
+	// for some scenarios and it's not a problem for the proto.Unmarshal process below.
+	// HeaderLen is also guaranteed to be non-negative because it is uint16, so
+	// there is no need to check whether it is negative.
+
+	begin := int(frameHeadLen)
+	end := int(frameHeadLen) + int(frameHead.HeaderLen)
+	if end > len(rspBuf) {
+		return nil, errors.New("client framer decode pb head len invalid")
+	}
+
+	// It is valid to skip proto unmarshal if pb head len is 0,
+	// since packetHead is guaranteed to be a valid non-nil struct.
+	if begin < end {
+		if err := proto.Unmarshal(rspBuf[begin:end], packetHead); err != nil {
+			return nil, err
+		}
+	}
+	return &FrameResponse{
+		frameHead:  frameHead,
+		frame:      rspBuf,
+		packetHead: packetHead,
+	}, nil
+}
+
 // ServerCodec is an implementation of codec.Codec.
 // Used for trpc serverside codec.
 type ServerCodec struct {
@@ -263,7 +350,7 @@ func (s *ServerCodec) Decode(msg codec.Msg, reqBuf []byte) ([]byte, error) {
 	if frameHead.TotalLen != uint32(len(reqBuf)) {
 		return nil, fmt.Errorf("total len %d is not actual buf len %d", frameHead.TotalLen, len(reqBuf))
 	}
-	if frameHead.FrameType != uint8(trpcpb.TrpcDataFrameType_TRPC_UNARY_FRAME) { // streaming rpc has its own decoding
+	if TrpcDataFrameType(frameHead.FrameType) != TrpcDataFrameType_TRPC_UNARY_FRAME { // streaming rpc has its own decoding
 		rspBody, err := s.streamCodec.Decode(msg, reqBuf)
 		if err != nil {
 			// if decoding fails, the Close frame with Reset type will be returned to the client
@@ -273,18 +360,24 @@ func (s *ServerCodec) Decode(msg codec.Msg, reqBuf []byte) ([]byte, error) {
 		}
 		return rspBody, nil
 	}
-	if frameHead.HeaderLen == 0 { // header not allowed to be empty for unary rpc
-		return nil, errors.New("server decode pb head len empty")
-	}
+
+	// Do not return error when frameHead.HeaderLen == 0, because it may be 0
+	// for some scenarios and it's not a problem for the proto.Unmarshal process below.
+	// HeaderLen is also guaranteed to be non-negative because it is uint16, so
+	// there is no need to check whether it is negative.
 
 	requestProtocolBegin := uint32(frameHeadLen)
 	requestProtocolEnd := requestProtocolBegin + uint32(frameHead.HeaderLen)
 	if requestProtocolEnd > uint32(len(reqBuf)) {
 		return nil, errors.New("server decode pb head len invalid")
 	}
-	req := &trpcpb.RequestProtocol{}
-	if err := proto.Unmarshal(reqBuf[requestProtocolBegin:requestProtocolEnd], req); err != nil {
-		return nil, err
+	req := &RequestProtocol{}
+	// It is valid to skip proto unmarshal if pb head len is 0,
+	// since req is guaranteed to be a valid non-nil struct.
+	if requestProtocolBegin < requestProtocolEnd {
+		if err := proto.Unmarshal(reqBuf[requestProtocolBegin:requestProtocolEnd], req); err != nil {
+			return nil, err
+		}
 	}
 
 	attachmentBegin := frameHead.TotalLen - req.AttachmentSize
@@ -299,7 +392,7 @@ func (s *ServerCodec) Decode(msg codec.Msg, reqBuf []byte) ([]byte, error) {
 	return reqBuf[requestBodyBegin:requestBodyEnd], nil
 }
 
-func msgWithRequestProtocol(msg codec.Msg, req *trpcpb.RequestProtocol, attm []byte) {
+func msgWithRequestProtocol(msg codec.Msg, req *RequestProtocol, attm []byte) {
 	// set server request head
 	msg.WithServerReqHead(req)
 	// construct response protocol head in advance
@@ -319,7 +412,7 @@ func msgWithRequestProtocol(msg codec.Msg, req *trpcpb.RequestProtocol, attm []b
 	// set body compression type
 	msg.WithCompressType(int(req.GetContentEncoding()))
 	// set dyeing mark
-	msg.WithDyeing((req.GetMessageType() & uint32(trpcpb.TrpcMessageType_TRPC_DYEING_MESSAGE)) != 0)
+	msg.WithDyeing((req.GetMessageType() & uint32(TrpcMessageType_TRPC_DYEING_MESSAGE)) != 0)
 	// parse tracing MetaData, set MetaData into msg
 	if len(req.TransInfo) > 0 {
 		msg.WithServerMetaData(req.GetTransInfo())
@@ -343,30 +436,26 @@ func msgWithRequestProtocol(msg codec.Msg, req *trpcpb.RequestProtocol, attm []b
 // It encodes the rspBody to binary data and returns it to client.
 func (s *ServerCodec) Encode(msg codec.Msg, rspBody []byte) ([]byte, error) {
 	frameHead := loadOrStoreDefaultUnaryFrameHead(msg)
-	if frameHead.isStream() {
+	if frameHead.IsStream() {
 		return s.streamCodec.Encode(msg, rspBody)
 	}
-	if !frameHead.isUnary() {
+	if !frameHead.IsUnary() {
 		return nil, errUnknownFrameType
 	}
 
 	rspProtocol := getAndInitResponseProtocol(msg)
 
-	var attm []byte
-	if a, ok := attachment.ServerResponseAttachment(msg); ok {
-		var err error
-		if attm, err = io.ReadAll(a); err != nil {
-			return nil, fmt.Errorf("encoding attachment: %w", err)
-		}
+	a, err := attachment.ServerResponseSizedAttachment(msg)
+	if err != nil {
+		return nil, fmt.Errorf("getting server response sized attachment from msg: %v", err)
 	}
-	rspProtocol.AttachmentSize = uint32(len(attm))
-
+	rspProtocol.AttachmentSize = uint32(a.Size())
 	rspHead, err := proto.Marshal(rspProtocol)
 	if err != nil {
 		return nil, err
 	}
 
-	rspBuf, err := frameHead.construct(rspHead, rspBody, attm)
+	rspBuf, err := frameHead.construct(rspHead, rspBody, a)
 	if errors.Is(err, errHeadOverflowsUint16) {
 		return handleEncodeErr(rspProtocol, frameHead, rspBody, err)
 	}
@@ -380,13 +469,13 @@ func (s *ServerCodec) Encode(msg codec.Msg, rspBody []byte) ([]byte, error) {
 
 // getAndInitResponseProtocol returns rsp head from msg and initialize the rsp with msg.
 // If rsp head is not found from msg, a new rsp head will be created and initialized.
-func getAndInitResponseProtocol(msg codec.Msg) *trpcpb.ResponseProtocol {
-	rsp, ok := msg.ServerRspHead().(*trpcpb.ResponseProtocol)
+func getAndInitResponseProtocol(msg codec.Msg) *ResponseProtocol {
+	rsp, ok := msg.ServerRspHead().(*ResponseProtocol)
 	if !ok {
-		if req, ok := msg.ServerReqHead().(*trpcpb.RequestProtocol); ok {
+		if req, ok := msg.ServerReqHead().(*RequestProtocol); ok {
 			rsp = newResponseProtocol(req)
 		} else {
-			rsp = &trpcpb.ResponseProtocol{}
+			rsp = &ResponseProtocol{}
 		}
 	}
 
@@ -398,9 +487,9 @@ func getAndInitResponseProtocol(msg codec.Msg) *trpcpb.ResponseProtocol {
 	if err := msg.ServerRspErr(); err != nil {
 		rsp.ErrorMsg = []byte(err.Msg)
 		if err.Type == errs.ErrorTypeFramework {
-			rsp.Ret = int32(err.Code)
+			rsp.Ret = err.Code
 		} else {
-			rsp.FuncRet = int32(err.Code)
+			rsp.FuncRet = err.Code
 		}
 	}
 
@@ -416,9 +505,9 @@ func getAndInitResponseProtocol(msg codec.Msg) *trpcpb.ResponseProtocol {
 	return rsp
 }
 
-func newResponseProtocol(req *trpcpb.RequestProtocol) *trpcpb.ResponseProtocol {
-	return &trpcpb.ResponseProtocol{
-		Version:         uint32(trpcpb.TrpcProtoVersion_TRPC_PROTO_V1),
+func newResponseProtocol(req *RequestProtocol) *ResponseProtocol {
+	return &ResponseProtocol{
+		Version:         uint32(TrpcProtoVersion_TRPC_PROTO_V1),
 		CallType:        req.CallType,
 		RequestId:       req.RequestId,
 		MessageType:     req.MessageType,
@@ -428,16 +517,11 @@ func newResponseProtocol(req *trpcpb.RequestProtocol) *trpcpb.ResponseProtocol {
 }
 
 // handleEncodeErr handles encode err and returns RetServerEncodeFail.
-func handleEncodeErr(
-	rsp *trpcpb.ResponseProtocol,
-	frameHead *FrameHead,
-	rspBody []byte,
-	encodeErr error,
-) ([]byte, error) {
+func handleEncodeErr(rsp *ResponseProtocol, frameHead *FrameHead, rspBody []byte, encodeErr error) ([]byte, error) {
 	// discard all TransInfo and return RetServerEncodeFail
 	// cover the original no matter what
 	rsp.TransInfo = nil
-	rsp.Ret = int32(errs.RetServerEncodeFail)
+	rsp.Ret = errs.RetServerEncodeFail
 	rsp.ErrorMsg = []byte(encodeErr.Error())
 	rspHead, err := proto.Marshal(rsp)
 	if err != nil {
@@ -445,7 +529,7 @@ func handleEncodeErr(
 	}
 	// if error still occurs, response will be discarded.
 	// client will be notified as conn closed
-	return frameHead.construct(rspHead, rspBody, nil)
+	return frameHead.construct(rspHead, rspBody, &attachment.SizedAttachment{})
 }
 
 // ClientCodec is an implementation of codec.Codec.
@@ -460,16 +544,13 @@ type ClientCodec struct {
 // It encodes reqBody into binary data. New msg will be cloned by client stub.
 func (c *ClientCodec) Encode(msg codec.Msg, reqBody []byte) (reqBuf []byte, err error) {
 	frameHead := loadOrStoreDefaultUnaryFrameHead(msg)
-	if frameHead.isStream() {
+	if frameHead.IsStream() {
 		return c.streamCodec.Encode(msg, reqBody)
 	}
-	if !frameHead.isUnary() {
+	if !frameHead.IsUnary() {
 		return nil, errUnknownFrameType
 	}
 
-	// create a new framehead without modifying the original one
-	// to avoid overwriting the requestID of the original framehead.
-	frameHead = newDefaultUnaryFrameHead()
 	req, err := loadOrStoreDefaultRequestProtocol(msg)
 	if err != nil {
 		return nil, err
@@ -480,30 +561,27 @@ func (c *ClientCodec) Encode(msg codec.Msg, reqBody []byte) (reqBuf []byte, err 
 	frameHead.upgradeProtocol(curProtocolVersion, requestID)
 	msg.WithRequestID(requestID)
 
-	var attm []byte
-	if a, ok := attachment.ClientRequestAttachment(msg); ok {
-		if attm, err = io.ReadAll(a); err != nil {
-			return nil, fmt.Errorf("encoding attachment: %w", err)
-		}
+	a, err := attachment.ClientRequestSizedAttachment(msg)
+	if err != nil {
+		return nil, fmt.Errorf("getting client request sized attachment from msg: %v", err)
 	}
-	req.AttachmentSize = uint32(len(attm))
-
+	req.AttachmentSize = uint32(a.Size())
 	updateRequestProtocol(req, updateCallerServiceName(msg, c.defaultCaller))
 
 	reqHead, err := proto.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
-	return frameHead.construct(reqHead, reqBody, attm)
+	return frameHead.construct(reqHead, reqBody, a)
 }
 
 // loadOrStoreDefaultRequestProtocol loads the existing RequestProtocol from msg if present.
 // Otherwise, it stores default UnaryRequestProtocol created to msg and returns the default RequestProtocol.
-func loadOrStoreDefaultRequestProtocol(msg codec.Msg) (*trpcpb.RequestProtocol, error) {
+func loadOrStoreDefaultRequestProtocol(msg codec.Msg) (*RequestProtocol, error) {
 	if req := msg.ClientReqHead(); req != nil {
 		// client req head not being nil means it's created on purpose and set to
 		// record request protocol head
-		req, ok := req.(*trpcpb.RequestProtocol)
+		req, ok := req.(*RequestProtocol)
 		if !ok {
 			return nil, errors.New("client encode req head type invalid, must be trpc request protocol head")
 		}
@@ -515,10 +593,10 @@ func loadOrStoreDefaultRequestProtocol(msg codec.Msg) (*trpcpb.RequestProtocol, 
 	return req, nil
 }
 
-func newDefaultUnaryRequestProtocol() *trpcpb.RequestProtocol {
-	return &trpcpb.RequestProtocol{
-		Version:  uint32(trpcpb.TrpcProtoVersion_TRPC_PROTO_V1),
-		CallType: uint32(trpcpb.TrpcCallType_TRPC_UNARY_CALL),
+func newDefaultUnaryRequestProtocol() *RequestProtocol {
+	return &RequestProtocol{
+		Version:  uint32(TrpcProtoVersion_TRPC_PROTO_V1),
+		CallType: uint32(TrpcCallType_TRPC_UNARY_CALL),
 	}
 }
 
@@ -531,7 +609,7 @@ func updateCallerServiceName(msg codec.Msg, name string) codec.Msg {
 }
 
 // update updates req with requestID and  msg.
-func updateRequestProtocol(req *trpcpb.RequestProtocol, msg codec.Msg) {
+func updateRequestProtocol(req *RequestProtocol, msg codec.Msg) {
 	req.RequestId = msg.RequestID()
 	req.Caller = []byte(msg.CallerServiceName())
 	// set callee service name
@@ -543,10 +621,10 @@ func updateRequestProtocol(req *trpcpb.RequestProtocol, msg codec.Msg) {
 	// set backend compression type
 	req.ContentEncoding = uint32(msg.CompressType())
 	// set rest timeout for downstream
-	req.Timeout = uint32(msg.RequestTimeout() / time.Millisecond)
+	req.Timeout = uint32(msg.RequestTimeout().Milliseconds())
 	// set dyeing info
 	if msg.Dyeing() {
-		req.MessageType = req.MessageType | uint32(trpcpb.TrpcMessageType_TRPC_DYEING_MESSAGE)
+		req.MessageType = req.MessageType | uint32(TrpcMessageType_TRPC_DYEING_MESSAGE)
 	}
 	// set client transinfo
 	req.TransInfo = setClientTransInfo(msg, req.TransInfo)
@@ -589,7 +667,8 @@ func setClientTransInfo(msg codec.Msg, trans map[string][]byte) map[string][]byt
 // It decodes rspBuf into rspBody.
 func (c *ClientCodec) Decode(msg codec.Msg, rspBuf []byte) (rspBody []byte, err error) {
 	if len(rspBuf) < int(frameHeadLen) {
-		return nil, errors.New("client decode rsp buf len invalid")
+		return nil, fmt.Errorf("client decode rsp buf len invalid, got %q, the length is %q, want at least %d",
+			rspBuf, len(rspBuf), frameHeadLen)
 	}
 	frameHead := newDefaultUnaryFrameHead()
 	frameHead.extract(rspBuf)
@@ -597,24 +676,31 @@ func (c *ClientCodec) Decode(msg codec.Msg, rspBuf []byte) (rspBody []byte, err 
 	if frameHead.TotalLen != uint32(len(rspBuf)) {
 		return nil, fmt.Errorf("total len %d is not actual buf len %d", frameHead.TotalLen, len(rspBuf))
 	}
-	if trpcpb.TrpcDataFrameType(frameHead.FrameType) != trpcpb.TrpcDataFrameType_TRPC_UNARY_FRAME {
+	if TrpcDataFrameType(frameHead.FrameType) != TrpcDataFrameType_TRPC_UNARY_FRAME {
 		return c.streamCodec.Decode(msg, rspBuf)
 	}
-	if frameHead.HeaderLen == 0 {
-		return nil, errors.New("client decode pb head len empty")
-	}
+
+	// Do not return error when frameHead.HeaderLen == 0, because it may be 0
+	// for some scenarios and it's not a problem for the proto.Unmarshal process below.
+	// HeaderLen is also guaranteed to be non-negative because it is uint16, so
+	// there is no need to check whether it is negative.
 
 	responseProtocolBegin := uint32(frameHeadLen)
 	responseProtocolEnd := responseProtocolBegin + uint32(frameHead.HeaderLen)
 	if responseProtocolEnd > uint32(len(rspBuf)) {
-		return nil, errors.New("client decode pb head len invalid")
+		return nil, fmt.Errorf("client decode pb head len invalid, header len is %d, "+
+			"got bytes %x for frame head", frameHeadLen, rspBuf[:frameHeadLen])
 	}
 	rsp, err := loadOrStoreResponseHead(msg)
 	if err != nil {
 		return nil, err
 	}
-	if err := proto.Unmarshal(rspBuf[responseProtocolBegin:responseProtocolEnd], rsp); err != nil {
-		return nil, err
+	// It is valid to skip proto unmarshal if pb head len is 0,
+	// since rsp is guaranteed to be a valid non-nil struct.
+	if responseProtocolBegin < responseProtocolEnd {
+		if err := proto.Unmarshal(rspBuf[responseProtocolBegin:responseProtocolEnd], rsp); err != nil {
+			return nil, err
+		}
 	}
 
 	attachmentBegin := frameHead.TotalLen - rsp.AttachmentSize
@@ -630,12 +716,12 @@ func (c *ClientCodec) Decode(msg codec.Msg, rspBuf []byte) (rspBody []byte, err 
 	return rspBuf[bodyBegin:bodyEnd], nil
 }
 
-func loadOrStoreResponseHead(msg codec.Msg) (*trpcpb.ResponseProtocol, error) {
+func loadOrStoreResponseHead(msg codec.Msg) (*ResponseProtocol, error) {
 	// client rsp head being nil means no need to record backend response protocol head
 	// most of the time, response head is not set and should be created here.
 	rsp := msg.ClientRspHead()
 	if rsp == nil {
-		rsp := &trpcpb.ResponseProtocol{}
+		rsp := &ResponseProtocol{}
 		msg.WithClientRspHead(rsp)
 		return rsp, nil
 	}
@@ -643,12 +729,40 @@ func loadOrStoreResponseHead(msg codec.Msg) (*trpcpb.ResponseProtocol, error) {
 	// client rsp head not being nil means it's created on purpose and set to
 	// record response protocol head
 	{
-		rsp, ok := rsp.(*trpcpb.ResponseProtocol)
+		rsp, ok := rsp.(*ResponseProtocol)
 		if !ok {
 			return nil, errors.New("client decode rsp head type invalid, must be trpc response protocol head")
 		}
 		return rsp, nil
 	}
+}
+
+// FrameResponse is an implementation of codec.TransportResponseFrame.
+type FrameResponse struct {
+	// frame = [frameHead, packetHead, body, attachment]
+	frame      []byte
+	frameHead  *FrameHead
+	packetHead *ResponseProtocol
+}
+
+// GetRequestID implements codec.TransportResponseFrame.
+// It returns stream id for streaming rpc, or request id for unary rpc.
+func (rsp *FrameResponse) GetRequestID() uint32 {
+	if rsp.frameHead.IsStream() {
+		return rsp.frameHead.StreamID
+	}
+	return rsp.packetHead.GetRequestId()
+}
+
+// GetResponseBuf implements codec.TransportResponseFrame.
+// It returns the whole frame for streaming rpc or the body for unary rpc.
+func (rsp *FrameResponse) GetResponseBuf() []byte {
+	if rsp.frameHead.IsStream() {
+		return rsp.frame
+	}
+	bodyBegin := uint32(frameHeadLen) + uint32(rsp.frameHead.HeaderLen)
+	bodyEnd := uint32(len(rsp.frame)) - rsp.packetHead.AttachmentSize
+	return rsp.frame[bodyBegin:bodyEnd]
 }
 
 // loadOrStoreDefaultUnaryFrameHead loads the existing frameHead from msg if present.
@@ -662,7 +776,21 @@ func loadOrStoreDefaultUnaryFrameHead(msg codec.Msg) *FrameHead {
 	return frameHead
 }
 
-func updateMsg(msg codec.Msg, frameHead *FrameHead, rsp *trpcpb.ResponseProtocol, attm []byte) error {
+func copyRspHead(dst, src *ResponseProtocol) {
+	dst.Version = src.Version
+	dst.CallType = src.CallType
+	dst.RequestId = src.RequestId
+	dst.Ret = src.Ret
+	dst.FuncRet = src.FuncRet
+	dst.ErrorMsg = src.ErrorMsg
+	dst.MessageType = src.MessageType
+	dst.TransInfo = src.TransInfo
+	dst.ContentType = src.ContentType
+	dst.ContentEncoding = src.ContentEncoding
+	dst.AttachmentSize = src.AttachmentSize
+}
+
+func updateMsg(msg codec.Msg, frameHead *FrameHead, rsp *ResponseProtocol, attm []byte) error {
 	msg.WithFrameHead(frameHead)
 	msg.WithCompressType(int(rsp.GetContentEncoding()))
 	msg.WithSerializationType(int(rsp.GetContentType()))
@@ -681,13 +809,7 @@ func updateMsg(msg codec.Msg, frameHead *FrameHead, rsp *trpcpb.ResponseProtocol
 
 	// if retcode is not 0, a converted error should be returned
 	if rsp.GetRet() != 0 {
-		err := &errs.Error{
-			Type: errs.ErrorTypeCalleeFramework,
-			Code: trpcpb.TrpcRetCode(rsp.GetRet()),
-			Desc: ProtocolName,
-			Msg:  string(rsp.GetErrorMsg()),
-		}
-		msg.WithClientRspErr(err)
+		msg.WithClientRspErr(errs.NewCalleeFrameError(int(rsp.GetRet()), string(rsp.GetErrorMsg())))
 	} else if rsp.GetFuncRet() != 0 {
 		msg.WithClientRspErr(errs.New(int(rsp.GetFuncRet()), string(rsp.GetErrorMsg())))
 	}
@@ -701,7 +823,6 @@ func updateMsg(msg codec.Msg, frameHead *FrameHead, rsp *trpcpb.ResponseProtocol
 	// handle protocol upgrading
 	frameHead.upgradeProtocol(curProtocolVersion, rsp.RequestId)
 	msg.WithRequestID(rsp.RequestId)
-
 	if len(attm) != 0 {
 		attachment.SetClientResponseAttachment(msg, attm)
 	}

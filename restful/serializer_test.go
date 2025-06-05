@@ -880,3 +880,53 @@ func TestJSONPBAllowUnmarshalNil(t *testing.T) {
 	require.Nil(t, err)
 	require.True(t, reflect.DeepEqual(&req, &helloworld.HelloRequest{}))
 }
+
+func TestJSONPBUnquoteString(t *testing.T) {
+	s := &restful.JSONPBSerializer{UnquoteString: true}
+	v := "hello\n world\n"
+	bs, err := s.Marshal(&v)
+	require.NoError(t, err)
+	t.Logf("with unquote: %v", string(bs))
+	require.EqualValues(t, v, string(bs))
+	v2 := ""
+	require.NoError(t, s.Unmarshal(bs, &v2))
+	require.EqualValues(t, v, v2)
+
+	normalSerialzer := &restful.JSONPBSerializer{UnquoteString: false}
+	bs, err = normalSerialzer.Marshal(&v)
+	require.NoError(t, err)
+	t.Logf("without unquote: %v", string(bs))
+	require.NotEqualValues(t, v, string(bs))
+
+	// The logged output is like:
+	// === RUN   TestJSONPBUnquoteString
+	//     serializer_test.go:876: with unquote: hello
+	//          world
+	//     serializer_test.go:885: without unquote: "hello\n world\n"
+	// --- PASS: TestJSONPBUnquoteString (0.00s)
+}
+
+func TestFormUnquoteString(t *testing.T) {
+	s := &restful.FormSerializer{UnquoteString: true}
+	v := "hello\n world\n"
+	bs, err := s.Marshal(&v)
+	require.NoError(t, err)
+	t.Logf("with unquote: %v", string(bs))
+	require.EqualValues(t, v, string(bs))
+	v2 := ""
+	require.NoError(t, s.Unmarshal(bs, &v2))
+	require.EqualValues(t, v, v2)
+
+	normalSerialzer := &restful.FormSerializer{UnquoteString: false}
+	bs, err = normalSerialzer.Marshal(&v)
+	require.NoError(t, err)
+	t.Logf("without unquote: %v", string(bs))
+	require.NotEqualValues(t, v, string(bs))
+
+	// The logged output is like:
+	// === RUN   TestFormUnquoteString
+	//     serializer_test.go:901: with unquote: hello
+	//          world
+	//     serializer_test.go:910: without unquote: "hello\n world\n"
+	// --- PASS: TestFormUnquoteString (0.00s)
+}

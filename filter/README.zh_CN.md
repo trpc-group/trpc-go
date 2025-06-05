@@ -2,7 +2,6 @@
 
 # tRPC-Go 开发拦截器插件
 
-
 ## 前言
 
 本文介绍如何开发 tRPC-Go 框架的拦截器（也称之为过滤器）。tRPC 框架利用拦截器的机制，将接口请求相关的特定逻辑组件化，插件化，从而同具体的业务逻辑解除耦合，达到复用的目的。例如监控拦截器，分布式追踪拦截器，日志拦截器，鉴权拦截器等。
@@ -11,11 +10,11 @@
 
 理解拦截器的原理关键点在于理解拦截器的`触发时机` 以及 `顺序性`。
 
-触发时机：拦截器可以拦截到接口的请求和响应，并对请求，响应，上下文进行处理（用通俗的语言阐述也就是 可以在`请求接受前`做一些事情，`请求处理后`做一些事情），因此，拦截器从功能上说是分为两个部分的 前置（业务逻辑处理前） 和 后置（业务逻辑处理后）。
+- 触发时机：拦截器可以拦截到接口的请求和响应，并对请求，响应，上下文进行处理（用通俗的语言阐述也就是 可以在`请求接受前`做一些事情，`请求处理后`做一些事情），因此，拦截器从功能上说是分为两个部分的 前置（业务逻辑处理前）和 后置（业务逻辑处理后）。
 
-顺序性：如下图所示，拦截器是有明确的顺序性，根据拦截器的注册顺序依次执行前置部分逻辑，并逆序执行拦截器的后置部分。
+- 顺序性：如下图所示，拦截器是有明确的顺序性，根据拦截器的注册顺序依次执行前置部分逻辑，并逆序执行拦截器的后置部分。
 
-![The Order of Filters](/.resources-without-git-lfs/filter/filter.png)
+![The Order of Filters](https://git.woa.com/trpc-go/trpc-go/raw/master/.resources/filter/filter.png)
 
 ## 示例
 
@@ -85,9 +84,9 @@ client:
 
 ## 流式拦截器
 
-因为流式服务和普通 RPC 调用接口差异较大，例如普通 RPC 的客户端通过 `proxy.SayHello`发起一次 RPC 调用，但是流式客户端通过`proxy.ClientStreamSayHello`创建一个流。流创建后，再调用`SendMsg` `RecvMsg` `CloseSend`来进行流的交互，所以针对流式服务，提供了不一样的拦截器接口。
-
-虽然暴露的接口不同，但是底层的实现方式和普通 RPC 类似，原理参考普通 RPC 拦截器的原理
+流式拦截器的底层的实现方式虽然和普通 RPC 类似，但是拦截器接口却不相同，因此开发流式拦截器和普通拦截器的步骤有所不同。
+这是由于流式服务和普通 RPC 调用接口差异较大导致的，例如普通 RPC 的客户端通过 `proxy.SayHello`发起一次 RPC 调用，但是流式客户端通过`proxy.ClientStreamSayHello`创建一个流。
+流创建后，再调用`SendMsg` `RecvMsg` `CloseSend`来进行流的交互。
 
 ### 客户端
 
@@ -99,7 +98,7 @@ type StreamFilter func(context.Context, *client.ClientStreamDesc, client.Streame
 
 以流式交互过程中的耗时统计上报拦截器进行举例说明如何开发流式拦截器
 
-**第一步**：实现`client.streamFilter`
+**第一步**：实现`client.StreamFilter`
 
 ```golang
 func StreamClientFilter(ctx context.Context, desc *client.ClientStreamDesc, streamer client.Streamer) (client.ClientStream, error) {
@@ -115,13 +114,15 @@ func StreamClientFilter(ctx context.Context, desc *client.ClientStreamDesc, stre
 }
 ```
 
+注意：上面的代码只是在创建流的时候进行拦截，而没有在创建流之后，对流交互过程 SendMsg，RecvMsg，CloseSend 进行拦截。
+
 **第二步**：封装 `client.ClientStream`，重写对应方法方法
 
-因为流式服务的交互过程中客户端有`SendMsg`、`RecvMsg`、`CloseSend`这些方法，为了拦截这些交互过程，需要引入一个新的结构体。用户需要为这个结构体重写`client.ClientStream`接口，框架调用`client.ClientStream`接口时，会执行这个结构体的对应方法，这样就实现了拦截。
+因为流式服务的交互过程中客户端有`SendMsg`、`RecvMsg`、`CloseSend`这些方法，为了拦截这些交互过程，需要引入一个新的结构体。
+你需要为这个结构体重写`client.ClientStream`接口，框架调用`client.ClientStream`接口时，会执行这个结构体的对应方法，这样就实现了拦截。
+因为你可能不需要拦截`client.ClientStream`的所有方法，所以可以将`client.ClientStream`设置为结构体的匿名字段，这样，不需要拦截的方法，会直接走原始的路径。你需要拦截哪些方法，就在这个结构体中重写那些方法。
 
-因为用户可能不需要拦截`client.ClientStream`的所有方法，所以可以将`client.ClientStream`设置为结构体的匿名字段，这样，不需要拦截的方法，会直接走原始的路径。用户需要拦截哪些方法，就在这个结构体中重写那些方法。
-
-例如我只想拦截发送数据的过程，那么只需要重写`SendMsg`方法，至于`client.ClientStream`其他的方法都不需要重新实现。这里是为了演示，所以实现了`client.ClientStream`的所有方法。
+例如你只想拦截发送数据的过程，那么只需要重写`SendMsg`方法，至于`client.ClientStream`其他的方法都不需要重新实现。这里是为了演示，所以实现了`client.ClientStream`的所有方法。
 
 ```golang
 // wrappedStream 封装原始流，需要拦截哪些方法，就重写哪些方法
@@ -237,11 +238,11 @@ func StreamServerFilter(ss server.Stream, si *server.StreamServerInfo, handler s
 
 **第二步**：封装 `server.Stream`，重写对应方法
 
-因为流式服务的交互过程中服务端端有`SendMsg`、`RecvMsg`这些方法，为了拦截这些交互过程，需要引入一个新结构体。用户需要为这个结构体重写`server.Stream`接口，框架调用`server.Stream`接口时，会执行这个结构体的对应方法，这样就实现了拦截。
+因为流式服务的交互过程中服务端有`SendMsg`、`RecvMsg`这些方法，为了拦截这些交互过程，需要引入一个新结构体。你需要为这个结构体重写`server.Stream`接口，框架调用`server.Stream`接口时，会执行这个结构体的对应方法，这样就实现了拦截。
 
-因为用户可能不需要拦截`server.Stream`的所有方法，所以可以将`server.Stream`设置为结构体的匿名字段，这样，不需要拦截的方法，会直接走原始的路径。用户需要拦截哪些方法，就在这个结构体中重写那些方法。
+因为你可能不需要拦截`server.Stream`的所有方法，所以可以将`server.Stream`设置为结构体的匿名字段，这样，不需要拦截的方法，会直接走原始的路径。你需要拦截哪些方法，就在这个结构体中重写那些方法。
 
-例如我只想拦截发送数据的过程，那么只需要重写`SendMsg`方法，至于`server.Stream`其他的方法都不需要实现。这里是为了演示，所以实现了`server.Stream`的所有方法。
+例如你只想拦截发送数据的过程，那么只需要重写`SendMsg`方法，至于`server.Stream`其他的方法都不需要实现。这里是为了演示，所以实现了`server.Stream`的所有方法。
 
 ```golang
 // wrappedStream 封装原始流，需要拦截哪些方法，就重写哪些方法
@@ -266,7 +267,7 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 func (w *wrappedStream) SendMsg(m interface{}) error {
     begin := time.Now() // 发送数据之前，打点记录时间戳
 
-    err := w.Stream.SendMsg(m) // 注意这里必须用户自己调用 SendMsg 让底层流接收数据，除非有特定目的需要直接返回
+    err := w.Stream.SendMsg(m) // 注意这里必须用户自己调用 SendMsg 让底层流发送数据，除非有特定目的需要直接返回
 
     cost := time.Since(begin) // 发送数据后，计算耗时
 
@@ -333,7 +334,7 @@ server:
 
 则执行顺序如下：
 
-```
+```raw
 接收到请求 -> filter1 前置逻辑 -> filter2 前置逻辑 -> filter3 前置逻辑 -> 用户的业务处理逻辑 -> filter3 后置逻辑 -> filter2 后置逻辑 -> filter1 后置逻辑 -> 回包
 ```
 

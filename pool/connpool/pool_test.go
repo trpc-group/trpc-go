@@ -19,18 +19,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"trpc.group/trpc-go/trpc-go/codec"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestWithGetOptions(t *testing.T) {
+	opts := &GetOptions{}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	fb := &noopFramerBuilder{}
-	opts := &GetOptions{CustomReader: codec.NewReader,
-		FramerBuilder: fb,
-		Ctx:           ctx,
-	}
+	fb := &emptyFramerBuilder{}
+	WithFramerBuilder(fb)(opts)
+	WithContext(ctx)(opts)
 
 	localAddr := "127.0.0.1:8080"
 	opts.WithLocalAddr(localAddr)
@@ -81,7 +80,7 @@ func (*safeFramer) IsSafe() bool {
 }
 
 func TestGetDialCtx(t *testing.T) {
-	opts := &GetOptions{CustomReader: codec.NewReader}
+	opts := &GetOptions{}
 	ctx, cancel := opts.getDialCtx(0)
 	assert.NotNil(t, ctx)
 	assert.NotNil(t, cancel)

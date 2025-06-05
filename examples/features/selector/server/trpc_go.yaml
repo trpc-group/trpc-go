@@ -5,7 +5,7 @@ global:                             # global config.
 server:                                            # server configuration.
   app: examples                                    # business application name.
   server: selectorExample                          # service process name.
-  service:                                         # business service configuration，can have multiple.
+  service:                                         # business service configuration, can have multiple.
     - name: trpc.examples.selector.Selector        # the route name of the service.
       ip: 127.0.0.1                                # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
       port: 8000                                   # the service listening port, can use the placeholder ${port}.

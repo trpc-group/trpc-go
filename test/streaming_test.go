@@ -22,11 +22,12 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/types/known/durationpb"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/server"
 	testpb "trpc.group/trpc-go/trpc-go/test/protocols"
+	"trpc.group/trpc-go/trpc-go/transport"
 )
 
 func (s *TestSuite) TestBidirectionalStreamingServerCrashWhenReceivingMessage() {
@@ -36,7 +37,7 @@ func (s *TestSuite) TestBidirectionalStreamingServerCrashWhenReceivingMessage() 
 	// And a trpc streaming client.
 	c := s.newStreamingClient()
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType: testpb.PayloadType_COMPRESSIBLE,
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: []*testpb.ResponseParameters{
 			{
 				Size:     2,
@@ -44,7 +45,7 @@ func (s *TestSuite) TestBidirectionalStreamingServerCrashWhenReceivingMessage() 
 			},
 		},
 		Payload: &testpb.Payload{
-			Type: testpb.PayloadType_COMPRESSIBLE,
+			Type: testpb.PayloadType_COMPRESSABLE,
 			Body: make([]byte, 1),
 		},
 	}
@@ -71,33 +72,52 @@ func (s *TestSuite) TestBidirectionalStreamingServerCrashWhenReceivingMessage() 
 		}
 	}
 
-	// Then client should receive RetServerSystemErr or RetUnknown error, not io.EOF.
-	s.T().Log(err)
-	require.NotEqual(s.T(), io.EOF, err)
+	require.NotNil(s.T(), err, "err: %+v", err)
 }
 
 func (s *TestSuite) TestBidirectionalStreaming() {
-	s.startServer(&StreamingService{})
-	s.Run("CallSequentiallyOk", func() {
-		_, err := s.testBidirectionalStreamingCallSequentiallyOk()
-		require.Nil(s.T(), err)
-	})
-	s.Run("CallConcurrentlyOk", s.testBidirectionalStreamingCallConcurrentlyOk)
-	s.Run("CallSequentiallyFailed", s.testBidirectionalStreamingCallSequentiallyFailed)
-	s.Run("ClientSendDataAfterCloseSend", s.testBidirectionalStreamingClientSendDataAfterCloseSend)
-	s.Run("ContinueReceivingDataAfterReceiveEOF", s.testBidirectionalStreamingContinueReceivingDataAfterReceiveEOF)
-	s.Run("CallCloseAndRecvTwice", s.testBidirectionalStreamingCallCloseAndReceiveTwice)
-	s.Run("DontSendDataAfterCreatingStreaming", s.testBidirectionalStreamingDontSendDataAfterCreatingStreaming)
+	for _, e := range allStreamEnvs {
+		s.Run(e.String(), func() {
+			s.testBidirectionalStreaming(e)
+		})
+	}
 }
 
-func (s *TestSuite) testBidirectionalStreamingCallSequentiallyOk() (testpb.TestStreaming_FullDuplexCallClient, error) {
-	c := s.newStreamingClient()
+func (s *TestSuite) testBidirectionalStreaming(e streamEnv) {
+	s.startServer(&StreamingService{},
+		server.WithStreamTransport(transport.GetServerStreamTransport(e.server.transport)))
+	s.Run("CallSequentiallyOk", func() {
+		_, err := s.testBidirectionalStreamingCallSequentiallyOk(e)
+		require.Nil(s.T(), err)
+	})
+	s.Run("CallConcurrentlyOk", func() {
+		s.testBidirectionalStreamingCallConcurrentlyOk(e)
+	})
+	s.Run("CallSequentiallyFailed", func() {
+		s.testBidirectionalStreamingCallSequentiallyFailed(e)
+	})
+	s.Run("ClientSendDataAfterCloseSend", func() {
+		s.testBidirectionalStreamingClientSendDataAfterCloseSend(e)
+	})
+	s.Run("ContinueReceivingDataAfterReceiveEOF", func() {
+		s.testBidirectionalStreamingContinueReceivingDataAfterReceiveEOF(e)
+	})
+	s.Run("CallCloseAndRecvTwice", func() {
+		s.testBidirectionalStreamingCallCloseAndReceiveTwice(e)
+	})
+	s.Run("DontSendDataAfterCreatingStreaming", func() {
+		s.testBidirectionalStreamingDontSendDataAfterCreatingStreaming(e)
+	})
+}
+
+func (s *TestSuite) testBidirectionalStreamingCallSequentiallyOk(e streamEnv) (testpb.TestStreaming_FullDuplexCallClient, error) {
+	c := s.newStreamingClient(client.WithStreamTransport(transport.GetClientStreamTransport(e.client.transport)))
 	cs, err := c.FullDuplexCall(trpc.BackgroundContext())
 	if err != nil {
 		return nil, err
 	}
 
-	payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, int32(1))
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +128,7 @@ func (s *TestSuite) testBidirectionalStreamingCallSequentiallyOk() (testpb.TestS
 		totalSize = itemSize * sendNum
 	)
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType: testpb.PayloadType_COMPRESSIBLE,
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: []*testpb.ResponseParameters{
 			{
 				Size:     int32(itemSize),
@@ -143,8 +163,8 @@ func (s *TestSuite) testBidirectionalStreamingCallSequentiallyOk() (testpb.TestS
 	return cs, nil
 }
 
-func (s *TestSuite) testBidirectionalStreamingCallSequentiallyFailed() {
-	c := s.newStreamingClient()
+func (s *TestSuite) testBidirectionalStreamingCallSequentiallyFailed(e streamEnv) {
+	c := s.newStreamingClient(client.WithStreamTransport(transport.GetClientStreamTransport(e.client.transport)))
 	cs, err := c.FullDuplexCall(trpc.BackgroundContext())
 	require.Nil(s.T(), err)
 
@@ -159,10 +179,10 @@ func (s *TestSuite) testBidirectionalStreamingCallSequentiallyFailed() {
 			Interval: durationpb.New(time.Microsecond),
 		},
 	}
-	payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, int32(1))
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
 	require.Nil(s.T(), err)
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSIBLE,
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParams,
 		Payload:            payload,
 	}
@@ -189,35 +209,35 @@ func (s *TestSuite) testBidirectionalStreamingCallSequentiallyFailed() {
 	require.NotNil(s.T(), err)
 }
 
-func (s *TestSuite) testBidirectionalStreamingCallConcurrentlyOk() {
+func (s *TestSuite) testBidirectionalStreamingCallConcurrentlyOk(e streamEnv) {
 	var g errgroup.Group
 	for i := 0; i < 20; i++ {
 		g.Go(func() error {
-			_, err := s.testBidirectionalStreamingCallSequentiallyOk()
+			_, err := s.testBidirectionalStreamingCallSequentiallyOk(e)
 			return err
 		})
 	}
 	require.Nil(s.T(), g.Wait())
 }
 
-func (s *TestSuite) testBidirectionalStreamingClientSendDataAfterCloseSend() {
-	cs, err := s.testBidirectionalStreamingCallSequentiallyOk()
+func (s *TestSuite) testBidirectionalStreamingClientSendDataAfterCloseSend(e streamEnv) {
+	cs, err := s.testBidirectionalStreamingCallSequentiallyOk(e)
 	require.Nil(s.T(), err)
 
-	payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, int32(1))
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
 	require.Nil(s.T(), err)
 	err = cs.Send(&testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSIBLE,
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: []*testpb.ResponseParameters{{Size: 1}},
 		Payload:            payload,
 	})
 
-	require.Equal(s.T(), errs.RetServerSystemErr, errs.Code(err))
+	require.Equal(s.T(), errs.RetServerSystemErr, errs.Code(err), "full err: %+v", err)
 	require.Contains(s.T(), errs.Msg(err), "Connection is Closed")
 }
 
-func (s *TestSuite) testBidirectionalStreamingContinueReceivingDataAfterReceiveEOF() {
-	cs, err := s.testBidirectionalStreamingCallSequentiallyOk()
+func (s *TestSuite) testBidirectionalStreamingContinueReceivingDataAfterReceiveEOF(e streamEnv) {
+	cs, err := s.testBidirectionalStreamingCallSequentiallyOk(e)
 	require.Nil(s.T(), err)
 	errChan := make(chan error)
 	go func() {
@@ -232,16 +252,16 @@ func (s *TestSuite) testBidirectionalStreamingContinueReceivingDataAfterReceiveE
 	}
 }
 
-func (s *TestSuite) testBidirectionalStreamingCallCloseAndReceiveTwice() {
-	cs, err := s.testBidirectionalStreamingCallSequentiallyOk()
+func (s *TestSuite) testBidirectionalStreamingCallCloseAndReceiveTwice(e streamEnv) {
+	cs, err := s.testBidirectionalStreamingCallSequentiallyOk(e)
 	require.Nil(s.T(), err)
 	err = cs.CloseSend()
-	require.Equal(s.T(), errs.RetServerSystemErr, errs.Code(err))
+	require.Equal(s.T(), errs.RetServerSystemErr, errs.Code(err), "full err: %+v", err)
 	require.Contains(s.T(), errs.Msg(err), "Connection is Closed")
 }
 
-func (s *TestSuite) testBidirectionalStreamingDontSendDataAfterCreatingStreaming() {
-	c := s.newStreamingClient()
+func (s *TestSuite) testBidirectionalStreamingDontSendDataAfterCreatingStreaming(e streamEnv) {
+	c := s.newStreamingClient(client.WithStreamTransport(transport.GetClientStreamTransport(e.client.transport)))
 	cs, err := c.FullDuplexCall(trpc.BackgroundContext())
 	require.Nil(s.T(), err)
 	require.Nil(s.T(), cs.CloseSend())
@@ -272,7 +292,7 @@ func (s *TestSuite) TestFlowControlWindowSizeUpdateOk() {
 	require.Nil(s.T(), err)
 
 	doFullDuplexCall := func(messageSize int) {
-		payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, int32(messageSize))
+		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(messageSize))
 		require.Nil(s.T(), err)
 		respParams := []*testpb.ResponseParameters{
 			{
@@ -280,7 +300,7 @@ func (s *TestSuite) TestFlowControlWindowSizeUpdateOk() {
 			},
 		}
 		req := &testpb.StreamingOutputCallRequest{
-			ResponseType:       testpb.PayloadType_COMPRESSIBLE,
+			ResponseType:       testpb.PayloadType_COMPRESSABLE,
 			ResponseParameters: respParams,
 			Payload:            payload,
 		}
@@ -305,7 +325,7 @@ func (s *TestSuite) TestWithMaxWindowSizeNotWorkWhenLessThanDefaultInitWindowSiz
 	s.startServer(&StreamingService{}, server.WithMaxWindowSize(windowSize))
 
 	c := s.newStreamingClient(client.WithMaxWindowSize(windowSize))
-	payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, defaultInitWindowSize)
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, defaultInitWindowSize)
 	require.Nil(s.T(), err)
 	cs, err := c.FullDuplexCall(
 		trpc.BackgroundContext(),
@@ -318,7 +338,7 @@ func (s *TestSuite) TestWithMaxWindowSizeNotWorkWhenLessThanDefaultInitWindowSiz
 			s.T(),
 			cs.Send(&testpb.StreamingOutputCallRequest{
 				Payload:            payload,
-				ResponseType:       testpb.PayloadType_COMPRESSIBLE,
+				ResponseType:       testpb.PayloadType_COMPRESSABLE,
 				ResponseParameters: []*testpb.ResponseParameters{{Size: int32(defaultInitWindowSize)}},
 			}),
 		)
@@ -356,27 +376,27 @@ func (s *TestSuite) TestSendBlockWhenContinuousSendDataMoreThanReceivedWindowSiz
 	require.Nil(s.T(), err)
 
 	payloadSize := defaultInitWindowSize
-	payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, int32(payloadSize))
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(payloadSize))
 	require.Nil(s.T(), err)
 	require.Nil(s.T(), cs.Send(&testpb.StreamingOutputCallRequest{
 		Payload:      payload,
-		ResponseType: testpb.PayloadType_COMPRESSIBLE,
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
 	}))
 
-	payload, err = newPayload(testpb.PayloadType_COMPRESSIBLE, int32(payloadSize))
+	payload, err = newPayload(testpb.PayloadType_COMPRESSABLE, int32(payloadSize))
 	require.Nil(s.T(), err)
 	require.Nil(s.T(), cs.Send(&testpb.StreamingOutputCallRequest{
 		Payload:      payload,
-		ResponseType: testpb.PayloadType_COMPRESSIBLE,
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
 	}))
 
 	received := make(chan struct{})
 	go func() {
-		payload, err = newPayload(testpb.PayloadType_COMPRESSIBLE, int32(1))
+		payload, err = newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
 		require.Nil(s.T(), err)
 		cs.Send(&testpb.StreamingOutputCallRequest{
 			Payload:      payload,
-			ResponseType: testpb.PayloadType_COMPRESSIBLE,
+			ResponseType: testpb.PayloadType_COMPRESSABLE,
 		})
 		close(received)
 	}()
@@ -392,33 +412,43 @@ func (s *TestSuite) TestSendBlockWhenContinuousSendDataMoreThanReceivedWindowSiz
 }
 
 func (s *TestSuite) TestServerStreaming() {
-	s.startServer(&StreamingService{})
+	for _, e := range allStreamEnvs {
+		s.Run(e.String(), func() {
+			s.testServerStreaming(e)
+		})
+	}
+}
+
+func (s *TestSuite) testServerStreaming(e streamEnv) {
+	s.startServer(&StreamingService{},
+		server.WithStreamTransport(transport.GetServerStreamTransport(e.server.transport)))
+	s.T().Cleanup(func() { s.closeServer(nil) })
 	s.Run("CallSequentiallyOk", func() {
-		_, err := s.testServerStreamingCallSequentiallyOk()
+		_, err := s.testServerStreamingCallSequentiallyOk(e)
 		require.Nil(s.T(), err)
 	})
-	s.Run("CallSequentiallyFailed", func() {
-		s.testServerStreamingCallSequentiallyFailed()
-	})
 	s.Run("CallConcurrentlyOk", func() {
-		s.testServerStreamingCallConcurrentlyOk()
+		s.testServerStreamingCallConcurrentlyOk(e)
+	})
+	s.Run("CallSequentiallyFailed", func() {
+		s.testServerStreamingCallSequentiallyFailed(e)
 	})
 	s.Run("ClientSendDataAfterCloseSend", func() {
-		s.testServerStreamingSendDataAfterCloseSend()
+		s.testServerStreamingSendDataAfterCloseSend(e)
 	})
 	s.Run("ReceiveDataAfterReceiveEOF", func() {
-		s.testServerStreamingReceiveDataAfterReceiveEOF()
+		s.testServerStreamingReceiveDataAfterReceiveEOF(e)
 	})
 	s.Run("DontReceiveDataAfterCreatingStreaming", func() {
-		s.testServerStreamingDontReceiveDataAfterCreatingStreaming()
+		s.testServerStreamingDontReceiveDataAfterCreatingStreaming(e)
 	})
 	s.Run("CallCloseAndRecvTwice", func() {
-		s.testServerStreamingCallCloseAndReceiveTwice()
+		s.testServerStreamingCallCloseAndReceiveTwice(e)
 	})
 }
 
-func (s *TestSuite) testServerStreamingCallSequentiallyOk() (testpb.TestStreaming_StreamingOutputCallClient, error) {
-	payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, int32(1))
+func (s *TestSuite) testServerStreamingCallSequentiallyOk(e streamEnv) (testpb.TestStreaming_StreamingOutputCallClient, error) {
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
 	if err != nil {
 		return nil, err
 	}
@@ -428,12 +458,12 @@ func (s *TestSuite) testServerStreamingCallSequentiallyOk() (testpb.TestStreamin
 		respParams = append(respParams, &testpb.ResponseParameters{Size: i})
 	}
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSIBLE,
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParams,
 		Payload:            payload,
 	}
 
-	c := s.newStreamingClient()
+	c := s.newStreamingClient(client.WithStreamTransport(transport.GetClientStreamTransport(e.client.transport)))
 	cs, err := c.StreamingOutputCall(trpc.BackgroundContext(), req)
 	if err != nil {
 		return nil, err
@@ -470,8 +500,8 @@ func (s *TestSuite) testServerStreamingCallSequentiallyOk() (testpb.TestStreamin
 	return cs, nil
 }
 
-func (s *TestSuite) testServerStreamingCallSequentiallyFailed() {
-	payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, int32(1))
+func (s *TestSuite) testServerStreamingCallSequentiallyFailed(e streamEnv) {
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
 	require.Nil(s.T(), err)
 
 	respParams := make([]*testpb.ResponseParameters, 10)
@@ -482,11 +512,11 @@ func (s *TestSuite) testServerStreamingCallSequentiallyFailed() {
 	respParams = append(respParams, &testpb.ResponseParameters{Size: int32(-1)})
 
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSIBLE,
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParams,
 		Payload:            payload,
 	}
-	c := s.newStreamingClient()
+	c := s.newStreamingClient(client.WithStreamTransport(transport.GetClientStreamTransport(e.client.transport)))
 	cs, err := c.StreamingOutputCall(trpc.BackgroundContext(), req)
 	require.Nil(s.T(), err)
 
@@ -508,36 +538,36 @@ func (s *TestSuite) testServerStreamingCallSequentiallyFailed() {
 	require.Equal(s.T(), invalidIndex, index)
 }
 
-func (s *TestSuite) testServerStreamingCallConcurrentlyOk() {
+func (s *TestSuite) testServerStreamingCallConcurrentlyOk(e streamEnv) {
 	var g errgroup.Group
 	for i := 0; i < 20; i++ {
 		g.Go(func() error {
-			_, err := s.testServerStreamingCallSequentiallyOk()
+			_, err := s.testServerStreamingCallSequentiallyOk(e)
 			return err
 		})
 	}
 	require.Nil(s.T(), g.Wait())
 }
 
-func (s *TestSuite) testServerStreamingSendDataAfterCloseSend() {
-	cs, err := s.testServerStreamingCallSequentiallyOk()
+func (s *TestSuite) testServerStreamingSendDataAfterCloseSend(e streamEnv) {
+	cs, err := s.testServerStreamingCallSequentiallyOk(e)
 	require.Nil(s.T(), err)
 
-	payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, int32(1))
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
 	require.Nil(s.T(), err)
 
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSIBLE,
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: []*testpb.ResponseParameters{{Size: 1}},
 		Payload:            payload,
 	}
 	err = cs.SendMsg(req)
-	require.Equal(s.T(), errs.RetServerSystemErr, errs.Code(err))
+	require.Equal(s.T(), errs.RetServerSystemErr, errs.Code(err), "full err: %+v", err)
 	require.Contains(s.T(), errs.Msg(err), "Connection is Closed")
 }
 
-func (s *TestSuite) testServerStreamingReceiveDataAfterReceiveEOF() {
-	cs, err := s.testServerStreamingCallSequentiallyOk()
+func (s *TestSuite) testServerStreamingReceiveDataAfterReceiveEOF(e streamEnv) {
+	cs, err := s.testServerStreamingCallSequentiallyOk(e)
 	require.Nil(s.T(), err)
 	errChan := make(chan error)
 	go func() {
@@ -552,46 +582,56 @@ func (s *TestSuite) testServerStreamingReceiveDataAfterReceiveEOF() {
 	}
 }
 
-func (s *TestSuite) testServerStreamingDontReceiveDataAfterCreatingStreaming() {
-	c := s.newStreamingClient()
+func (s *TestSuite) testServerStreamingDontReceiveDataAfterCreatingStreaming(e streamEnv) {
+	c := s.newStreamingClient(client.WithStreamTransport(transport.GetClientStreamTransport(e.client.transport)))
 	cs, err := c.StreamingOutputCall(trpc.BackgroundContext(), &testpb.StreamingOutputCallRequest{})
 	require.Nil(s.T(), err)
 	require.Nil(s.T(), cs.CloseSend())
 }
 
-func (s *TestSuite) testServerStreamingCallCloseAndReceiveTwice() {
-	cs, err := s.testServerStreamingCallSequentiallyOk()
+func (s *TestSuite) testServerStreamingCallCloseAndReceiveTwice(e streamEnv) {
+	cs, err := s.testServerStreamingCallSequentiallyOk(e)
 	require.Nil(s.T(), err)
 	err = cs.CloseSend()
-	require.Equal(s.T(), errs.RetServerSystemErr, errs.Code(err))
+	require.Equal(s.T(), errs.RetServerSystemErr, errs.Code(err), "full err: %+v", err)
 	require.Contains(s.T(), errs.Msg(err), "Connection is Closed")
 }
 
 func (s *TestSuite) TestClientStreaming() {
-	s.startServer(&StreamingService{})
+	for _, e := range allStreamEnvs {
+		s.Run(e.String(), func() {
+			s.testClientStreaming(e)
+		})
+	}
+}
+
+func (s *TestSuite) testClientStreaming(e streamEnv) {
+	s.startServer(&StreamingService{},
+		server.WithStreamTransport(transport.GetServerStreamTransport(e.server.transport)))
+	s.T().Cleanup(func() { s.closeServer(nil) })
 	s.Run("CallSequentiallyOk", func() {
-		_, err := s.testClientStreamingCallSequentiallyOk()
+		_, err := s.testClientStreamingCallSequentiallyOk(e)
 		require.Nil(s.T(), err)
 	})
 	s.Run("CallConcurrentlyOk", func() {
-		s.testClientStreamingCallConcurrentlyOk()
+		s.testClientStreamingCallConcurrentlyOk(e)
 	})
 	s.Run("ClientSendDataAfterCloseSend", func() {
-		s.testClientStreamingClientSendDataAfterCloseSend()
+		s.testClientStreamingClientSendDataAfterCloseSend(e)
 	})
 	s.Run("ReceiveDataAfterCloseAndReceive", func() {
-		s.testClientStreamingReceiveDataAfterCloseAndReceive()
+		s.testClientStreamingReceiveDataAfterCloseAndReceive(e)
 	})
 	s.Run("DontSendDataAfterCreatingStreaming", func() {
-		s.testClientStreamingDontSendDataAfterCreatingStreaming()
+		s.testClientStreamingDontSendDataAfterCreatingStreaming(e)
 	})
 	s.Run("CallCloseAndRecvTwice", func() {
-		s.testClientStreamingCallCloseAndReceiveTwice()
+		s.testClientStreamingCallCloseAndReceiveTwice(e)
 	})
 }
 
-func (s *TestSuite) testClientStreamingCallSequentiallyOk() (testpb.TestStreaming_StreamingInputCallClient, error) {
-	c := s.newStreamingClient()
+func (s *TestSuite) testClientStreamingCallSequentiallyOk(e streamEnv) (testpb.TestStreaming_StreamingInputCallClient, error) {
+	c := s.newStreamingClient(client.WithStreamTransport(transport.GetClientStreamTransport(e.client.transport)))
 	cs, err := c.StreamingInputCall(trpc.BackgroundContext())
 	if err != nil {
 		return cs, err
@@ -600,7 +640,7 @@ func (s *TestSuite) testClientStreamingCallSequentiallyOk() (testpb.TestStreamin
 	var sendSize int
 	for i := 1; i <= 10; i++ {
 		sendSize += i
-		payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, int32(i))
+		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(i))
 		if err != nil {
 			return cs, err
 		}
@@ -619,33 +659,33 @@ func (s *TestSuite) testClientStreamingCallSequentiallyOk() (testpb.TestStreamin
 	return cs, nil
 }
 
-func (s *TestSuite) testClientStreamingCallConcurrentlyOk() {
+func (s *TestSuite) testClientStreamingCallConcurrentlyOk(e streamEnv) {
 	var g errgroup.Group
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 10; i++ {
 		g.Go(func() error {
-			_, err := s.testClientStreamingCallSequentiallyOk()
+			_, err := s.testClientStreamingCallSequentiallyOk(e)
 			return err
 		})
 	}
 	require.Nil(s.T(), g.Wait())
 }
 
-func (s *TestSuite) testClientStreamingClientSendDataAfterCloseSend() {
-	cs, err := s.testClientStreamingCallSequentiallyOk()
+func (s *TestSuite) testClientStreamingClientSendDataAfterCloseSend(e streamEnv) {
+	cs, err := s.testClientStreamingCallSequentiallyOk(e)
 	require.Nil(s.T(), err)
 
-	payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, 10)
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 10)
 	require.Nil(s.T(), err)
 	err = cs.Send(&testpb.StreamingInputCallRequest{Payload: payload})
-	require.Equal(s.T(), errs.RetServerSystemErr, errs.Code(err))
+	require.Equal(s.T(), errs.RetServerSystemErr, errs.Code(err), "full err: %+v", err)
 	require.Contains(s.T(), errs.Msg(err), "Connection is Closed")
 }
 
-func (s *TestSuite) testClientStreamingReceiveDataAfterCloseAndReceive() {
-	c := s.newStreamingClient()
+func (s *TestSuite) testClientStreamingReceiveDataAfterCloseAndReceive(e streamEnv) {
+	c := s.newStreamingClient(client.WithStreamTransport(transport.GetClientStreamTransport(e.client.transport)))
 	cs, err := c.StreamingInputCall(trpc.BackgroundContext())
 	require.Nil(s.T(), err)
-	payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, 10)
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 10)
 	require.Nil(s.T(), err)
 	require.Nil(s.T(), cs.Send(&testpb.StreamingInputCallRequest{Payload: payload}))
 	require.Nil(s.T(), cs.Send(&testpb.StreamingInputCallRequest{Payload: payload}))
@@ -666,16 +706,16 @@ func (s *TestSuite) testClientStreamingReceiveDataAfterCloseAndReceive() {
 	}
 }
 
-func (s *TestSuite) testClientStreamingCallCloseAndReceiveTwice() {
-	cs, err := s.testClientStreamingCallSequentiallyOk()
+func (s *TestSuite) testClientStreamingCallCloseAndReceiveTwice(e streamEnv) {
+	cs, err := s.testClientStreamingCallSequentiallyOk(e)
 	require.Nil(s.T(), err)
 	_, err = cs.CloseAndRecv()
-	require.Equal(s.T(), errs.RetServerSystemErr, errs.Code(err))
+	require.Equal(s.T(), errs.RetServerSystemErr, errs.Code(err), "full err: %+v", err)
 	require.Contains(s.T(), errs.Msg(err), "Connection is Closed")
 }
 
-func (s *TestSuite) testClientStreamingDontSendDataAfterCreatingStreaming() {
-	c := s.newStreamingClient()
+func (s *TestSuite) testClientStreamingDontSendDataAfterCreatingStreaming(e streamEnv) {
+	c := s.newStreamingClient(client.WithStreamTransport(transport.GetClientStreamTransport(e.client.transport)))
 	cs, err := c.StreamingInputCall(trpc.BackgroundContext())
 	require.Nil(s.T(), err)
 

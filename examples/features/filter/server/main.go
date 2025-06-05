@@ -19,19 +19,19 @@ import (
 
 	"trpc.group/trpc-go/trpc-go/examples/features/filter/shared"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/examples/features/common"
 	"trpc.group/trpc-go/trpc-go/filter"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/server"
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 func main() {
 	// Create a server with filter
 	s := trpc.NewServer(server.WithFilter(serverFilter))
-	pb.RegisterGreeterService(s, &common.GreeterServerImpl{})
+	pb.RegisterGreeterService(s.Service("trpc.test.helloworld.Greeter"), &common.GreeterServerImpl{})
 	// Start serving.
 	s.Serve()
 }

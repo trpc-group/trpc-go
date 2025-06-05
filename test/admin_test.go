@@ -25,12 +25,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/admin"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/config"
 	"trpc.group/trpc-go/trpc-go/filter"
 	"trpc.group/trpc-go/trpc-go/healthcheck"
+	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/rpcz"
 	"trpc.group/trpc-go/trpc-go/server"
 
@@ -169,10 +170,44 @@ func (s *TestSuite) testCmdsLogLevel() {
 	require.Nil(s.T(), json.Unmarshal(resp, &r), "Unmarshal failed")
 	require.Equal(s.T(), "debug", r.Level)
 
-	resp, err = httpRequest(http.MethodPut, logURL, "value=info")
+	w := bufferWriter{buf: buffer{}}
+	mustRegisterLogWriter(s.T(), "buffer", &w)
+	l := log.NewZapLog([]log.OutputConfig{
+		{
+			Writer: "buffer",
+			Level:  "debug",
+			FormatConfig: log.FormatConfig{
+				MessageKey: "msg",
+				LevelKey:   "level",
+			},
+		},
+	})
+
+	const defaultLoggerName = "default"
+	oldDefaultLogger := log.GetDefaultLogger()
+	log.Register(defaultLoggerName, l)
+	defer func() {
+		log.Register(defaultLoggerName, oldDefaultLogger)
+	}()
+
+	l.Debug("this is a debug level log")
+	l.Info("this is a info level log")
+	require.Equal(s.T(), `{"level":"DEBUG","msg":"this is a debug level log"}
+{"level":"INFO","msg":"this is a info level log"}
+`, w.buf.message())
+
+	// set log level to info
+	url := fmt.Sprintf("%v", logURL)
+	resp, err = httpRequest(http.MethodPut, url, "value=info")
 	require.Nil(s.T(), err)
 	require.Nil(s.T(), json.Unmarshal(resp, &r), "Unmarshal failed")
 	require.Equal(s.T(), "info", r.Level)
+	l.Debug("this is a debug level log")
+	l.Info("this is a info level log")
+	require.Equal(s.T(), `{"level":"DEBUG","msg":"this is a debug level log"}
+{"level":"INFO","msg":"this is a info level log"}
+{"level":"INFO","msg":"this is a info level log"}
+`, w.buf.message())
 }
 
 func (s *TestSuite) testIsHealthy() {
@@ -197,16 +232,12 @@ func (s *TestSuite) testIsHealthy() {
 }
 
 func (s *TestSuite) testCustomHandleFunc() {
-	if as, ok := s.server.Service(admin.ServiceName).(*admin.Server); ok {
-		as.HandleFunc(
-			"/customHandle",
-			func(http.ResponseWriter, *http.Request) {
-				panic("panic error handle")
-			},
-		)
-	} else {
-		s.T().Fatal("config admin handle function failed")
-	}
+	admin.HandleFunc(
+		"/customHandle",
+		func(http.ResponseWriter, *http.Request) {
+			panic("panic error handle")
+		},
+	)
 
 	resp, err := httpRequest(
 		http.MethodGet,

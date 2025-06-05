@@ -21,12 +21,12 @@ import (
 
 type testRegistry struct{}
 
-// Register 注册
+// Register does nothing.
 func (r *testRegistry) Register(service string, opt ...Option) error {
 	return nil
 }
 
-// Deregister 反注册
+// Deregister does nothing.
 func (r *testRegistry) Deregister(service string) error {
 	return nil
 }

@@ -18,14 +18,12 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"sync"
 
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
-	"trpc.group/trpc-go/trpc-go/internal/addrutil"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
+	"trpc.group/trpc-go/trpc-go/internal/attachment"
 
-	"google.golang.org/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 )
 
 var (
@@ -37,15 +35,13 @@ var (
 	errEncodeCloseFrame error = errors.New("encode close frame error")
 	// error for failing to encode Feedback frame
 	errEncodeFeedbackFrame error = errors.New("encode feedback error")
-	// error for init metadata not found
-	errUninitializedMeta error = errors.New("uninitialized meta")
 	// error for invalid trpc framehead
 	errFrameHeadTypeInvalid error = errors.New("framehead type invalid")
 )
 
 // NewServerStreamCodec initializes and returns a ServerStreamCodec.
 func NewServerStreamCodec() *ServerStreamCodec {
-	return &ServerStreamCodec{initMetas: make(map[string]map[uint32]*trpcpb.TrpcStreamInitMeta), m: &sync.RWMutex{}}
+	return &ServerStreamCodec{}
 }
 
 // NewClientStreamCodec initializes and returns a ClientStreamCodec.
@@ -55,30 +51,26 @@ func NewClientStreamCodec() *ClientStreamCodec {
 
 // ServerStreamCodec is an implementation of codec.Codec.
 // Used for trpc server streaming codec.
-type ServerStreamCodec struct {
-	m         *sync.RWMutex
-	initMetas map[string]map[uint32]*trpcpb.TrpcStreamInitMeta // addr->streamID->TrpcStreamInitMeta
-}
+type ServerStreamCodec struct{}
 
 // ClientStreamCodec is an implementation of codec.Codec.
 // Used for trpc client streaming codec.
-type ClientStreamCodec struct {
-}
+type ClientStreamCodec struct{}
 
 // Encode implements codec.Codec.
 func (c *ClientStreamCodec) Encode(msg codec.Msg, reqBuf []byte) ([]byte, error) {
 	frameHead, ok := msg.FrameHead().(*FrameHead)
-	if !ok || !frameHead.isStream() {
+	if !ok || !frameHead.IsStream() {
 		return nil, errUnknownFrameType
 	}
-	switch trpcpb.TrpcStreamFrameType(frameHead.StreamFrameType) {
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT:
+	switch TrpcStreamFrameType(frameHead.StreamFrameType) {
+	case TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT:
 		return c.encodeInitFrame(frameHead, msg, reqBuf)
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA:
+	case TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA:
 		return c.encodeDataFrame(frameHead, msg, reqBuf)
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE:
+	case TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE:
 		return c.encodeCloseFrame(frameHead, msg, reqBuf)
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK:
+	case TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK:
 		return c.encodeFeedbackFrame(frameHead, msg, reqBuf)
 	default:
 		return nil, errUnknownFrameType
@@ -88,19 +80,19 @@ func (c *ClientStreamCodec) Encode(msg codec.Msg, reqBuf []byte) ([]byte, error)
 // Decode implements codec.Codec.
 func (c *ClientStreamCodec) Decode(msg codec.Msg, rspBuf []byte) ([]byte, error) {
 	frameHead, ok := msg.FrameHead().(*FrameHead)
-	if !ok || !frameHead.isStream() {
+	if !ok || !frameHead.IsStream() {
 		return nil, errUnknownFrameType
 	}
 
 	msg.WithStreamID(frameHead.StreamID)
-	switch trpcpb.TrpcStreamFrameType(frameHead.StreamFrameType) {
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT:
+	switch TrpcStreamFrameType(frameHead.StreamFrameType) {
+	case TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT:
 		return c.decodeInitFrame(msg, rspBuf)
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA:
+	case TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA:
 		return c.decodeDataFrame(msg, rspBuf)
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE:
+	case TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE:
 		return c.decodeCloseFrame(msg, rspBuf)
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK:
+	case TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK:
 		return c.decodeFeedbackFrame(msg, rspBuf)
 	default:
 		return nil, errUnknownFrameType
@@ -110,7 +102,7 @@ func (c *ClientStreamCodec) Decode(msg codec.Msg, rspBuf []byte) ([]byte, error)
 // decodeCloseFrame decodes the Close frame.
 func (c *ClientStreamCodec) decodeCloseFrame(msg codec.Msg, rspBuf []byte) ([]byte, error) {
 	// unmarshal Close frame
-	close := &trpcpb.TrpcStreamCloseMeta{}
+	close := &TrpcStreamCloseMeta{}
 	if err := proto.Unmarshal(rspBuf[frameHeadLen:], close); err != nil {
 		return nil, err
 	}
@@ -118,14 +110,8 @@ func (c *ClientStreamCodec) decodeCloseFrame(msg codec.Msg, rspBuf []byte) ([]by
 	// It is considered an exception and an error should be returned to the client if:
 	// 1. the CloseType is Reset
 	// 2. ret code != 0
-	if close.GetCloseType() == int32(trpcpb.TrpcStreamCloseType_TRPC_STREAM_RESET) || close.GetRet() != 0 {
-		e := &errs.Error{
-			Type: errs.ErrorTypeCalleeFramework,
-			Code: trpcpb.TrpcRetCode(close.GetRet()),
-			Desc: "trpc",
-			Msg:  string(close.GetMsg()),
-		}
-		msg.WithClientRspErr(e)
+	if close.GetCloseType() == int32(TrpcStreamCloseType_TRPC_STREAM_RESET) || close.GetRet() != 0 {
+		msg.WithClientRspErr(errs.NewCalleeFrameError(int(close.GetRet()), string(close.GetMsg())))
 	}
 	msg.WithStreamFrame(close)
 	return nil, nil
@@ -133,7 +119,7 @@ func (c *ClientStreamCodec) decodeCloseFrame(msg codec.Msg, rspBuf []byte) ([]by
 
 // decodeFeedbackFrame decodes the Feedback frame.
 func (c *ClientStreamCodec) decodeFeedbackFrame(msg codec.Msg, rspBuf []byte) ([]byte, error) {
-	feedback := &trpcpb.TrpcStreamFeedBackMeta{}
+	feedback := &TrpcStreamFeedBackMeta{}
 	if err := proto.Unmarshal(rspBuf[frameHeadLen:], feedback); err != nil {
 		return nil, err
 	}
@@ -143,7 +129,8 @@ func (c *ClientStreamCodec) decodeFeedbackFrame(msg codec.Msg, rspBuf []byte) ([
 
 // decodeInitFrame decodes the Init frame.
 func (c *ClientStreamCodec) decodeInitFrame(msg codec.Msg, rspBuf []byte) ([]byte, error) {
-	initMeta := &trpcpb.TrpcStreamInitMeta{}
+	// data structure of Init frame defined in trpc.pb.go
+	initMeta := &TrpcStreamInitMeta{}
 	if err := proto.Unmarshal(rspBuf[frameHeadLen:], initMeta); err != nil {
 		return nil, err
 	}
@@ -153,13 +140,10 @@ func (c *ClientStreamCodec) decodeInitFrame(msg codec.Msg, rspBuf []byte) ([]byt
 
 	// if ret code is not 0, an error should be set and returned
 	if initMeta.GetResponseMeta().GetRet() != 0 {
-		e := &errs.Error{
-			Type: errs.ErrorTypeCalleeFramework,
-			Code: trpcpb.TrpcRetCode(initMeta.GetResponseMeta().GetRet()),
-			Desc: "trpc",
-			Msg:  string(initMeta.GetResponseMeta().GetErrorMsg()),
-		}
-		msg.WithClientRspErr(e)
+		msg.WithClientRspErr(errs.NewCalleeFrameError(
+			int(initMeta.GetResponseMeta().GetRet()),
+			string(initMeta.GetResponseMeta().GetErrorMsg())),
+		)
 	}
 	msg.WithStreamFrame(initMeta)
 	return nil, nil
@@ -175,10 +159,10 @@ func (c *ClientStreamCodec) decodeDataFrame(msg codec.Msg, rspBuf []byte) ([]byt
 
 // encodeInitFrame encodes the Init frame.
 func (c *ClientStreamCodec) encodeInitFrame(frameHead *FrameHead, msg codec.Msg, reqBuf []byte) ([]byte, error) {
-	initMeta, ok := msg.StreamFrame().(*trpcpb.TrpcStreamInitMeta)
+	initMeta, ok := msg.StreamFrame().(*TrpcStreamInitMeta)
 	if !ok {
-		initMeta = &trpcpb.TrpcStreamInitMeta{}
-		initMeta.RequestMeta = &trpcpb.TrpcStreamInitRequestMeta{}
+		initMeta = &TrpcStreamInitMeta{}
+		initMeta.RequestMeta = &TrpcStreamInitRequestMeta{}
 	}
 	req := initMeta.RequestMeta
 	// set caller service name
@@ -197,7 +181,7 @@ func (c *ClientStreamCodec) encodeInitFrame(frameHead *FrameHead, msg codec.Msg,
 	initMeta.ContentEncoding = uint32(msg.CompressType())
 	// set dyeing info
 	if msg.Dyeing() {
-		req.MessageType = req.MessageType | uint32(trpcpb.TrpcMessageType_TRPC_DYEING_MESSAGE)
+		req.MessageType = req.MessageType | uint32(TrpcMessageType_TRPC_DYEING_MESSAGE)
 	}
 	// set client transinfo
 	req.TransInfo = setClientTransInfo(msg, req.TransInfo)
@@ -215,8 +199,8 @@ func (c *ClientStreamCodec) encodeDataFrame(frameHead *FrameHead, msg codec.Msg,
 
 // encodeCloseFrame encodes the Close frame.
 func (c *ClientStreamCodec) encodeCloseFrame(frameHead *FrameHead, msg codec.Msg,
-	reqBuf []byte) (rspbuf []byte, err error) {
-	closeFrame, ok := msg.StreamFrame().(*trpcpb.TrpcStreamCloseMeta)
+	reqBuf []byte) (rspBuf []byte, err error) {
+	closeFrame, ok := msg.StreamFrame().(*TrpcStreamCloseMeta)
 	if !ok {
 		return nil, errEncodeCloseFrame
 	}
@@ -229,7 +213,7 @@ func (c *ClientStreamCodec) encodeCloseFrame(frameHead *FrameHead, msg codec.Msg
 
 // encodeFeedbackFrame encodes the Feedback frame.
 func (c *ClientStreamCodec) encodeFeedbackFrame(frameHead *FrameHead, msg codec.Msg, reqBuf []byte) ([]byte, error) {
-	feedbackFrame, ok := msg.StreamFrame().(*trpcpb.TrpcStreamFeedBackMeta)
+	feedbackFrame, ok := msg.StreamFrame().(*TrpcStreamFeedBackMeta)
 	if !ok {
 		return nil, errEncodeFeedbackFrame
 	}
@@ -243,13 +227,12 @@ func (c *ClientStreamCodec) encodeFeedbackFrame(frameHead *FrameHead, msg codec.
 // frameWrite converts FrameHead to binary frame.
 func frameWrite(frameHead *FrameHead, streamBuf []byte) ([]byte, error) {
 	// no pb header for streaming rpc
-	return frameHead.construct(nil, streamBuf, nil)
+	return frameHead.construct(nil, streamBuf, &attachment.SizedAttachment{})
 }
 
 // encodeCloseFrame encodes the Close frame.
 func (s *ServerStreamCodec) encodeCloseFrame(frameHead *FrameHead, msg codec.Msg, reqBuf []byte) ([]byte, error) {
-	defer s.deleteInitMeta(msg)
-	closeFrame, ok := msg.StreamFrame().(*trpcpb.TrpcStreamCloseMeta)
+	closeFrame, ok := msg.StreamFrame().(*TrpcStreamCloseMeta)
 	if !ok {
 		return nil, errEncodeCloseFrame
 	}
@@ -277,9 +260,9 @@ func (s *ServerStreamCodec) encodeInitFrame(frameHead *FrameHead, msg codec.Msg,
 	rsp := getStreamInitMeta(msg)
 	rsp.ContentType = uint32(msg.SerializationType())
 	rsp.ContentEncoding = uint32(msg.CompressType())
-	rspMeta := &trpcpb.TrpcStreamInitResponseMeta{}
+	rspMeta := &TrpcStreamInitResponseMeta{}
 	if e := msg.ServerRspErr(); e != nil {
-		rspMeta.Ret = int32(e.Code)
+		rspMeta.Ret = e.Code
 		rspMeta.ErrorMsg = []byte(e.Msg)
 	}
 	rsp.ResponseMeta = rspMeta
@@ -292,7 +275,7 @@ func (s *ServerStreamCodec) encodeInitFrame(frameHead *FrameHead, msg codec.Msg,
 
 // encodeFeedbackFrame encodes the Feedback frame.
 func (s *ServerStreamCodec) encodeFeedbackFrame(frameHead *FrameHead, msg codec.Msg, reqBuf []byte) ([]byte, error) {
-	feedback, ok := msg.StreamFrame().(*trpcpb.TrpcStreamFeedBackMeta)
+	feedback, ok := msg.StreamFrame().(*TrpcStreamFeedBackMeta)
 	if !ok {
 		return nil, errEncodeFeedbackFrame
 	}
@@ -305,28 +288,28 @@ func (s *ServerStreamCodec) encodeFeedbackFrame(frameHead *FrameHead, msg codec.
 
 // getStreamInitMeta returns TrpcStreamInitMeta from msg.
 // If not found, a new TrpcStreamInitMeta will be created and returned.
-func getStreamInitMeta(msg codec.Msg) *trpcpb.TrpcStreamInitMeta {
-	rsp, ok := msg.StreamFrame().(*trpcpb.TrpcStreamInitMeta)
+func getStreamInitMeta(msg codec.Msg) *TrpcStreamInitMeta {
+	rsp, ok := msg.StreamFrame().(*TrpcStreamInitMeta)
 	if !ok {
-		rsp = &trpcpb.TrpcStreamInitMeta{ResponseMeta: &trpcpb.TrpcStreamInitResponseMeta{}}
+		rsp = &TrpcStreamInitMeta{ResponseMeta: &TrpcStreamInitResponseMeta{}}
 	}
 	return rsp
 }
 
 // Encode implements codec.Codec.
-func (s *ServerStreamCodec) Encode(msg codec.Msg, reqBuf []byte) (rspbuf []byte, err error) {
+func (s *ServerStreamCodec) Encode(msg codec.Msg, reqBuf []byte) (rspBuf []byte, err error) {
 	frameHead, ok := msg.FrameHead().(*FrameHead)
-	if !ok || !frameHead.isStream() {
+	if !ok || !frameHead.IsStream() {
 		return nil, errUnknownFrameType
 	}
-	switch trpcpb.TrpcStreamFrameType(frameHead.StreamFrameType) {
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT:
+	switch TrpcStreamFrameType(frameHead.StreamFrameType) {
+	case TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT:
 		return s.encodeInitFrame(frameHead, msg, reqBuf)
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA:
+	case TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA:
 		return s.encodeDataFrame(frameHead, msg, reqBuf)
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE:
+	case TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE:
 		return s.encodeCloseFrame(frameHead, msg, reqBuf)
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK:
+	case TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK:
 		return s.encodeFeedbackFrame(frameHead, msg, reqBuf)
 	default:
 		return nil, errUnknownFrameType
@@ -337,18 +320,18 @@ func (s *ServerStreamCodec) Encode(msg codec.Msg, reqBuf []byte) (rspbuf []byte,
 // It decodes the head and the stream frame data.
 func (s *ServerStreamCodec) Decode(msg codec.Msg, reqBuf []byte) ([]byte, error) {
 	frameHead, ok := msg.FrameHead().(*FrameHead)
-	if !ok || !frameHead.isStream() {
+	if !ok || !frameHead.IsStream() {
 		return nil, errUnknownFrameType
 	}
 	msg.WithStreamID(frameHead.StreamID)
-	switch trpcpb.TrpcStreamFrameType(frameHead.StreamFrameType) {
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT:
+	switch TrpcStreamFrameType(frameHead.StreamFrameType) {
+	case TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT:
 		return s.decodeInitFrame(msg, reqBuf)
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA:
+	case TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA:
 		return s.decodeDataFrame(msg, reqBuf)
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE:
+	case TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE:
 		return s.decodeCloseFrame(msg, reqBuf)
-	case trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK:
+	case TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK:
 		return s.decodeFeedbackFrame(msg, reqBuf)
 	default:
 		return nil, errUnknownFrameType
@@ -357,10 +340,7 @@ func (s *ServerStreamCodec) Decode(msg codec.Msg, reqBuf []byte) ([]byte, error)
 
 // decodeFeedbackFrame decodes the Feedback frame.
 func (s *ServerStreamCodec) decodeFeedbackFrame(msg codec.Msg, reqBuf []byte) ([]byte, error) {
-	if err := s.setInitMeta(msg); err != nil {
-		return nil, err
-	}
-	feedback := &trpcpb.TrpcStreamFeedBackMeta{}
+	feedback := &TrpcStreamFeedBackMeta{}
 	if err := proto.Unmarshal(reqBuf[frameHeadLen:], feedback); err != nil {
 		return nil, err
 	}
@@ -368,53 +348,11 @@ func (s *ServerStreamCodec) decodeFeedbackFrame(msg codec.Msg, reqBuf []byte) ([
 	return nil, nil
 }
 
-// setInitMeta finds the InitMeta and sets the ServerRPCName by the server handler in the InitMeta.
-func (s *ServerStreamCodec) setInitMeta(msg codec.Msg) error {
-	streamID := msg.StreamID()
-	addr := addrutil.AddrToKey(msg.LocalAddr(), msg.RemoteAddr())
-	s.m.RLock()
-	defer s.m.RUnlock()
-	if streamIDToInitMeta, ok := s.initMetas[addr]; ok {
-		if initMeta, ok := streamIDToInitMeta[streamID]; ok {
-			msg.WithServerRPCName(string(initMeta.GetRequestMeta().GetFunc()))
-			return nil
-		}
-	}
-	return errUninitializedMeta
-}
-
-// deleteInitMeta deletes the cached info by msg.
-func (s *ServerStreamCodec) deleteInitMeta(msg codec.Msg) {
-	addr := addrutil.AddrToKey(msg.LocalAddr(), msg.RemoteAddr())
-	streamID := msg.StreamID()
-	s.m.Lock()
-	defer s.m.Unlock()
-	delete(s.initMetas[addr], streamID)
-	if len(s.initMetas[addr]) == 0 {
-		delete(s.initMetas, addr)
-	}
-}
-
 // decodeCloseFrame decodes the Close frame.
 func (s *ServerStreamCodec) decodeCloseFrame(msg codec.Msg, rspBuf []byte) ([]byte, error) {
-	if err := s.setInitMeta(msg); err != nil {
-		return nil, err
-	}
-	close := &trpcpb.TrpcStreamCloseMeta{}
+	close := &TrpcStreamCloseMeta{}
 	if err := proto.Unmarshal(rspBuf[frameHeadLen:], close); err != nil {
 		return nil, err
-	}
-	// It is considered an exception and an error should be returned to the client if:
-	// 1. the CloseType is Reset
-	// 2. ret code != 0
-	if close.GetCloseType() == int32(trpcpb.TrpcStreamCloseType_TRPC_STREAM_RESET) || close.GetRet() != 0 {
-		e := &errs.Error{
-			Type: errs.ErrorTypeCalleeFramework,
-			Code: trpcpb.TrpcRetCode(close.GetRet()),
-			Desc: "trpc",
-			Msg:  string(close.GetMsg()),
-		}
-		msg.WithServerRspErr(e)
 	}
 	msg.WithStreamFrame(close)
 	return nil, nil
@@ -422,42 +360,23 @@ func (s *ServerStreamCodec) decodeCloseFrame(msg codec.Msg, rspBuf []byte) ([]by
 
 // decodeDataFrame decodes the Data frame.
 func (s *ServerStreamCodec) decodeDataFrame(msg codec.Msg, reqBuf []byte) ([]byte, error) {
-	if err := s.setInitMeta(msg); err != nil {
-		return nil, err
-	}
 	reqBody := reqBuf[frameHeadLen:]
 	return reqBody, nil
 }
 
 // decodeInitFrame decodes the Init frame.
 func (s *ServerStreamCodec) decodeInitFrame(msg codec.Msg, reqBuf []byte) ([]byte, error) {
-	initMeta := &trpcpb.TrpcStreamInitMeta{}
+	initMeta := &TrpcStreamInitMeta{}
 	if err := proto.Unmarshal(reqBuf[frameHeadLen:], initMeta); err != nil {
 		return nil, err
 	}
 	s.updateMsg(msg, initMeta)
-	s.storeInitMeta(msg, initMeta)
 	msg.WithStreamFrame(initMeta)
 	return nil, nil
 }
 
-// storeInitMeta stores the InitMeta every time when a new frame is received.
-func (s *ServerStreamCodec) storeInitMeta(msg codec.Msg, initMeta *trpcpb.TrpcStreamInitMeta) {
-	streamID := msg.StreamID()
-	addr := addrutil.AddrToKey(msg.LocalAddr(), msg.RemoteAddr())
-	s.m.Lock()
-	defer s.m.Unlock()
-	if _, ok := s.initMetas[addr]; ok {
-		s.initMetas[addr][streamID] = initMeta
-	} else {
-		t := make(map[uint32]*trpcpb.TrpcStreamInitMeta)
-		t[streamID] = initMeta
-		s.initMetas[addr] = t
-	}
-}
-
 // updateMsg updates the Msg by InitMeta.
-func (s *ServerStreamCodec) updateMsg(msg codec.Msg, initMeta *trpcpb.TrpcStreamInitMeta) {
+func (s *ServerStreamCodec) updateMsg(msg codec.Msg, initMeta *TrpcStreamInitMeta) {
 	// get request meta
 	req := initMeta.GetRequestMeta()
 
@@ -470,7 +389,7 @@ func (s *ServerStreamCodec) updateMsg(msg codec.Msg, initMeta *trpcpb.TrpcStream
 	msg.WithSerializationType(int(initMeta.GetContentType()))
 	// set body compression type
 	msg.WithCompressType(int(initMeta.GetContentEncoding()))
-	msg.WithDyeing((req.GetMessageType() & uint32(trpcpb.TrpcMessageType_TRPC_DYEING_MESSAGE)) != 0)
+	msg.WithDyeing((req.GetMessageType() & uint32(TrpcMessageType_TRPC_DYEING_MESSAGE)) != 0)
 
 	if len(req.TransInfo) > 0 {
 		msg.WithServerMetaData(req.GetTransInfo())
@@ -486,9 +405,9 @@ func (s *ServerStreamCodec) updateMsg(msg codec.Msg, initMeta *trpcpb.TrpcStream
 }
 
 func (s *ServerStreamCodec) buildResetFrame(msg codec.Msg, frameHead *FrameHead, err error) {
-	frameHead.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE)
-	closeMeta := &trpcpb.TrpcStreamCloseMeta{
-		CloseType: int32(trpcpb.TrpcStreamCloseType_TRPC_STREAM_RESET),
+	frameHead.StreamFrameType = uint8(TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE)
+	closeMeta := &TrpcStreamCloseMeta{
+		CloseType: int32(TrpcStreamCloseType_TRPC_STREAM_RESET),
 		Ret:       int32(errs.Code(err)),
 		Msg:       []byte(errs.Msg(err)),
 	}

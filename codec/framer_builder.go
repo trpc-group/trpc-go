@@ -18,7 +18,7 @@ import (
 	"io"
 )
 
-// DefaultReaderSize is the default size of reader in bit.
+// DefaultReaderSize is the default size of reader in bytes.
 const DefaultReaderSize = 4 * 1024
 
 // readerSizeConfig is the default size of buffer when framer read package.
@@ -37,12 +37,12 @@ func NewReader(r io.Reader) io.Reader {
 	return bufio.NewReaderSize(r, readerSizeConfig)
 }
 
-// GetReaderSize returns size of read buffer in bit.
+// GetReaderSize returns size of read buffer in bytes.
 func GetReaderSize() int {
 	return readerSizeConfig
 }
 
-// SetReaderSize sets the size of read buffer in bit.
+// SetReaderSize sets the size of read buffer in bytes.
 func SetReaderSize(size int) {
 	readerSizeConfig = size
 }
@@ -74,4 +74,25 @@ func IsSafeFramer(f interface{}) bool {
 		return true
 	}
 	return false
+}
+
+// Decoder defines the decode logic of transport response frame data.
+type Decoder interface {
+	// Decode parse frame head, package head and package body from response.
+	Decode() (TransportResponseFrame, error)
+
+	// UpdateMsg update Msg content, the first input param is parsed response data.
+	UpdateMsg(interface{}, Msg) error
+}
+
+// TransportResponseFrame is the interface should be implemented
+// by the response package data.
+type TransportResponseFrame interface {
+	// GetRequestID returns the stream id when in stream mode,
+	// returns request id when one-request-one-response mode.
+	GetRequestID() uint32
+
+	// GetResponseBuf returns the whole frame when in stream mode,
+	// returns the package body when in one-request-one-response mode.
+	GetResponseBuf() []byte
 }

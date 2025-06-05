@@ -16,6 +16,8 @@ package http
 import (
 	"fmt"
 	"net/url"
+	"reflect"
+	"strconv"
 
 	"trpc.group/trpc-go/trpc-go/codec"
 
@@ -41,6 +43,7 @@ func NewFormSerialization(tag string) codec.Serializer {
 	decoder.SetTagName(tag)
 	return &FormSerialization{
 		tagname: tag,
+		MapType: false,
 		encode:  encoder.Encode,
 		decode:  wrapDecodeWithRecovery(decoder.Decode),
 	}
@@ -49,6 +52,9 @@ func NewFormSerialization(tag string) codec.Serializer {
 // FormSerialization packages the kv structure of http get request.
 type FormSerialization struct {
 	tagname string
+	// MapType is used to determine the serialization method of a map,
+	// which defaults to false and follows the logic of the original form/v4.
+	MapType bool
 	encode  func(interface{}) (url.Values, error)
 	decode  func(interface{}, url.Values) error
 }
@@ -127,14 +133,94 @@ func unmarshalValues(tagname string, values url.Values, body interface{}) error 
 	return decoder.Decode(params)
 }
 
-// Marshal packages kv structure.
-func (j *FormSerialization) Marshal(body interface{}) ([]byte, error) {
-	if req, ok := body.(url.Values); ok { // Used to send form urlencode post request to backend.
-		return []byte(req.Encode()), nil
+// encodeArray recursively process nested array.
+func encodeArray(prefix string, arr interface{}, values url.Values) {
+	v := reflect.ValueOf(arr)
+	switch v.Kind() {
+	case reflect.Slice:
+		for i := 0; i < v.Len(); i++ {
+			newPrefix := fmt.Sprintf("%s[%d]", prefix, i)
+			encodeArray(newPrefix, v.Index(i).Interface(), values)
+		}
+	default:
+		values.Add(prefix, fmt.Sprintf("%v", arr))
 	}
+}
+
+// processValue processes a value, handling maps, arrays, slices, and basic types.
+func processValue(v reflect.Value, prefix string, values url.Values, root bool) error {
+	switch v.Kind() {
+	case reflect.Map:
+		return processMap(v, prefix, values)
+	case reflect.Array, reflect.Slice:
+		if v.Len() > 0 && v.Len() > 0 && v.Index(0).Kind() != reflect.Slice {
+			for i := 0; i < v.Len(); i++ {
+				values.Add(prefix, fmt.Sprintf("%v", v.Index(i)))
+			}
+		} else {
+			encodeArray(prefix, v.Interface(), values)
+		}
+	default:
+		values.Add(prefix, fmt.Sprintf("%v", v.Interface()))
+	}
+	return nil
+}
+
+// processMap recursively process nested maps.
+func processMap(v reflect.Value, prefix string, values url.Values) error {
+	if v.Kind() != reflect.Map {
+		return fmt.Errorf("expected a map, got %s", v.Kind())
+	}
+	for _, key := range v.MapKeys() {
+		var strKey string
+		switch key.Kind() {
+		case reflect.String:
+			strKey = key.String()
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			strKey = strconv.FormatInt(key.Int(), 10)
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			strKey = strconv.FormatUint(key.Uint(), 10)
+		default:
+			strKey = fmt.Sprintf("%v", key)
+			fmt.Printf("Warning: map key is of type %s, using %v as key\n", key.Kind(), strKey)
+		}
+		if prefix != "" {
+			strKey = prefix + "." + strKey
+		}
+		value := v.MapIndex(key)
+		if err := processValue(value, strKey, values, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// mapToUrlValues convert a map to url.Values.
+func mapToUrlValues(body interface{}) ([]byte, error) {
+	values := url.Values{}
+	if err := processMap(reflect.ValueOf(body), "", values); err != nil {
+		return nil, err
+	}
+	return []byte(values.Encode()), nil
+}
+
+func (j *FormSerialization) otherTypeToUrlValues(body interface{}) ([]byte, error) {
 	val, err := j.encode(body)
 	if err != nil {
 		return nil, err
 	}
-	return []byte(val.Encode()), nil
+	return []byte(val.Encode()), err
+}
+
+// Marshal packages kv structure.
+func (j *FormSerialization) Marshal(body interface{}) ([]byte, error) {
+	// Used to send form urlencode post request to backend.
+	if req, ok := body.(url.Values); ok {
+		return []byte(req.Encode()), nil
+	}
+	// Due to the inability of the form package to correctly serialize the map type, a special judgment is made here.
+	if j.MapType == true && reflect.TypeOf(body).Kind() == reflect.Map {
+		return mapToUrlValues(body)
+	}
+	return j.otherTypeToUrlValues(body)
 }

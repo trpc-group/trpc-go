@@ -22,9 +22,14 @@ import (
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/packetbuffer"
 	"trpc.group/trpc-go/trpc-go/internal/report"
+	"trpc.group/trpc-go/trpc-go/pool/objectpool"
+	"trpc.group/trpc-go/trpc-go/transport/internal/dialer"
+	ierrs "trpc.group/trpc-go/trpc-go/transport/internal/errs"
 )
 
 const defaultUDPRecvBufSize = 64 * 1024
+
+var udpBufPool = objectpool.NewBytesPool(defaultUDPRecvBufSize)
 
 // udpRoundTrip sends UDP requests.
 func (c *clientTransport) udpRoundTrip(ctx context.Context, reqData []byte,
@@ -34,7 +39,14 @@ func (c *clientTransport) udpRoundTrip(ctx context.Context, reqData []byte,
 			"udp client transport: framer builder empty")
 	}
 
-	conn, addr, err := c.dialUDP(ctx, opts)
+	conn, addr, err := dialer.DialUDP(ctx, dialer.DialOptions{
+		Network:        opts.Network,
+		Address:        opts.Address,
+		LocalAddr:      opts.LocalAddr,
+		DialUDP:        dialer.DefaultDialUDP,
+		DialTimeout:    opts.DialTimeout,
+		ConnectionMode: opts.ConnectionMode,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -73,29 +85,35 @@ func (c *clientTransport) udpReadFrame(
 	default:
 	}
 
-	buf := packetbuffer.New(conn, defaultUDPRecvBufSize)
-	defer buf.Close()
+	recvData := udpBufPool.Get()
+	defer udpBufPool.Put(recvData)
+	buf := packetbuffer.New(recvData)
 	fr := opts.FramerBuilder.New(buf)
+	// Receive server's response.
+	num, _, err := conn.ReadFrom(buf.Bytes())
+	if err != nil {
+		if e, ok := err.(net.Error); ok && e.Timeout() {
+			return nil, errs.NewFrameError(errs.RetClientTimeout, "udp client transport ReadFrom: "+err.Error())
+		}
+		return nil, errs.NewFrameError(errs.RetClientNetErr, "udp client transport ReadFrom: "+err.Error())
+	}
+	if num == 0 {
+		return nil, errs.NewFrameError(errs.RetClientNetErr, "udp client transport ReadFrom: num empty")
+	}
+	// Update the buffer according to the actual length of the received data.
+	buf.Advance(num)
 	req, err := fr.ReadFrame()
 	if err != nil {
 		report.UDPClientTransportReadFail.Incr()
-		if e, ok := err.(net.Error); ok {
-			if e.Timeout() {
-				return nil, errs.NewFrameError(errs.RetClientTimeout,
-					"udp client transport ReadFrame: "+err.Error())
-			}
-			return nil, errs.NewFrameError(errs.RetClientNetErr,
-				"udp client transport ReadFrom: "+err.Error())
-		}
 		return nil, errs.NewFrameError(errs.RetClientReadFrameErr,
 			"udp client transport ReadFrame: "+err.Error())
 	}
 	// One packet of udp corresponds to one trpc packet,
 	// and after parsing, there should not be any remaining data
-	if err := buf.Next(); err != nil {
+	if buf.UnRead() > 0 {
 		report.UDPClientTransportUnRead.Incr()
 		return nil, errs.NewFrameError(errs.RetClientReadFrameErr,
-			fmt.Sprintf("udp client transport ReadFrame: %s", err))
+			fmt.Sprintf("udp client transport ReadFrame: remaining %d bytes data", buf.UnRead()))
 	}
 	report.UDPClientTransportReceiveSize.Set(float64(len(req)))
 	// Framer is used for every request so there is no need to copy memory.
@@ -115,67 +133,10 @@ func (c *clientTransport) udpWriteFrame(conn net.PacketConn,
 		num, err = conn.WriteTo(reqData, addr)
 	}
 	if err != nil {
-		if e, ok := err.(net.Error); ok && e.Timeout() {
-			return errs.NewFrameError(errs.RetClientTimeout, "udp client transport WriteTo: "+err.Error())
-		}
-		return errs.NewFrameError(errs.RetClientNetErr, "udp client transport WriteTo: "+err.Error())
+		return ierrs.WrapAsClientTimeoutErrOr(err, errs.RetClientNetErr, "udp client transport WriteTo failed")
 	}
 	if num != len(reqData) {
 		return errs.NewFrameError(errs.RetClientNetErr, "udp client transport WriteTo: num mismatch")
 	}
 	return nil
-}
-
-// dialUDP establishes an UDP connection.
-func (c *clientTransport) dialUDP(ctx context.Context, opts *RoundTripOptions) (net.PacketConn, *net.UDPAddr, error) {
-	addr, err := net.ResolveUDPAddr(opts.Network, opts.Address)
-	if err != nil {
-		return nil, nil, errs.NewFrameError(errs.RetClientNetErr,
-			"udp client transport ResolveUDPAddr: "+err.Error())
-	}
-
-	var conn net.PacketConn
-	if opts.ConnectionMode == Connected {
-		var localAddr net.Addr
-		if opts.LocalAddr != "" {
-			localAddr, err = net.ResolveUDPAddr(opts.Network, opts.LocalAddr)
-			if err != nil {
-				return nil, nil, errs.NewFrameError(errs.RetClientNetErr,
-					"udp client transport LocalAddr ResolveUDPAddr: "+err.Error())
-			}
-		}
-		dialer := net.Dialer{
-			LocalAddr: localAddr,
-		}
-		var udpConn net.Conn
-		udpConn, err = dialer.Dial(opts.Network, opts.Address)
-		if err != nil {
-			return nil, nil, errs.NewFrameError(errs.RetClientConnectFail,
-				fmt.Sprintf("dial udp fail: %s", err.Error()))
-		}
-
-		var ok bool
-		conn, ok = udpConn.(net.PacketConn)
-		if !ok {
-			return nil, nil, errs.NewFrameError(errs.RetClientConnectFail,
-				"udp conn not implement net.PacketConn")
-		}
-	} else {
-		// Listen on all available IP addresses of the local system by default,
-		// and a port number is automatically chosen.
-		const defaultLocalAddr = ":"
-		localAddr := defaultLocalAddr
-		if opts.LocalAddr != "" {
-			localAddr = opts.LocalAddr
-		}
-		conn, err = net.ListenPacket(opts.Network, localAddr)
-	}
-	if err != nil {
-		return nil, nil, errs.NewFrameError(errs.RetClientNetErr, "udp client transport Dial: "+err.Error())
-	}
-	d, ok := ctx.Deadline()
-	if ok {
-		conn.SetDeadline(d)
-	}
-	return conn, addr, nil
 }

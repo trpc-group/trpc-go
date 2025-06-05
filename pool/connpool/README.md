@@ -1,4 +1,4 @@
-English | [中文](README.zh_CN.md)
+English | [中文](https://git.woa.com/trpc-go/trpc-go/tree/master/pool/connpool/README.zh_CN.md)
 
 ## Background
 
@@ -8,7 +8,7 @@ Connection pool is a certain degree of encapsulation to achieve this function.
 
 ## Principle
 
-The pool maintains a `sync.Map` as a connection pool, the key is encoded by <network, address, protocol>, and the value is the ConnectionPool formed by the connection established with the target address, and a linked list is used to maintain idle connections inside. In short connection mode, the transport layer closes the connection after the RPC call, while in the connection pool mode, the used connection is returned to the connection pool to be taken out when needed next time.
+The pool maintains a `sync.Map` as a connection pool, the key is encoded by `<network, address, protocol>`, and the value is the ConnectionPool formed by the connection established with the target address, and a linked list is used to maintain idle connections inside. In short connection mode, the transport layer closes the connection after the RPC call, while in the connection pool mode, the used connection is returned to the connection pool to be taken out when needed next time.
 
 To achieve the above purposes, the connection pool needs to have the following functions:
 
@@ -21,7 +21,7 @@ To achieve the above purposes, the connection pool needs to have the following f
 
 Its overall code structure is shown in the figure below
 
-![design implementation](/.resources-without-git-lfs/pool/connpool/design_implementation.png)
+![design implementation](https://git.woa.com/trpc-go/trpc-go/raw/master/.resources/pool/connpool/design_implementation.png)
 
 ### Initialize the Connection Pool
 
@@ -29,19 +29,19 @@ Its overall code structure is shown in the figure below
 
 ```go
 func NewConnectionPool(opt ...Option) Pool {
-  opts := &Options{
-    MaxIdle: defaultMaxIdle,
-    IdleTimeout: defaultIdleTimeout,
-    DialTimeout: defaultDialTimeout,
-    Dial: Dial,
-  }
-  for _, o := range opt {
-    o(opts)
-  }
-  return &pool{
-    opts: opts,
-    connectionPools: new(sync.Map),
-  }
+    opts := &Options{
+        MaxIdle: defaultMaxIdle,
+        IdleTimeout: defaultIdleTimeout,
+        DialTimeout: defaultDialTimeout,
+        Dial: Dial,
+    }
+    for _, o := range opt {
+        o(opts)
+    }
+    return &pool{
+        opts: opts,
+        connectionPools: new(sync.Map),
+    }
 }
 ```
 
@@ -67,18 +67,18 @@ conn, err = opts.Pool.Get(opts.Network, opts.Address, getOpts)
 
 ```go
 func (p *pool) Get(network string, address string, opts GetOptions) (net.Conn, error) {
-  // ...
-  key := getNodeKey(network, address, opts.Protocol)
-  if v, ok := p.connectionPools.Load(key); ok {
+    // ...
+    key := getNodeKey(network, address, opts.Protocol)
+    if v, ok := p.connectionPools.Load(key); ok {
+        return v.(*ConnectionPool).Get(ctx)
+    }
+    // create newPool...
+    v, ok := p.connectionPools.LoadOrStore(key, newPool)
+    if !ok {
+        // init newPool...
+        return newPool.Get(ctx)
+    }
     return v.(*ConnectionPool).Get(ctx)
-  }
-  // create newPool...
-  v, ok := p.connectionPools.LoadOrStore(key, newPool)
-  if !ok {
-    // init newPool...
-    return newPool.Get(ctx)
-  }
-  return v.(*ConnectionPool).Get(ctx)
 }
 ```
 
@@ -86,36 +86,55 @@ After obtaining the `ConnectionPool`, an attempt is made to obtain a connection.
 
 ```go
 func (p *ConnectionPool) getToken(ctx context.Context) error {
-  if p.MaxActive <= 0 {
-    return nil
-  }
-    
-  if p.Wait {
-    select {
-    case p.token <- struct{}{}:
-      return nil
-    case <-ctx.Done():
-      return ctx.Err()
+    if p.MaxActive <= 0 {
+        return nil
     }
-  } else {
-    select {
-    case p.token <- struct{}{}:
-      return nil
-    default:
-      return ErrPoolLimit
+      
+    if p.Wait {
+        select {
+        case p.token <- struct{}{}:
+            return nil
+        case <-ctx.Done():
+            return ctx.Err()
+        }
+    } else {
+        select {
+        case p.token <- struct{}{}:
+            return nil
+        default:
+            return ErrPoolLimit
+        }
     }
-  }
 }
 
 func (p *ConnectionPool) freeToken() {
-  if p.MaxActive <= 0 {
-    return
-  }
-  <-p.token
+    if p.MaxActive <= 0 {
+      return
+    }
+    <-p.token
 }
 ```
 
 After the `token` is successfully obtained, the idle connection is first obtained from the `idle list`, and if it fails, the newly created connection returns.
+
+### Put the connection back into the connection pool
+
+After using a connection, you need to call the `Close` method to put it back into the connection pool to avoid resource leaks. Note that the `Close` method here does not actually close the connection.
+
+```go
+p := connpool.NewConnectionPool()
+conn, err := p.Get(network, addr, timeout)
+// handle err
+var (
+    bts []byte
+    err error
+)
+_, err = pc.Read(bts)
+// handle err
+
+// puts conn back into the connection pool.
+conn.Close()
+```
 
 ### Initialize the ConnectionPool
 
@@ -137,19 +156,19 @@ The ConnectionPool periodically performs the following checks:
 
   ```go
   func (p *ConnectionPool) defaultChecker(pc *PoolConn, isFast bool) bool {
-    if pc.isRemoteError(isFast) {
-      return false
-    }
-    if isFast {
+      if pc.isRemoteError(isFast) {
+          return false
+      }
+      if isFast {
+          return true
+      }
+      if p.IdleTimeout > 0 && pc.t.Add(p.IdleTimeout).Before(time.Now()) {
+          return false
+      }
+      if p.MaxConnLifetime > 0 && pc.created.Add(p.MaxConnLifetime).Before(time.Now  ()) {
+          return false
+      }
       return true
-    }
-    if p.IdleTimeout > 0 && pc.t.Add(p.IdleTimeout).Before(time.Now()) {
-      return false
-    }
-    if p.MaxConnLifetime > 0 && pc.created.Add(p.MaxConnLifetime).Before(time.Now()) {
-      return false
-    }
-    return true
   }
   ```
 
@@ -175,7 +194,7 @@ The ConnectionPool periodically performs the following checks:
 
 If there is a read/write error during connection usage by the user, the connection will be closed directly. If the check for connection availability fails, the connection will also be closed directly.
 
-![connection life cycle](/.resources-without-git-lfs/pool/connpool/life_cycle.png)
+![connection life cycle](https://git.woa.com/trpc-go/trpc-go/raw/master/.resources/pool/connpool/life_cycle.png)
 
 ## Idle Connection Management Policy
 
@@ -186,35 +205,34 @@ The connection pool has two strategies for selecting and eliminating idle connec
 
 ```go
 func (p *ConnectionPool) addIdleConn(ctx context.Context) error {
-  c, _ := p.dial(ctx)
-  pc := p.newPoolConn(c)
-  if !p.PushIdleConnToTail {
-    p.idle.pushHead(pc)
-  } else {
-    p.idle.pushTail(pc)
-  }
+    c, _ := p.dial(ctx)
+    pc := p.newPoolConn(c)
+    if !p.PushIdleConnToTail {
+        p.idle.pushHead(pc)
+    } else {
+        p.idle.pushTail(pc)
+    }
 }
 
 func (p *ConnectionPool) getIdleConn() *PoolConn {
-  for p.idle.head != nil {
-    pc := p.idle.head
-    p.idle.popHead()
-    // ...
-  }
+    for p.idle.head != nil {
+        pc := p.idle.head
+        p.idle.popHead()
+        // ...
+    }
 }
 
 func (p *ConnectionPool) put(pc *PoolConn, forceClose bool) error {
-  if !p.closed && !forceClose {
-    if !p.PushIdleConnToTail {
-      p.idle.pushHead(pc)
-    } else {
-      p.idle.pushTail(pc)
+    if !p.closed && !forceClose {
+        if !p.PushIdleConnToTail {
+            p.idle.pushHead(pc)
+        } else {
+            p.idle.pushTail(pc)
+        }
+        if p.idleSize >= p.MaxIdle {
+            pc = p.idle.tail
+            p.idle.popTail()
+        }
     }
-    if p.idleSize >= p.MaxIdle {
-      pc = p.idle.tail
-      p.idle.popTail()
-    }
-  }
 }
 ```
-

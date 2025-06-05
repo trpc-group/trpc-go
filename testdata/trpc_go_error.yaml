@@ -14,7 +14,7 @@ server:                                            # server configuration.
     read_timeout: 3000    # ms. the timeout setting for the request is accepted and the request information is completely read to prevent slow clients.
     write_timeout: 60000  # ms. the timeout setting for processing.
     enable_tls: false     # whether to enable TLS, currently not supported.
-  service: # business service configuration，can have multiple.
+  service: # business service configuration, can have multiple.
     - name: trpc.test.helloworld.Greeter1          # the route name of the service.
       nic: ethxxxx                                    # the service listening network card address, if configures ip, you don't need to configure it.
       port: 8000                                   # the service listening port, can use the placeholder ${port}.
@@ -45,7 +45,7 @@ client:                                            # configuration for client ca
     - name: trpc.test.helloworld.Greeter2          # backend service name.
       namespace: Production                        # backend service environment.
       network: tcp                                 # backend service network type, tcp or udp, configuration takes precedence.
-      target: ip://127.0.0.1:8080                   # the specific address of the backend service, generally not configures, compatible with the old routing method, (e.g. ip://127.0.0.1:8080).
+      target: cl5://11111:222222                   # the specific address of the backend service, generally not configures, compatible with the old routing method, (ip://127.0.0.1:8080, cl5://modid:cmdid, cmlb://appid).
       protocol: http                               # application layer protocol, trpc or http.
       timeout: 2000                                # maximum request processing time in milliseconds.
 
@@ -76,6 +76,9 @@ plugins:                                          # plugins configurations.
       curcuitbreaker:                             # circuit breaker configuration of polaris overall api.
         name: rate                                # circuit breaker strategy of polaris overall api.
       address_list: ${polaris_address_list}       # name service remote address list.
+    cmlb:                                         # configuration for cmlb name service.
+      refresh_interval: 10000                     # sync refresh time.
+      agent_address: ${cmlb_agent_address}        # local agent address.
 
   discovery:                                      # service discovery configuration.
     polaris:                                      # configuration for polaris service discovery.
@@ -115,3 +118,8 @@ plugins:                                          # plugins configurations.
         param: 1
       reporter:
         localAgentHostPort: localhost:6831
+    tjg:                                # tpstelemetry.
+      agent: localhost:4534
+      sample_rate: 1000                             # sampling rate.
+      min_speed_rate: 100                           # minimum speed rate.
+      max_speed_rate: 1000                          # maximum speed rate.

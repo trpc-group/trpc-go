@@ -29,8 +29,10 @@ type ServerAttachmentKey struct{}
 
 // Attachment stores the attachment in tRPC requests/responses.
 type Attachment struct {
-	Request  io.Reader
-	Response io.Reader
+	Request      io.Reader
+	RequestSize  int
+	Response     io.Reader
+	ResponseSize int
 }
 
 // NoopAttachment is an empty attachment.
@@ -41,20 +43,49 @@ func (a NoopAttachment) Read(_ []byte) (n int, err error) {
 	return 0, io.EOF
 }
 
-// ClientRequestAttachment returns client's Request Attachment from msg.
-func ClientRequestAttachment(msg codec.Msg) (io.Reader, bool) {
-	if a, _ := msg.CommonMeta()[ClientAttachmentKey{}].(*Attachment); a != nil {
-		return a.Request, true
-	}
-	return nil, false
+// SizedAttachment is an attachment with size.
+type SizedAttachment struct {
+	r         io.Reader
+	bts       []byte
+	size      int64
+	ioEnabled bool
 }
 
-// ServerResponseAttachment returns server's Response Attachment from msg.
-func ServerResponseAttachment(msg codec.Msg) (io.Reader, bool) {
-	if a, _ := msg.CommonMeta()[ServerAttachmentKey{}].(*Attachment); a != nil {
-		return a.Response, true
+// ReadAll read all data from SizedAttachment.
+// The length of bts is at least Size.
+func (a *SizedAttachment) ReadAll(bts []byte) error {
+	if a.ioEnabled {
+		_, err := io.ReadAtLeast(a.r, bts, int(a.size))
+		return err
 	}
-	return nil, false
+	copy(bts, a.bts[:a.size])
+	return nil
+}
+
+// Size returns the size of SizedAttachment.
+func (a *SizedAttachment) Size() int64 {
+	return a.size
+}
+
+// Sizer is the interface that wraps the basic Read method.
+// Attachment implements Sizer can reduce memory copy.
+type Sizer interface {
+	Size() int64
+}
+
+// ClientRequestSizedAttachment returns client's Request Attachment with size from msg.
+func ClientRequestSizedAttachment(msg codec.Msg) (*SizedAttachment, error) {
+	if a, _ := msg.CommonMeta()[ClientAttachmentKey{}].(*Attachment); a != nil {
+		if s, ok := a.Request.(Sizer); ok {
+			return &SizedAttachment{r: a.Request, ioEnabled: true, size: s.Size()}, nil
+		}
+		bts, err := io.ReadAll(a.Request)
+		if err != nil {
+			return nil, err
+		}
+		return &SizedAttachment{bts: bts, size: int64(len(bts))}, nil
+	}
+	return &SizedAttachment{}, nil
 }
 
 // SetClientResponseAttachment sets client's Response attachment to msg.
@@ -65,6 +96,22 @@ func SetClientResponseAttachment(msg codec.Msg, attachment []byte) {
 	if a, _ := msg.CommonMeta()[ClientAttachmentKey{}].(*Attachment); a != nil {
 		a.Response = bytes.NewReader(attachment)
 	}
+}
+
+// ServerResponseSizedAttachment returns server's Response Attachment from msg.
+func ServerResponseSizedAttachment(msg codec.Msg) (*SizedAttachment, error) {
+	if a, _ := msg.CommonMeta()[ServerAttachmentKey{}].(*Attachment); a != nil {
+		if s, ok := a.Response.(Sizer); ok {
+			return &SizedAttachment{r: a.Response, ioEnabled: true, size: s.Size()}, nil
+		}
+
+		bts, err := io.ReadAll(a.Response)
+		if err != nil {
+			return nil, err
+		}
+		return &SizedAttachment{bts: bts, size: int64(len(bts))}, nil
+	}
+	return &SizedAttachment{}, nil
 }
 
 // SetServerRequestAttachment sets server's Request Attachment to msg.

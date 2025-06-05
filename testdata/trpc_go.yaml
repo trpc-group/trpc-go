@@ -1,20 +1,41 @@
-global:                             # global config.
-  namespace: Development            # environment type, two types: production and development.
-  env_name: test                    # environment name, names of multiple environments in informal settings.
+global:  # global config.
+  namespace: Development  # environment type, two types: production and development.
+  env_name: test  # environment name, names of multiple environments in informal settings.
+  container_name: ""  # container name, default empty.
+  local_ip: 0.0.0.0  # local ip, default empty.
+  enable_set: N  # Y/N. Whether to enable Set. Default is N.
+  full_set_name: name.region.group  # full set name with the format: [set name].[set region].[set group name], default empty.
+  read_buffer_size: 4096  # size of the read buffer in bytes. <=0 means read buffer disabled, default 4096.
+  max_frame_size: 20000000  # in bytes, default 10485760 (10MB), available version: >= v0.15.0.
+  plugin_setup_timeout: 5s  # the setup timeout for each plugin, default 3 seconds, available version: >= v0.15.0.
+  update_gomaxprocs_interval: 200ms  # Update GOMAXPROCS interval, default 3 seconds, available version: >= v0.16.0.
+  round_up_cpu_quota: true  # Whether to enable round up the CPU quota, default false, available version: >= v0.18.5.
 
-server:                                            # server configuration.
-  app: test                                        # business application name.
-  server: helloworld                               # service process name.
-  bin_path: /usr/local/trpc/bin/                   # paths to binary executables and framework configuration files.
-  conf_path: /usr/local/trpc/conf/                 # paths to business configuration files.
-  data_path: /usr/local/trpc/data/                 # paths to business data files.
+server:  # server configuration.
+  app: test  # business application name.
+  server: helloworld  # service process name.
+  bin_path: /usr/local/trpc/bin/  # paths to binary executables and framework configuration files.
+  conf_path: /usr/local/trpc/conf/  # paths to business configuration files.
+  data_path: /usr/local/trpc/data/  # paths to business data files.
+  transport: tnet  # global server transport type, default empty.
+  network: tcp  # global server network type, default tcp.
+  protocol: trpc  # global server protocol type, default trpc.
+  current_serialization_type: -1  # global current serialization type, -1 means noop, default not set.
+  current_compress_type: 0  # global current compression type, 0 means noop, default not set.
+  filter: []  # global server filters.
+  stream_filter: []  # global server stream filters.
+  close_wait_time: 1000  # minimum waiting time in milliseconds when closing the server to wait for deregister finish.
+  max_close_wait_time: 2000  # maximum waiting time in milliseconds when closing the server to wait for requests to finish.
+  timeout: 500  # server timeout in milliseconds.
+  reflection_service: &reflection_service trpc.reflection.v1.ServerReflection # specify a service as a reflection service
+  # overload_ctrl: default  # setting for overload control. Available for version >= v0.19.0.
   admin:
-    ip: 127.0.0.1         # ip.
-    port: 9528            # default: 9028.
-    read_timeout: 3000    # ms. the timeout setting for the request is accepted and the request information is completely read to prevent slow clients.
+    ip: 127.0.0.1  # ip.
+    port: 9528  # default: 9028.
+    read_timeout: 3000  # ms. the timeout setting for the request is accepted and the request information is completely read to prevent slow clients.
     write_timeout: 60000  # ms. the timeout setting for processing.
-    enable_tls: false     # whether to enable TLS, currently not supported.
-    rpcz:                 # tool that monitors the running state of RPC, recording various things that happen in a rpc.
+    enable_tls: false  # whether to enable TLS, currently not supported.
+    rpcz:  # tool that monitors the running state of RPC, recording various things that happen in a rpc.
       fraction: 0.0  # sample rate, 0.0 <= fraction <= 1.0.
       record_when:
         - AND:
@@ -25,7 +46,7 @@ server:                                            # server configuration.
             - __error_code: 2  # record span whose error codes is  2.
             - __error_message: "unknown" # record span whose error messages contain  "unknown".
             - __error_message: "not found" # record span whose error messages contain  "not found".
-        - NOT: { __rpc_name: "/trpc.app.server.service/method1" }  # record span whose RPCName doesn't contain __rpc_name.
+        - NOT: {__rpc_name: "/trpc.app.server.service/method1"}  # record span whose RPCName doesn't contain __rpc_name.
         - NOT: # record span whose RPCName doesn't contain "/trpc.app.server.service/method2, or "/trpc.app.server.service/method3".
             OR:
               - __rpc_name: "/trpc.app.server.service/method2"
@@ -33,47 +54,168 @@ server:                                            # server configuration.
         - __min_duration: 1000ms  # record span whose duration is greater than __min_duration.
         # record span that has the attribute: name1, and name1's value contains "value1"
         # valid attribute form: (key, value) only one space character after comma character, and key can't contain comma(',') character.
-        - __has_attribute: (name1, value1)
+        - __has_attribute:  (name1, value1)
         # record span that has the attribute: name2, and name2's value contains "value2".
-        - __has_attribute: (name2, value2)
-  service:                                         # business service configuration，can have multiple.
-    - name: trpc.test.helloworld.Greeter1          # the route name of the service.
-      ip: 127.0.0.1                                # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
-      nic: eth0                                    # the service listening network card address, if configures ip, you don't need to configure it.
-      port: 8000                                   # the service listening port, can use the placeholder ${port}.
-      network: tcp                                 # the service listening network type,  tcp or udp.
-      protocol: trpc                               # application layer protocol, trpc or http.
-      timeout: 1000                                # maximum request processing time in milliseconds.
-      idletime: 300000                             # connection idle time in milliseconds.
-      registry: polaris                            # The service registration method used when the service starts.
-    - name: trpc.test.helloworld.Greeter2          # the route name of the service.
-      ip: 127.0.0.1                                # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
-      nic: eth0                                    # the service listening network card address, if configures ip, you don't need to configure it.
-      port: 8080                                   # the service listening port, can use the placeholder ${port}.
-      network: tcp                                 # the service listening network type,  tcp or udp.
-      protocol: http                               # application layer protocol, trpc or http.
-      timeout: 1000                                # maximum request processing time in milliseconds.
-      idletime: 300000                             # connection idle time in milliseconds.
-      registry: polaris                            # The service registration method used when the service starts.
+        - __has_attribute:  (name2, value2)
+
+  service:  # business service configuration, can have multiple.
+    - name: trpc.test.helloworld.Greeter1  # the route name of the service.
+      method:  # configuration for service method, available version: >= v0.15.0.
+        method_name:  # method_name should be changed to some specific method name.
+          timeout: 200  # method timeout in milliseconds.
+      disable_request_timeout: false  # disable request timeout inherited from upstream service, default false.
+      ip: 127.0.0.1  # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
+      nic: eth0  # the service listening network card address, if configures ip, you don't need to configure it.
+      port: 8000  # the service listening port, can use the placeholder ${port}.
+      network: tcp  # the service listening network type,  tcp or udp.
+      protocol: trpc  # application layer protocol, trpc or http.
+      transport: tnet  # transport type for this service, default empty.
+      # read_timeout specifies the maximum duration in milliseconds for reading a request
+      # from a client connection in this service.
+      #
+      # If not set, the read timeout will default to the same value as the idle timeout.
+      #
+      # It is important to distinguish between "timeout" and "read_timeout":
+      #  - timeout: the maximum duration allowed for a handler to process a request.
+      #  - read_timeout: the maximum duration allowed for reading a request from a client connection.
+      #
+      # As for the difference between "read_timeout" and "idletime":
+      # Under the current implementation, if read_timeout is reached but idletime is not,
+      # the server will attempt to read requests from the connection again. This means the reading process
+      # is interrupted by the read timeout at regular intervals, and the connection is only closed if the
+      # idle timeout is reached.
+      #
+      # By default, read_timeout is set to the idletime's default value, which is 60 seconds.
+      # This extended duration can cause the graceful restart process to seem sluggish.
+      # However, setting read_timeout to a smaller value might lead to the server closing the client
+      # connection prematurely, potentially resulting in the client receiving errors
+      # such as error code 141.
+      # Available for version >= v0.18.0.
+      read_timeout: 60000  # the maximum duration for reading a request from a client connection.
+      timeout: 1000  # maximum request processing time in milliseconds.
+      idletime: 300000  # connection idle time in milliseconds.
+      disable_keep_alives: false  # whether disable keep-alives, default false.
+      registry: polaris  # The service registration method used when the service starts.
+      current_serialization_type: 0  # 0 for pb, -1 for noop.
+      current_compress_type: 0  # 0 for noop.
+      filter: []  # filters for this service.
+      stream_filter: []  # stream filters for this service.
+      writev: false  # whether to enable writev, default true.
+      tls_key: ""  # used for tls, default empty.
+      tls_cert: ""  # used for tls, default empty.
+      ca_cert: ""  # used for tls, default empty.
+      # overload_ctrl: default  # setting for overload control. Available for version >= v0.8.1.
+    - name: trpc.test.helloworld.Greeter2  # the route name of the service.
+      ip: 127.0.0.1  # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
+      nic: eth0  # the service listening network card address, if configures ip, you don't need to configure it.
+      port: 8080  # the service listening port, can use the placeholder ${port}.
+      network: tcp  # the service listening network type,  tcp or udp.
+      protocol: http  # application layer protocol, trpc or http.
+      timeout: 1000  # maximum request processing time in milliseconds.
+      idletime: 300000  # connection idle time in milliseconds.
+      registry: polaris  # The service registration method used when the service starts.
       max_routines: 1000
-    - name: trpc.test.helloworld.Greeter3          # the route name of the service.
-      ip: 127.0.0.1                                # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
-      nic: eth0                                    # the service listening network card address, if configures ip, you don't need to configure it.
-      port: 8090                                   # the service listening port, can use the placeholder ${port}.
-      network: tcp                                 # the service listening network type,  tcp or udp.
-      protocol: http                               # application layer protocol, trpc or http.
-      timeout: 1000                                # maximum request processing time in milliseconds.
-      idletime: 300000                             # connection idle time in milliseconds.
-client:                                            # configuration for client calls.
-  timeout: 1000                                    # maximum request processing time for all backends.
-  service:                                         # configuration for a single backend.
-    - name: trpc.test.helloworld.Greeter1          # backend service name.
-      namespace: Development                       # backend service environment.
-      network: tcp                                 # backend service network type, tcp or udp, configuration takes precedence.
-      protocol: trpc                               # application layer protocol, trpc or http.
-      timeout: 800                                 # maximum request processing time in milliseconds.
-    - name: trpc.test.helloworld.Greeter2          # backend service name.
-      namespace: Production                        # backend service environment.
-      network: tcp                                 # backend service network type, tcp or udp, configuration takes precedence.
-      protocol: http                               # application layer protocol, trpc or http.
-      timeout: 2000                                # maximum request processing time in milliseconds.
+    - name: trpc.test.helloworld.Greeter3  # the route name of the service.
+      ip: 127.0.0.1  # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
+      nic: eth0  # the service listening network card address, if configures ip, you don't need to configure it.
+      port: 8090  # the service listening port, can use the placeholder ${port}.
+      network: tcp  # the service listening network type,  tcp or udp.
+      protocol: http  # application layer protocol, trpc or http.
+      timeout: 1000  # maximum request processing time in milliseconds.
+      idletime: 300000  # connection idle time in milliseconds.
+    - name: *reflection_service # the route name of the service.
+      ip: 127.0.0.1 # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
+      nic: eth0 # the service listening network card address, if configures ip, you don't need to configure it.
+      port: 8099 # the service listening port, can use the placeholder ${port}.
+      network: tcp # the service listening network type,  tcp or udp.
+      protocol: trpc # application layer protocol, trpc or http.
+client:  # configuration for client calls.
+  namespace: Development  # callee namespace for all backends. use global.namespace if empty.
+  caller_namespace: Development  # caller namespace for current service. use global.namespace if empty.
+  network: tcp  # network type for all backends.
+  protocol: trpc  # application layer protocol for all backends.
+  filter: []  # client filters for all backends.
+  stream_filter: []  # client stream filters for all backends.
+  transport: tnet  # transport type for all backends, default empty.
+  timeout: 1000  # maximum request processing time for all backends.
+  discovery: ""  # service discovery for all backends.
+  servicerouter: ""  # service router for all backends.
+  loadbalance: ""  # load balancer for all backends.
+  circuitbreaker: ""  # circuit breaker for all backends.
+  service:  # configuration for a single backend.
+    - name: trpc.test.helloworld.Greeter1  # backend service name.
+      callee: trpc.test.helloworld.Greeter1  # proto name of the callee service defined in proto stub file.
+      timeout: 800  # maximum request processing time in milliseconds.
+      method:  # configuration for backend method, available version: >= v0.15.0.
+        method_name:
+          timeout: 200  # method timeout in milliseconds.
+      namespace: Development  # backend service environment for the callee. use client.namespace if empty.
+      caller_namespace: Development  # caller environment, use client.caller_namespace if empty. available version: >= v0.19.0.
+      network: tcp  # backend service network type, tcp or udp, configuration takes precedence.
+      protocol: trpc  # application layer protocol, trpc or http.
+      transport: tnet  # backend transport, default empty.
+      filter: []  # filters for this backend.
+      stream_filter: []  # stream filters for this backend.
+      serialization: 0  # 0 for pb, -1 for noop.
+      compression: 0  # 0 for noop.
+      discovery: ""  # service discovery for this backends.
+      servicerouter: ""  # service router for this backends.
+      loadbalance: ""  # load balancer for this backends.
+      circuitbreaker: ""  # circuit breaker for this backends.
+      target: ip://127.0.0.1:8080  # use target instead of name to select node, default empty.
+      password: xxxx  # password for authentication.
+      env_name: ""  # env name for the callee.
+      set_name: ""  # set name for the callee.
+      caller_env_name: ""  # env name for the caller, available version: >= v0.19.0.
+      caller_set_name: ""  # set name for the caller, available version: >= v0.19.0.
+      disable_servicerouter: true  # denotes the de-facto meaning of disabling out-rule routing for the source service, default false.
+      caller_metadata: {}  # specify callee metadata, default empty, available version: >= v0.19.0.
+      callee_metadata: {}  # specify callee metadata, default empty.
+      tls_key: ""  # used for tls, default empty.
+      tls_cert: ""  # used for tls, default empty.
+      ca_cert: ""  # used for tls, default empty.
+      tls_server_name: ""  # used for tls, default empty.
+      # the following conn_type related configurations are available for version >= v0.15.0.
+      # the following is for client connection type connpool.
+      conn_type: connpool  # connection type is connection pool, the following options are all for connpool.
+      connpool:
+        # priority: option dial_timeout ≈ context timeout > yaml dial_timeout
+        # when both option dial_timeout and context timeout exist, real dial timeout = min(option dial timeout, context timeout)
+        dial_timeout: 200ms  # connection pool: dial timeout, default 200ms.
+        force_close: false  # connection pool: whether force close the connection, default false.
+        idle_timeout: 50s  # connection pool: idle timeout, default 50s.
+        max_active: 0  # connection pool: max active connections, default 0 (means no limit).
+        max_conn_lifetime: 0s  # connection pool: max lifetime for connection, default 0s (means no limit).
+        max_idle: 65536  # connection pool: max idle connections, default 65536.
+        min_idle: 0  # connection pool: min idle connections, default 0.
+        pool_idle_timeout: 100s  # connection pool: idle timeout to close the entire pool, default 100s.
+        push_idle_conn_to_tail: false  # connection pool: recycle the connection to head/tail of the idle list, default false (head).
+        wait: false  # connection pool: whether wait util timeout or return err immediately when number of total connections reach max_active, default false.
+      
+      # the following is for client connection type multiplex.
+      # conn_type: multiplexed  # connection type is multiplexed, the following options are all for multiplex.
+      # multiplexed:
+      #   multiplexed_dial_timeout: 1s  # multiplexed: dial timeout, default 1s.
+      #   conns_per_host: 2  # multiplexed: number of concrete(real) connections for each host, default 2.
+      #   max_vir_conns_per_conn: 0  # multiplexed: max number of virtual connections for each concrete(real) connection, default 0 (means no limit).
+      #   max_idle_conns_per_host: 0  # multiplexed: max number of idle concrete(real) connections for each host, used together with max_vir_conns_per_conn, default 0 (disabled).
+      #   queue_size: 1024  # multiplexed: size of send queue for each concrete(real) connection, default 1024.
+      #   drop_full: false  # multiplexed: whether to drop the send package when queue is full, default false.
+      #   max_reconnect_count: 10 # multiplexed: the maximum number of reconnection attempts, 0 means reconnect is disable, default 10.
+      #   initial_backoff: 5ms # multiplexed: the initial backoff time during the first reconnection attempt, default 5ms.
+      #   reconnect_count_reset_interval: 600s # multiplexed: the time to reset the reconnect counts.
+      
+      # the following is for client connection type short, meaning short connection.
+      # conn_type: short  # connection type is short.
+      # the following details the configuration available for tnet-multiplexed (the configuration for tnet-connpool is the same as connpool).
+      # transport: tnet
+      # conn_type: multiplexed  # connection type is multiplexed, the following options are all for multiplex.
+      # multiplexed:
+      #   multiplexed_dial_timeout: 1s  # multiplexed: dial timeout, default 1s.
+      #   max_vir_conns_per_conn: 0  # multiplexed: max number of virtual connections for each concrete(real) connection, default 0 (means no limit).
+      #   enable_metrics: true  # tnet-multiplex: whether to enable metrics, used together with 'transport: tnet', default false.
+    - name: trpc.test.helloworld.Greeter2  # backend service name.
+      namespace: Production  # backend service environment.
+      network: tcp  # backend service network type, tcp or udp, configuration takes precedence.
+      protocol: http  # application layer protocol, trpc or http.
+      timeout: 2000  # maximum request processing time in milliseconds.

@@ -30,6 +30,8 @@ var (
 // ClientStreamTransport is the client stream transport interface.
 // It's compatible with common RPC transport.
 type ClientStreamTransport interface {
+	// ClientTransport is used to keep compatibility with common RPC interface.
+	ClientTransport
 	// Send sends stream messages.
 	Send(ctx context.Context, req []byte, opts ...RoundTripOption) error
 	// Recv receives stream messages.

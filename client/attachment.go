@@ -25,6 +25,12 @@ type Attachment struct {
 }
 
 // NewAttachment returns a new Attachment whose response Attachment is a NoopAttachment.
+// If the request additionally implements the Sizer interface, it can significantly reduce memory copying for large
+// attachments and reduce transmission time. Typically, you can pass bytes.NewReader, which already implements Sizer.
+//
+//	type Sizer interface {
+//		Size() int64
+//	}
 func NewAttachment(request io.Reader) *Attachment {
 	return &Attachment{attachment: attachment.Attachment{Request: request, Response: attachment.NoopAttachment{}}}
 }

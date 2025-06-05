@@ -1,51 +1,90 @@
-package codec_test
+//
+//
+// Tencent is pleased to support the open source community by making tRPC available.
+//
+// Copyright (C) 2023 THL A29 Limited, a Tencent company.
+// All rights reserved.
+//
+// If you have downloaded a copy of the tRPC source code from Tencent,
+// please note that tRPC source code is licensed under the  Apache 2.0 License,
+// A copy of the Apache 2.0 License is included in this file.
+//
+//
+
+package codec
 
 import (
 	"errors"
+	"fmt"
 	"testing"
-
-	"trpc.group/trpc-go/trpc-go/codec"
 )
 
-func BenchmarkCheckNoopCompression(b *testing.B) {
-	b.Run("check noop compression", func(b *testing.B) {
-		bs := make([]byte, 1024)
-		var result []byte
+// goos: linux
+// goarch: amd64
+// pkg: trpc.group/trpc-go/trpc-go/codec
+// cpu: AMD EPYC 7K62 48-Core Processor
+// compress_old-16   67606471  17.87 ns/op  0 B/op  0 allocs/op
+// compress_new-16  160804280  7.479 ns/op  0 B/op  0 allocs/op
+func BenchmarkCompressionSliceAndMap(b *testing.B) {
+	const customCompressType = 6
+	oldRegisterCompressor(customCompressType, &NoopCompress{})
+	backup := GetCompressor(customCompressType)
+	RegisterCompressor(customCompressType, &NoopCompress{})
+	b.Cleanup(func() {
+		RegisterCompressor(customCompressType, backup)
+	})
+	bs1 := []byte("hello")
+	var bs2 []byte
+	b.Run("compress old", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			result, _ = codec.Compress(codec.CompressTypeNoop, bs)
-			bs, _ = codec.Decompress(codec.CompressTypeNoop, result)
+			bs2, _ = oldCompress(customCompressType, bs1)
+			bs1, _ = oldDecompress(customCompressType, bs2)
 		}
 	})
-	b.Run("not check noop compression", func(b *testing.B) {
-		bs := make([]byte, 1024)
-		var result []byte
+	b.Run("compress new", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			result, _ = oldCompress(codec.CompressTypeNoop, bs)
-			bs, _ = oldDecompress(codec.CompressTypeNoop, result)
+			bs2, _ = Compress(customCompressType, bs1)
+			bs1, _ = Decompress(customCompressType, bs2)
 		}
 	})
+	fmt.Printf("%q %q\n", bs1, bs2)
 }
 
-// oldCompress returns the compressed data, the data is compressed
-// by a specific compressor.
+func init() {
+	oldRegisterCompressor(CompressTypeGzip, &GzipCompress{})
+	oldRegisterCompressor(CompressTypeNoop, &NoopCompress{})
+	oldRegisterCompressor(CompressTypeSnappy, NewSnappyCompressor())
+	oldRegisterCompressor(CompressTypeStreamSnappy, NewSnappyCompressor())
+	oldRegisterCompressor(CompressTypeBlockSnappy, NewSnappyBlockCompressor())
+	oldRegisterCompressor(CompressTypeZlib, &ZlibCompress{})
+}
+
+var oldCompressors = make(map[int]Compressor)
+
+func oldRegisterCompressor(compressType int, s Compressor) {
+	oldCompressors[compressType] = s
+}
+
+func oldGetCompressor(compressType int) Compressor {
+	return oldCompressors[compressType]
+}
+
 func oldCompress(compressorType int, in []byte) ([]byte, error) {
 	if len(in) == 0 {
 		return nil, nil
 	}
-	compressor := codec.GetCompressor(compressorType)
+	compressor := oldGetCompressor(compressorType)
 	if compressor == nil {
 		return nil, errors.New("compressor not registered")
 	}
 	return compressor.Compress(in)
 }
 
-// oldDecompress returns the decompressed data, the data is decompressed
-// by a specific compressor.
 func oldDecompress(compressorType int, in []byte) ([]byte, error) {
 	if len(in) == 0 {
 		return nil, nil
 	}
-	compressor := codec.GetCompressor(compressorType)
+	compressor := oldGetCompressor(compressorType)
 	if compressor == nil {
 		return nil, errors.New("compressor not registered")
 	}

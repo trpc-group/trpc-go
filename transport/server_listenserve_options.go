@@ -15,9 +15,12 @@ package transport
 
 import (
 	"net"
+	"sync/atomic"
 	"time"
 
 	"trpc.group/trpc-go/trpc-go/codec"
+	ikeeporder "trpc.group/trpc-go/trpc-go/internal/keeporder"
+	"trpc.group/trpc-go/trpc-go/internal/keeporder/actor"
 )
 
 // ListenServeOptions is the server options on start.
@@ -28,15 +31,29 @@ type ListenServeOptions struct {
 	Handler       Handler
 	FramerBuilder codec.FramerBuilder
 	Listener      net.Listener
+	UDPListener   net.PacketConn
 
 	CACertFile  string        // ca certification file
-	TLSCertFile string        // server certification file
-	TLSKeyFile  string        // server key file
+	TLSCertFile string        // server certification file, joined with tlsFileSeparator if multiple files
+	TLSKeyFile  string        // server key file, joined with tlsFileSeparator if multiple files
 	Routines    int           // size of goroutine pool
 	ServerAsync bool          // whether enable server async
 	Writev      bool          // whether enable writev in server
 	CopyFrame   bool          // whether copy frame
 	IdleTimeout time.Duration // idle timeout of connection
+	ReadTimeout time.Duration // read timeout of connection
+
+	// KeepOrderPreDecodeExtractor specifies the pre-decoding extractor to use
+	// for ordering-keeping.
+	KeepOrderPreDecodeExtractor ikeeporder.PreDecodeExtractor
+	// KeepOrderPreUnmarshalExtractor specifies the pre-unmarshalling extractor to use
+	// for ordering-keeping.
+	KeepOrderPreUnmarshalExtractor ikeeporder.PreUnmarshalExtractor
+
+	// OrderedGroups specifies the keep-order groups to used.
+	// The default value is a global one, user can specify it to provide different
+	// groups for different service.
+	OrderedGroups ikeeporder.OrderedGroups
 
 	// DisableKeepAlives, if true, disables keep-alives and only use the
 	// connection for a single request.
@@ -46,6 +63,27 @@ type ListenServeOptions struct {
 
 	// StopListening is used to instruct the server transport to stop listening.
 	StopListening <-chan struct{}
+
+	// ActiveCnt records the number of listener(always 1), connections and active requests.
+	// Service use this value to determine whether it's ok to exit.
+	ActiveCnt activeCnt
+}
+
+func (o *ListenServeOptions) fixKeepOrder() {
+	if o.OrderedGroups == nil {
+		// Use actor.Default as the default implementation for ordered groups.
+		o.OrderedGroups = actor.Default
+	}
+}
+
+type activeCnt struct {
+	activeCnt *int64
+}
+
+func (ac activeCnt) Add(i int64) {
+	if ac.activeCnt != nil {
+		atomic.AddInt64(ac.activeCnt, i)
+	}
 }
 
 // ListenServeOption modifies the ListenServeOptions.
@@ -87,6 +125,13 @@ func WithListener(lis net.Listener) ListenServeOption {
 	}
 }
 
+// WithUDPListener returns a ListenServeOption which allows users to use their customized udp listener.
+func WithUDPListener(lis net.PacketConn) ListenServeOption {
+	return func(opts *ListenServeOptions) {
+		opts.UDPListener = lis
+	}
+}
+
 // WithHandler returns a ListenServeOption which sets business Handler.
 func WithHandler(handler Handler) ListenServeOption {
 	return func(opts *ListenServeOptions) {
@@ -110,6 +155,42 @@ func WithServeTLS(certFile, keyFile, caFile string) ListenServeOption {
 func WithServerAsync(serverAsync bool) ListenServeOption {
 	return func(opts *ListenServeOptions) {
 		opts.ServerAsync = serverAsync
+	}
+}
+
+// WithKeepOrderPreDecodeExtractor returns a ListenServeOption which enables the keep order feature
+// by providing pre-decoding extractor.
+//
+// By providing the pre-decoding extractor, a keep-order key will be extracted from the decoding result
+// or the raw binary request body.
+// Requests sharing the same keep-order key are processed serially within the same group.
+// Requests from different groups, identified by different keys, are processed in parallel.
+//
+// The default value is nil (do not keep order).
+func WithKeepOrderPreDecodeExtractor(preDecodeExtractor ikeeporder.PreDecodeExtractor) ListenServeOption {
+	return func(opts *ListenServeOptions) {
+		opts.KeepOrderPreDecodeExtractor = preDecodeExtractor
+	}
+}
+
+// WithKeepOrderPreUnmarshalExtractor returns a ListenServeOption which enables the keep order feature
+// by providing pre-unmarshalling extractor.
+//
+// By providing the pre-unmarshalling extractor, a keep-order key will be extracted from the unmarshalled request.
+// Requests sharing the same keep-order key are processed serially within the same group.
+// Requests from different groups, identified by different keys, are processed in parallel.
+//
+// The default value is nil (do not keep order).
+func WithKeepOrderPreUnmarshalExtractor(preUnmarshalExtractor ikeeporder.PreUnmarshalExtractor) ListenServeOption {
+	return func(opts *ListenServeOptions) {
+		opts.KeepOrderPreUnmarshalExtractor = preUnmarshalExtractor
+	}
+}
+
+// WithOrderedGroups returns a ListenServeOption which specifies the groups to use for order-keeping.
+func WithOrderedGroups(groups ikeeporder.OrderedGroups) ListenServeOption {
+	return func(opts *ListenServeOptions) {
+		opts.OrderedGroups = groups
 	}
 }
 
@@ -146,6 +227,13 @@ func WithDisableKeepAlives(disable bool) ListenServeOption {
 	}
 }
 
+// WithServerReadTimeout returns a ListenServeOption which sets the server read timeout.
+func WithServerReadTimeout(timeout time.Duration) ListenServeOption {
+	return func(options *ListenServeOptions) {
+		options.ReadTimeout = timeout
+	}
+}
+
 // WithServerIdleTimeout returns a ListenServeOption which sets the server idle timeout.
 func WithServerIdleTimeout(timeout time.Duration) ListenServeOption {
 	return func(options *ListenServeOptions) {
@@ -157,5 +245,13 @@ func WithServerIdleTimeout(timeout time.Duration) ListenServeOption {
 func WithStopListening(ch <-chan struct{}) ListenServeOption {
 	return func(options *ListenServeOptions) {
 		options.StopListening = ch
+	}
+}
+
+// WithServiceActiveCnt returns a ListenServeOption which can be used to atomically update active cnt.
+// Service gracefully stops when active cnt reaches zero.
+func WithServiceActiveCnt(cnt *int64) ListenServeOption {
+	return func(o *ListenServeOptions) {
+		o.ActiveCnt.activeCnt = cnt
 	}
 }

@@ -13,7 +13,7 @@
 
 // Package test to end-to-end testing.
 //
-//go:generate trpc create -p ./protocols/test.proto --rpconly -o ./protocols --protodir . --mock=false
+//go:generate trpc create -p ./protocols/test.proto --api-version 2 --rpconly -o ./protocols --protodir . --mock=false
 package test
 
 import (
@@ -27,15 +27,14 @@ import (
 	reuseport "github.com/kavu/go_reuseport"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/server"
-	"trpc.group/trpc-go/trpc-go/transport"
-	"trpc.group/trpc-go/trpc-go/transport/tnet"
-
 	testpb "trpc.group/trpc-go/trpc-go/test/protocols"
 	"trpc.group/trpc-go/trpc-go/test/testdata"
+	"trpc.group/trpc-go/trpc-go/transport"
+	"trpc.group/trpc-go/trpc-go/transport/tnet"
 )
 
 // TestRunSuite run test suite in TestSuite.
@@ -67,13 +66,15 @@ func (s *TestSuite) SetupSuite() {
 	require.Nil(s.T(), os.Chdir(testdata.BasePath()))
 	transport.RegisterServerTransport("default", transport.DefaultServerTransport)
 	transport.RegisterServerTransport("tnet", tnet.DefaultServerTransport)
+	transport.RegisterServerStreamTransport("default", transport.DefaultServerStreamTransport)
+	transport.RegisterServerStreamTransport("tnet", tnet.DefaultServerTransport.(transport.ServerStreamTransport))
 
 	const argSize = 271
 	const respSize = 314
-	payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, argSize)
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
 	require.Nil(s.T(), err)
 	s.defaultSimpleRequest = &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSIBLE,
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
 		ResponseSize: respSize,
 		Payload:      payload,
 	}
@@ -117,6 +118,7 @@ func (s *TestSuite) startServer(service interface{}, opts ...server.Option) {
 		}
 	}
 	require.Nil(s.T(), err)
+
 	s.listener = l
 	s.T().Logf("server address: %v", l.Addr())
 
@@ -128,6 +130,8 @@ func (s *TestSuite) startServer(service interface{}, opts ...server.Option) {
 		svr = s.startStreamingServer(ts, opts...)
 	case *testHTTPService:
 		svr = s.startHTTPServer(ts, opts...)
+	case *testFastHTTPService:
+		svr = s.startFastHTTPServer(ts, opts...)
 	case *testRESTfulService:
 		svr = s.newRESTfulServer(ts, opts...)
 	default:
@@ -141,16 +145,14 @@ func (s *TestSuite) startServer(service interface{}, opts ...server.Option) {
 
 func (s *TestSuite) startTRPCServer(ts testpb.TestTRPCService, opts ...server.Option) *server.Server {
 	service := server.New(
-		append(
-			opts,
+		append([]server.Option{
 			server.WithServiceName(trpcServiceName),
 			server.WithProtocol("trpc"),
 			server.WithNetwork(s.tRPCEnv.server.network),
 			server.WithListener(s.listener),
 			server.WithServerAsync(s.tRPCEnv.server.async),
 			server.WithTransport(transport.GetServerTransport(s.tRPCEnv.server.transport)),
-		)...,
-	)
+		}, opts...)...)
 	svr := &server.Server{}
 	svr.AddService(trpcServiceName, service)
 	testpb.RegisterTestTRPCService(svr.Service(trpcServiceName), ts)
@@ -160,11 +162,10 @@ func (s *TestSuite) startTRPCServer(ts testpb.TestTRPCService, opts ...server.Op
 func (s *TestSuite) startStreamingServer(ts testpb.TestStreamingService, opts ...server.Option) *server.Server {
 	trpc.ServerConfigPath = "trpc_go_streaming_server.yaml"
 	svr := trpc.NewServer(
-		append(
-			opts,
+		append([]server.Option{
 			server.WithListener(s.listener),
 			server.WithServerAsync(s.tRPCEnv.server.async),
-		)...,
+		}, opts...)...,
 	)
 	testpb.RegisterTestStreamingService(svr.Service(streamingServiceName), ts)
 	return svr
@@ -177,12 +178,29 @@ func (s *TestSuite) startHTTPServer(ts testpb.TestHTTPService, opts ...server.Op
 		server.New(append([]server.Option{
 			server.WithServiceName(httpServiceName),
 			server.WithNetwork("tcp"),
-			server.WithProtocol("http"),
+			server.WithProtocol(protocol.HTTP),
 			server.WithServerAsync(s.httpServerEnv.async),
 			server.WithListener(s.listener),
 		}, opts...)...),
 	)
 	testpb.RegisterTestHTTPService(svr.Service(httpServiceName), ts)
+	s.server = svr
+	return svr
+}
+
+func (s *TestSuite) startFastHTTPServer(ts testpb.TestHTTPService, opts ...server.Option) *server.Server {
+	svr := &server.Server{}
+	svr.AddService(
+		fasthttpServiceName,
+		server.New(append([]server.Option{
+			server.WithServiceName(fasthttpServiceName),
+			server.WithNetwork("tcp"),
+			server.WithProtocol(protocol.FastHTTP),
+			server.WithServerAsync(s.httpServerEnv.async),
+			server.WithListener(s.listener),
+		}, opts...)...),
+	)
+	testpb.RegisterTestHTTPService(svr.Service(fasthttpServiceName), ts)
 	s.server = svr
 	return svr
 }
@@ -221,12 +239,19 @@ func (s *TestSuite) serverAddress() string {
 }
 
 func (s *TestSuite) unaryCallDefaultURL() string {
-	// "default url: http://ip:port/package.service/method"
 	return fmt.Sprintf("http://%v/%s/UnaryCall", s.listener.Addr(), httpServiceName)
+}
+
+func (s *TestSuite) unaryHTTPSCallDefaultURL() string {
+	return fmt.Sprintf("https://%v/%s/UnaryCall", s.listener.Addr(), httpServiceName)
 }
 
 func (s *TestSuite) unaryCallCustomURL() string {
 	return fmt.Sprintf("http://%v/UnaryCall", s.listener.Addr())
+}
+
+func (s *TestSuite) unaryHTTPSCallCustomURL() string {
+	return fmt.Sprintf("https://%v/UnaryCall", s.listener.Addr())
 }
 
 func (s *TestSuite) startTRPCServerWithConfig(
@@ -274,7 +299,15 @@ func (s *TestSuite) newTRPCClient(opts ...client.Option) testpb.TestTRPCClientPr
 func (s *TestSuite) newHTTPRPCClient(opts ...client.Option) testpb.TestHTTPClientProxy {
 	s.T().Logf("client dial to %s", s.serverAddress())
 	return testpb.NewTestHTTPClientProxy(append([]client.Option{
-		client.WithProtocol("http"),
+		client.WithProtocol(protocol.HTTP),
+		client.WithTarget(s.serverAddress()),
+		client.WithTimeout(time.Second)}, opts...)...)
+}
+
+func (s *TestSuite) newFastHTTPRPCClient(opts ...client.Option) testpb.TestHTTPClientProxy {
+	s.T().Logf("client dial to %s", s.serverAddress())
+	return testpb.NewTestHTTPClientProxy(append([]client.Option{
+		client.WithProtocol(protocol.FastHTTP),
 		client.WithTarget(s.serverAddress()),
 		client.WithTimeout(time.Second)}, opts...)...)
 }
@@ -308,5 +341,4 @@ func (s *TestSuite) closeServer(ch chan struct{}) {
 		}
 		s.server = nil
 	}
-	s.listener = nil
 }

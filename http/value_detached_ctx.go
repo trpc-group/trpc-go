@@ -24,6 +24,10 @@ import (
 // After the original ctx timeout/cancel, valueDetachedCtx must release
 // the original ctx to ensure that the resources associated with
 // original ctx can be GC normally.
+//
+// The value detached context is no longer needed for versions >= go1.22,
+// since https://go-review.googlesource.com/c/go/+/512196 has fixed the
+// context leakage issue.
 type valueDetachedCtx struct {
 	mu  sync.Mutex
 	ctx context.Context
@@ -34,7 +38,18 @@ func detachCtxValue(ctx context.Context) context.Context {
 	if ctx.Done() == nil {
 		return context.Background()
 	}
-	c := valueDetachedCtx{ctx: ctx}
+	c := &valueDetachedCtx{ctx: ctx}
+	collect(ctx, c)
+	return c
+}
+
+func collect(ctx context.Context, c *valueDetachedCtx) {
+	if globalScavenger.collect(c) {
+		// True means that the context is successfully collected, we can return immediately.
+		return
+	}
+	// If the context is not collected, we need to handle the context
+	// timeout/cancel in a new goroutine to avoid the context leakage.
 	go func() {
 		<-ctx.Done()
 		deadline, ok := ctx.Deadline()
@@ -47,7 +62,6 @@ func detachCtxValue(ctx context.Context) context.Context {
 		}
 		c.mu.Unlock()
 	}()
-	return &c
 }
 
 // Deadline implements the Deadline method of Context.
@@ -86,7 +100,7 @@ type ctxRemnant struct {
 	done        <-chan struct{}
 }
 
-// Deadline returns the saved readline information.
+// Deadline returns the saved deadline information.
 func (c *ctxRemnant) Deadline() (time.Time, bool) {
 	return c.deadline, c.hasDeadline
 }

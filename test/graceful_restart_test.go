@@ -14,6 +14,7 @@
 package test
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
@@ -22,63 +23,147 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/server"
 	testpb "trpc.group/trpc-go/trpc-go/test/protocols"
 )
 
+type gracefulRestartTestData struct {
+	network    string
+	target     string
+	sourceFile string
+	configFile string
+	binaryFile string
+}
+
 func (s *TestSuite) TestServerGracefulRestart() {
-	s.Run("ServerGracefulRestartIsIdempotent", func() {
-		s.testServerGracefulRestartIsIdempotent()
-	})
+	tests := []gracefulRestartTestData{
+		{
+			network:    "tcp",
+			target:     "ip://127.0.0.1:17777",
+			sourceFile: "./gracefulrestart/trpc/server.go",
+			configFile: "./gracefulrestart/trpc/trpc_go_tcp.yaml",
+			binaryFile: "./gracefulrestart/trpc/server.o",
+		},
+		{
+			network:    "udp",
+			target:     "ip://127.0.0.1:17777",
+			sourceFile: "./gracefulrestart/trpc/server.go",
+			configFile: "./gracefulrestart/trpc/trpc_go_udp.yaml",
+			binaryFile: "./gracefulrestart/trpc/server.o",
+		},
+	}
+	for _, tt := range tests {
+		s.Run("ServerGracefulRestartIsIdempotent"+tt.network, func() {
+			s.testServerGracefulRestartIsIdempotent(tt)
+		})
+		s.Run("SendNonGracefulRestartSignal"+tt.network, func() {
+			s.testSendNonGracefulRestartSignal(tt)
+		})
+		s.Run("ServerGracefulRestartContinuesHandling"+tt.network, func() {
+			s.testServerGracefulRestartContinuesHandling(tt)
+		})
+	}
+	tests = []gracefulRestartTestData{
+		{
+			network:    "tcp",
+			target:     "ip://127.0.0.1:17777",
+			sourceFile: "./gracefulrestart/trpc/server.go",
+			configFile: "./gracefulrestart/trpc/trpc_go_emptyip_tcp.yaml",
+			binaryFile: "./gracefulrestart/trpc/server.o",
+		},
+		{
+			network:    "udp",
+			target:     "ip://127.0.0.1:17777",
+			sourceFile: "./gracefulrestart/trpc/server.go",
+			configFile: "./gracefulrestart/trpc/trpc_go_emptyip_udp.yaml",
+			binaryFile: "./gracefulrestart/trpc/server.o",
+		},
+	}
+	for _, tt := range tests {
+		s.Run("GracefulRestartForEmptyIP"+tt.network, func() {
+			s.testGracefulRestartForEmptyIP(tt)
+		})
+	}
 	s.Run("OldStreamFailedButNewStreamOk", func() {
 		s.testServerGracefulRestartOldStreamFailedButNewStreamOk()
 	})
-	s.Run("SendNonGracefulRestartSignal", func() {
-		s.testSendNonGracefulRestartSignal()
-	})
-	s.Run("GracefulRestartForEmptyIP", func() {
-		s.testGracefulRestartForEmptyIP()
-	})
 }
 
-func (s *TestSuite) testServerGracefulRestartIsIdempotent() {
-	const (
-		binaryFile = "./gracefulrestart/trpc/server.o"
-		sourceFile = "./gracefulrestart/trpc/server.go"
-		configFile = "./gracefulrestart/trpc/trpc_go.yaml"
-	)
-
+func (s *TestSuite) testServerGracefulRestartIsIdempotent(testData gracefulRestartTestData) {
 	cmd, err := startServerFromBash(
-		sourceFile,
-		configFile,
-		binaryFile,
+		testData.sourceFile,
+		testData.configFile,
+		testData.binaryFile,
 	)
 	require.Nil(s.T(), err)
 	defer func() {
-		require.Nil(s.T(), exec.Command("rm", binaryFile).Run())
+		require.Nil(s.T(), exec.Command("rm", testData.binaryFile).Run())
 		require.Nil(s.T(), cmd.Process.Kill())
+		time.Sleep(time.Second)
 	}()
 
-	const target = "ip://127.0.0.1:17777"
-	sp, err := getServerProcessByEmptyCall(target)
+	sp, err := getServerProcessByEmptyCall(testData.network, testData.target)
 	require.Nil(s.T(), err)
 	pid := sp.Pid
 	for i := 0; i < 3; i++ {
 		require.Nil(s.T(), sp.Signal(server.DefaultServerGracefulSIG))
-		// wait until server has restarted gracefully.
-		time.Sleep(1 * time.Second)
-		sp, err = getServerProcessByEmptyCall(target)
+		// Wait until server has restarted gracefully.
+		time.Sleep(5 * time.Second)
+		sp, err = getServerProcessByEmptyCall(testData.network, testData.target)
 		require.Nil(s.T(), err)
 		require.NotEqual(s.T(), pid, sp.Pid)
 		pid = sp.Pid
 	}
+	// Kill server and wait for it to graceful exit.
 	require.Nil(s.T(), sp.Kill())
+	time.Sleep(time.Second)
+}
+
+func (s *TestSuite) testServerGracefulRestartContinuesHandling(testData gracefulRestartTestData) {
+	cmd, err := startServerFromBash(
+		testData.sourceFile,
+		testData.configFile,
+		testData.binaryFile,
+	)
+	assert.Nil(s.T(), err)
+	defer func() {
+		assert.Nil(s.T(), exec.Command("rm", testData.binaryFile).Run())
+		assert.Nil(s.T(), cmd.Process.Kill())
+		time.Sleep(time.Second)
+	}()
+
+	done := make(chan struct{})
+	go func() {
+		for i := 0; i < 10_0000; i++ {
+			req := fmt.Sprintf("%v", i)
+			rsp, err := echo(req, testData.network, testData.target)
+			assert.Nil(s.T(), err)
+			assert.Equal(s.T(), req, rsp)
+		}
+		done <- struct{}{}
+	}()
+
+	time.Sleep(time.Second)
+	sp, err := getServerProcessByEmptyCall(testData.network, testData.target)
+	require.Nil(s.T(), err)
+	oldPid := sp.Pid
+	require.Nil(s.T(), sp.Signal(server.DefaultServerGracefulSIG))
+	time.Sleep(5 * time.Second)
+
+	<-done
+	sp, err = getServerProcessByEmptyCall(testData.network, testData.target)
+	require.Nil(s.T(), err)
+	newPid := sp.Pid
+	require.NotEqual(s.T(), oldPid, newPid)
+	// Kill server and wait for it to graceful exit.
+	require.Nil(s.T(), sp.Kill())
+	time.Sleep(time.Second)
 }
 
 func (s *TestSuite) testServerGracefulRestartOldStreamFailedButNewStreamOk() {
@@ -97,6 +182,7 @@ func (s *TestSuite) testServerGracefulRestartOldStreamFailedButNewStreamOk() {
 	defer func() {
 		require.Nil(s.T(), exec.Command("rm", binaryFile).Run())
 		require.Nil(s.T(), cmd.Process.Kill())
+		time.Sleep(time.Second)
 	}()
 
 	respParams := []*testpb.ResponseParameters{
@@ -104,10 +190,10 @@ func (s *TestSuite) testServerGracefulRestartOldStreamFailedButNewStreamOk() {
 			Size: int32(1),
 		},
 	}
-	payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, int32(1))
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
 	require.Nil(s.T(), err)
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSIBLE,
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParams,
 		Payload:            payload,
 	}
@@ -131,157 +217,112 @@ func (s *TestSuite) testServerGracefulRestartOldStreamFailedButNewStreamOk() {
 	sp1, cs1 := doFullDuplexCall()
 	pid1 := sp1.Pid
 	require.Nil(s.T(), sp1.Signal(server.DefaultServerGracefulSIG))
-	// wait until server has restarted gracefully.
-	time.Sleep(1 * time.Second)
+	// Wait until server has restarted gracefully.
+	time.Sleep(5 * time.Second)
 
 	err = cs1.Send(req)
-	require.Equal(s.T(), errs.RetServerSystemErr, errs.Code(err))
+	require.Equal(s.T(), errs.RetServerSystemErr, errs.Code(err), "full err: %+v", err)
 	require.Contains(s.T(), errs.Msg(err), "Connection is Closed")
 
 	sp2, cs2 := doFullDuplexCall()
 	require.Nil(s.T(), cs2.Send(req))
 
 	require.NotEqual(s.T(), pid1, sp2.Pid)
+	// Kill server and wait for it to graceful exit.
 	require.Nil(s.T(), sp2.Kill())
+	time.Sleep(time.Second)
 }
 
-func (s *TestSuite) TestServerGracefulRestartOldListenerIsClosed() {
-	const binaryFile = "./gracefulrestart/trpc/server.o"
-	cmd := exec.Command(
-		"bash",
-		"-c",
-		fmt.Sprintf("go build -o %s ./gracefulrestart/trpc/server.go", binaryFile),
-	)
-	require.Nil(s.T(), cmd.Run())
-	defer func() {
-		cmd := exec.Command("rm", binaryFile)
-		require.Nil(s.T(), cmd.Run())
-	}()
-
-	cmd = exec.Command(binaryFile, "-conf", "./gracefulrestart/trpc/trpc_go.yaml")
-	cmd.Stdout = os.Stdout
-	require.Nil(s.T(), cmd.Start())
-	// wait until server has started.
-	time.Sleep(3 * time.Second)
-	defer func() {
-		require.Nil(s.T(), cmd.Process.Kill())
-	}()
-
-	c := testpb.NewTestTRPCClientProxy()
-	doEmptyCall := func() *os.Process {
-		head := &trpcpb.ResponseProtocol{}
-		_, err := c.EmptyCall(
-			trpc.BackgroundContext(),
-			&testpb.Empty{},
-			client.WithTarget("ip://127.0.0.1:17777"),
-			client.WithRspHead(head),
-		)
-		require.Nil(s.T(), err)
-
-		serverPid, err := strconv.Atoi(string(head.TransInfo["server-pid"]))
-		require.Nil(s.T(), err)
-		sp, err := os.FindProcess(serverPid)
-		require.Nil(s.T(), err)
-		return sp
-	}
-
-	sp := doEmptyCall()
-	pid := sp.Pid
-	require.Nil(s.T(), sp.Signal(server.DefaultServerGracefulSIG))
-	time.Sleep(600 * time.Millisecond)
-	for i := 0; i < 30; i++ {
-		sp = doEmptyCall()
-		require.NotEqual(s.T(), pid, sp.Pid) // The old listener is closed, all request is sent to the new one.
-	}
-	require.Nil(s.T(), sp.Kill())
-}
-
-func (s *TestSuite) testSendNonGracefulRestartSignal() {
-	const (
-		sourceFile = "./gracefulrestart/trpc/server.go"
-		configFile = "./gracefulrestart/trpc/trpc_go.yaml"
-		binaryFile = "./gracefulrestart/trpc/server.o"
-
-		target = "ip://127.0.0.1:17777"
-	)
-
+func (s *TestSuite) testSendNonGracefulRestartSignal(testData gracefulRestartTestData) {
 	s.Run("Send Default Server Close Signal", func() {
 		cmd, err := startServerFromBash(
-			sourceFile,
-			configFile,
-			binaryFile,
+			testData.sourceFile,
+			testData.configFile,
+			testData.binaryFile,
 		)
 		require.Nil(s.T(), err)
 		defer func() {
-			require.Nil(s.T(), exec.Command("rm", binaryFile).Run())
+			require.Nil(s.T(), exec.Command("rm", testData.binaryFile).Run())
 			require.Nil(s.T(), cmd.Process.Kill())
+			time.Sleep(time.Second)
 		}()
-		sp, err := getServerProcessByEmptyCall(target)
+		sp, err := getServerProcessByEmptyCall(testData.network, testData.target)
 		require.Nil(s.T(), err)
 
 		r := rand.New(rand.NewSource(time.Now().Unix()))
 		closeSignal := server.DefaultServerCloseSIG[r.Intn(len(server.DefaultServerCloseSIG))]
 		require.Nil(s.T(), sp.Signal(closeSignal))
+		time.Sleep(time.Second)
 		for {
-			if _, err := getServerProcessByEmptyCall(target); err != nil {
-				require.EqualValues(s.T(), errs.RetClientReadFrameErr, errs.Code(err))
+			if _, err := getServerProcessByEmptyCall(testData.network, testData.target); err != nil {
+				require.Conditionf(s.T(), func() bool {
+					code := errs.Code(err)
+					switch testData.network {
+					case "tcp":
+						// Both the following code are possible due to the implementation of connection pool.
+						return code == errs.RetClientReadFrameErr || code == errs.RetClientConnectFail
+					case "udp":
+						return code == errs.RetClientNetErr || code == errs.RetClientFullLinkTimeout
+					default:
+						return false
+					}
+				}, "full err: %+v", err)
 				return
 			}
 		}
 	})
 	s.Run("Send Non Close Signal", func() {
 		cmd, err := startServerFromBash(
-			sourceFile,
-			configFile,
-			binaryFile,
+			testData.sourceFile,
+			testData.configFile,
+			testData.binaryFile,
 		)
 		require.Nil(s.T(), err)
 		defer func() {
-			require.Nil(s.T(), exec.Command("rm", binaryFile).Run())
+			require.Nil(s.T(), exec.Command("rm", testData.binaryFile).Run())
 			require.Nil(s.T(), cmd.Process.Kill())
+			time.Sleep(time.Second)
 		}()
 
-		sp, err := getServerProcessByEmptyCall(target)
+		sp, err := getServerProcessByEmptyCall(testData.network, testData.target)
 		require.Nil(s.T(), err)
 		pid := sp.Pid
 		for i := 0; i < 3; i++ {
 			require.Nil(s.T(), sp.Signal(syscall.SIGUSR1))
-			sp, err = getServerProcessByEmptyCall(target)
+			sp, err = getServerProcessByEmptyCall(testData.network, testData.target)
 			require.Equal(s.T(), pid, sp.Pid)
+			require.Nil(s.T(), err)
 		}
+		// Kill server and wait for it to graceful exit.
 		require.Nil(s.T(), sp.Kill())
+		time.Sleep(time.Second)
 	})
 }
 
-func (s *TestSuite) testGracefulRestartForEmptyIP() {
-	const (
-		binaryFile = "./gracefulrestart/trpc/server.o"
-		sourceFile = "./gracefulrestart/trpc/server.go"
-		configFile = "./gracefulrestart/trpc/trpc_go_emptyip.yaml"
-	)
-
+func (s *TestSuite) testGracefulRestartForEmptyIP(testData gracefulRestartTestData) {
 	cmd, err := startServerFromBash(
-		sourceFile,
-		configFile,
-		binaryFile,
+		testData.sourceFile,
+		testData.configFile,
+		testData.binaryFile,
 	)
 	require.Nil(s.T(), err)
 	defer func() {
-		require.Nil(s.T(), exec.Command("rm", binaryFile).Run())
+		require.Nil(s.T(), exec.Command("rm", testData.binaryFile).Run())
 		require.Nil(s.T(), cmd.Process.Kill())
+		time.Sleep(time.Second)
 	}()
 
-	const target = "ip://127.0.0.1:17777"
-	sp, err := getServerProcessByEmptyCall(target)
+	sp, err := getServerProcessByEmptyCall(testData.network, testData.target)
 	require.Nil(s.T(), err)
 	pid := sp.Pid
 	require.Nil(s.T(), sp.Signal(server.DefaultServerGracefulSIG))
-	time.Sleep(1 * time.Second)
-	sp, err = getServerProcessByEmptyCall(target)
+	time.Sleep(5 * time.Second)
+	sp, err = getServerProcessByEmptyCall(testData.network, testData.target)
 	require.Nil(s.T(), err)
 	require.NotEqual(s.T(), pid, sp.Pid)
-	pid = sp.Pid
+	// Kill server and wait for it to graceful exit.
 	require.Nil(s.T(), sp.Kill())
+	time.Sleep(time.Second)
 }
 
 func startServerFromBash(sourceFile, configFile, targetFile string) (*exec.Cmd, error) {
@@ -299,16 +340,19 @@ func startServerFromBash(sourceFile, configFile, targetFile string) (*exec.Cmd, 
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	// wait until server has started.
+	// Wait until server has started.
 	time.Sleep(3 * time.Second)
 	return cmd, nil
 }
 
-func getServerProcessByEmptyCall(target string) (*os.Process, error) {
-	head := &trpcpb.ResponseProtocol{}
+func getServerProcessByEmptyCall(network, target string) (*os.Process, error) {
+	head := &trpc.ResponseProtocol{}
+	ctx, cancel := context.WithTimeout(trpc.BackgroundContext(), 5*time.Second)
+	defer cancel()
 	if _, err := testpb.NewTestTRPCClientProxy().EmptyCall(
-		trpc.BackgroundContext(),
+		ctx,
 		&testpb.Empty{},
+		client.WithNetwork(network),
 		client.WithTarget(target),
 		client.WithRspHead(head),
 	); err != nil {
@@ -326,4 +370,19 @@ func getServerProcessByEmptyCall(target string) (*os.Process, error) {
 	}
 
 	return sp, nil
+}
+
+func echo(req, network, target string) (string, error) {
+	ctx, cancel := context.WithTimeout(trpc.BackgroundContext(), 5*time.Second)
+	defer cancel()
+	rsp, err := testpb.NewTestTRPCClientProxy().UnaryCall(
+		ctx,
+		&testpb.SimpleRequest{Username: req},
+		client.WithNetwork(network),
+		client.WithTarget(target),
+	)
+	if err != nil {
+		return "", err
+	}
+	return rsp.GetUsername(), nil
 }

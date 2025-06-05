@@ -16,38 +16,45 @@ package client
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 	"sync"
 	"time"
 
 	"trpc.group/trpc-go/trpc-go/codec"
+	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/filter"
 	"trpc.group/trpc-go/trpc-go/internal/attachment"
+	icodec "trpc.group/trpc-go/trpc-go/internal/codec"
+	"trpc.group/trpc-go/trpc-go/internal/scope"
 	"trpc.group/trpc-go/trpc-go/naming/circuitbreaker"
 	"trpc.group/trpc-go/trpc-go/naming/discovery"
 	"trpc.group/trpc-go/trpc-go/naming/loadbalance"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 	"trpc.group/trpc-go/trpc-go/naming/selector"
 	"trpc.group/trpc-go/trpc-go/naming/servicerouter"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"trpc.group/trpc-go/trpc-go/pool/connpool"
 	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
 	"trpc.group/trpc-go/trpc-go/transport"
 )
 
-// Options are clientside options.
+// Options are client side options.
 type Options struct {
 	ServiceName       string        // Backend service name.
+	Tag               string        // Tag of the Backend config.
 	CallerServiceName string        // Service name of caller itself.
 	CalleeMethod      string        // Callee method name, usually used for metrics.
 	Timeout           time.Duration // Timeout.
 
 	// Target is address of backend service: name://endpoint,
-	// also compatible with old addressing like ip://ip:port
+	// also compatible with old addressing like cl5://sid cmlb://appid ip://ip:port
 	Target   string
 	endpoint string // The same as service name if target is not set.
 
+	OverloadCtrl overloadctrl.OverloadController // Client side overload control.
+
 	Network           string
-	Protocol          string
 	CallType          codec.RequestType           // Type of request, referring to transport.RequestType.
 	CallOptions       []transport.RoundTripOption // Options for client transport to call server.
 	Transport         transport.ClientTransport
@@ -71,7 +78,9 @@ type Options struct {
 	Filters                filter.ClientChain // Filter chain.
 	FilterNames            []string           // The name of filters.
 	DisableFilter          bool               // Whether to disable filter.
-	selectorFilterPosFixed bool               // Whether selector filter pos is fixed，if not, put it to the end.
+	selectorFilterPosFixed bool               // Whether selector filter pos is fixed, if not, put it to the end.
+
+	methods map[string]*methodOptions
 
 	ReqHead interface{} // Allow custom req head.
 	RspHead interface{} // Allow custom rsp head.
@@ -82,9 +91,24 @@ type Options struct {
 	RControl      RecvControl       // Receiver's flow control.
 	StreamFilters StreamFilterChain // Stream filter chain.
 
+	// Scope is the scope of the current client, the allowed values are:
+	// "local": the client can only call the local server.
+	// "remote": the client can only call the remote server.
+	// "all": the client can call the local and remote server (first try local, then remote).
+	Scope     scope.Scope
+	localAddr net.Addr
+
 	fixTimeout func(error) error
 
 	attachment *attachment.Attachment
+
+	// protocol is the current protocol used by client.
+	protocol string
+}
+
+// methodOptions defines the method level options.
+type methodOptions struct {
+	timeout *time.Duration
 }
 
 type onceNode struct {
@@ -126,6 +150,13 @@ func WithServiceName(s string) Option {
 	return func(o *Options) {
 		o.ServiceName = s
 		o.endpoint = s
+	}
+}
+
+// WithTag returns an Option that sets tag of backend service.
+func WithTag(tag string) Option {
+	return func(o *Options) {
+		o.Tag = tag
 	}
 }
 
@@ -203,16 +234,20 @@ func WithCalleeMethod(method string) Option {
 	}
 }
 
-// WithCallerMetadata returns an Option that sets metadata of caller.
+// WithCallerMetadata returns an Option that sets metadata of caller, only used for polaris routing addressing.
+// CallerMetadata is also called SourceMetadata in Polaris router.
 // It should not be used for env/set as specific methods are provided for env/set.
+// If you need to transparently transmit business data to the downstream, please use WithMetaData.
 func WithCallerMetadata(key string, val string) Option {
 	return func(o *Options) {
 		o.SelectOptions = append(o.SelectOptions, selector.WithSourceMetadata(key, val))
 	}
 }
 
-// WithCalleeMetadata returns an Option that sets metadata of callee.
+// WithCalleeMetadata returns an Option that sets metadata of callee, only used for polaris routing addressing.
+// CalleeMetadata is also called DestinationMetadata in Polaris router.
 // It should not be used for env/set as specific methods are provided for env/set.
+// If you need to transparently transmit business data to the downstream, please use WithMetaData.
 func WithCalleeMetadata(key string, val string) Option {
 	return func(o *Options) {
 		o.SelectOptions = append(o.SelectOptions, selector.WithDestinationMetadata(key, val))
@@ -268,8 +303,8 @@ func WithReplicas(r int) Option {
 	}
 }
 
-// WithTarget returns an Option that sets target address using URI scheme://endpoint.
-// e.g. ip://ip_addr:port
+// WithTarget returns an Option that sets target address with scheme name://endpoint,
+// like cl5://sid ons://zkname ip://ip:port.
 func WithTarget(t string) Option {
 	return func(o *Options) {
 		o.Target = t
@@ -321,8 +356,31 @@ func WithTimeout(t time.Duration) Option {
 	}
 }
 
+// WithScope returns an Option that sets the client's Scope.
+// "local": the client can only call the local server.
+// "remote": the client can only call the remote server.
+// "all": the client can call the local and remote server (first try local, then remote).
+//
+// The default value is "remote".
+func WithScope(scope scope.Scope) Option {
+	return func(o *Options) {
+		o.Scope = scope
+	}
+}
+
 // WithCurrentSerializationType returns an Option that sets serialization type of caller itself.
 // WithSerializationType should be used to set serialization type of backend service.
+//
+// When WithSerializationType and WithCurrentSerializationType are used together, their roles differ:
+//   - WithSerializationType specifies the intended serialization type for the final payload,
+//     although the framework may not necessarily perform the serialization.
+//   - WithCurrentSerializationType determines the actual serialization operation that the framework needs to carry out.
+//
+// The most common practice is to use WithCurrentSerializationType(codec.SerializationTypeNoop),
+// and then use WithSerializationType to specify an actual serialization method.
+// In this way, you can directly provide the serialized []byte, and also specify that the serialization method
+// filled in the protocol header is a certain serialization method, thereby skipping the step of the framework
+// executing the serialization.
 func WithCurrentSerializationType(t int) Option {
 	return func(o *Options) {
 		o.CurrentSerializationType = t
@@ -340,6 +398,17 @@ func WithSerializationType(t int) Option {
 
 // WithCurrentCompressType returns an Option that sets compression type of caller itself.
 // WithCompressType should be used to set compression type of backend service.
+//
+// When WithCompressType and WithCurrentCompressType are used together, their roles differ:
+//   - WithCompressType specifies the intended compression type for the final payload,
+//     although the framework may not necessarily perform the compression.
+//   - WithCurrentCompressType determines the actual compression operation that the framework needs to carry out.
+//
+// The most common practice is to use WithCurrentCompressType(codec.CompressTypeNoop),
+// and then use WithCompressType to specify an actual compression method.
+// In this way, you can directly provide the compressed []byte, and also specify that the compression method
+// filled in the protocol header is a certain compression method, thereby skipping the step of the framework
+// executing the compression.
 func WithCurrentCompressType(t int) Option {
 	return func(o *Options) {
 		o.CurrentCompressType = t
@@ -370,7 +439,7 @@ func WithProtocol(s string) Option {
 		if s == "" {
 			return
 		}
-		o.Protocol = s
+		o.protocol = s
 		o.Codec = codec.GetClient(s)
 		if b := transport.GetFramerBuilder(s); b != nil {
 			o.CallOptions = append(o.CallOptions,
@@ -481,7 +550,9 @@ func WithMetaData(key string, val []byte) Option {
 }
 
 // WithSelectorNode returns an Option that records the selected node.
-// It's usually used for debugging.
+// It's usually used for debugging. The Node should be set for each RPC call, not just once when calling NewClientProxy.
+// After the RPC is completed, the framework will automatically populate the downstream IP port and current elapsed
+// time into the node. The node is not thread-safe and cannot be reused by multiple goroutines.
 func WithSelectorNode(n *registry.Node) Option {
 	return func(o *Options) {
 		o.Node = &onceNode{Node: n}
@@ -539,7 +610,16 @@ func WithDialTimeout(dur time.Duration) Option {
 // WithStreamTransport returns an Option that sets client stream transport.
 func WithStreamTransport(st transport.ClientStreamTransport) Option {
 	return func(o *Options) {
-		o.StreamTransport = st
+		if st != nil {
+			o.StreamTransport = st
+		}
+	}
+}
+
+// WithOverloadCtrl returns an Option that sets client overload control strategy.
+func WithOverloadCtrl(oc overloadctrl.OverloadController) Option {
+	return func(o *Options) {
+		o.OverloadCtrl = oc
 	}
 }
 
@@ -569,6 +649,13 @@ func WithRecvControl(rc RecvControl) Option {
 func WithShouldErrReportToSelector(f func(error) bool) Option {
 	return func(o *Options) {
 		o.shouldErrReportToSelector = f
+	}
+}
+
+// WithHTTPRoundTripOptions returns an Option that sets http round trip options.
+func WithHTTPRoundTripOptions(h transport.HTTPRoundTripOptions) Option {
+	return func(o *Options) {
+		o.CallOptions = append(o.CallOptions, transport.WithHTTPRoundTripOptions(h))
 	}
 }
 
@@ -613,13 +700,17 @@ func NewOptions() *Options {
 	)
 	return &Options{
 		Transport:         transport.DefaultClientTransport,
+		StreamTransport:   transport.DefaultClientStreamTransport,
 		Selector:          selector.DefaultSelector,
+		OverloadCtrl:      overloadctrl.NoopOC{},
 		SerializationType: invalidSerializationType, // the initial value is -1
 		// CurrentSerializationType is the serialization type of caller itself.
 		// SerializationType is the serialization type of backend service.
 		// For proxy, CurrentSerializationType should be noop but SerializationType should not.
 		CurrentSerializationType: invalidSerializationType,
 		CurrentCompressType:      invalidCompressType,
+
+		methods: make(map[string]*methodOptions),
 
 		fixTimeout:                func(err error) error { return err },
 		shouldErrReportToSelector: func(err error) bool { return false },
@@ -643,12 +734,12 @@ func (opts *Options) clone() *Options {
 // created for each slice appending.
 func (opts *Options) rebuildSliceCapacity() {
 	if len(opts.CallOptions) != cap(opts.CallOptions) {
-		o := make([]transport.RoundTripOption, len(opts.CallOptions), len(opts.CallOptions))
+		o := make([]transport.RoundTripOption, len(opts.CallOptions))
 		copy(o, opts.CallOptions)
 		opts.CallOptions = o
 	}
 	if len(opts.SelectOptions) != cap(opts.SelectOptions) {
-		o := make([]selector.Option, len(opts.SelectOptions), len(opts.SelectOptions))
+		o := make([]selector.Option, len(opts.SelectOptions))
 		copy(o, opts.SelectOptions)
 		opts.SelectOptions = o
 	}
@@ -699,4 +790,136 @@ func (opts *Options) LoadNodeConfig(node *registry.Node) {
 	if node.Protocol != "" {
 		WithProtocol(node.Protocol)(opts)
 	}
+}
+
+// ------------------------------ the following code is deprecated ------------------------------ //
+// Deprecated
+
+// LoadClientConfig loads client config by key which is
+// the callee service name from the proto file by default.
+// Deprecated
+func (opts *Options) LoadClientConfig(key string) error {
+	cfg := Config(key)
+	if err := opts.SetNamingOptions(cfg); err != nil {
+		return err
+	}
+
+	opts.OverloadCtrl = &cfg.OverloadCtrl
+	if cfg.Timeout > 0 {
+		opts.Timeout = time.Duration(cfg.Timeout) * time.Millisecond
+	}
+	if cfg.Serialization != nil {
+		opts.SerializationType = *cfg.Serialization
+	}
+
+	if icodec.IsValidCompressType(cfg.Compression) && cfg.Compression != codec.CompressTypeNoop {
+		opts.CompressType = cfg.Compression
+	}
+	if cfg.Protocol != "" {
+		o := WithProtocol(cfg.Protocol)
+		o(opts)
+	}
+	if cfg.Network != "" {
+		opts.Network = cfg.Network
+		opts.CallOptions = append(opts.CallOptions, transport.WithDialNetwork(cfg.Network))
+	}
+	if cfg.Password != "" {
+		opts.CallOptions = append(opts.CallOptions, transport.WithDialPassword(cfg.Password))
+	}
+	if cfg.CACert != "" {
+		opts.CallOptions = append(opts.CallOptions,
+			transport.WithDialTLS(cfg.TLSCert, cfg.TLSKey, cfg.CACert, cfg.TLSServerName))
+	}
+	if cfg.Scope != "" {
+		opts.Scope = cfg.Scope
+	}
+	return nil
+}
+
+// SetNamingOptions sets naming related options.
+// Deprecated
+func (opts *Options) SetNamingOptions(cfg *BackendConfig) error {
+	if cfg.ServiceName != "" {
+		opts.ServiceName = cfg.ServiceName
+		opts.endpoint = cfg.ServiceName
+	}
+	if cfg.Namespace != "" {
+		opts.SelectOptions = append(opts.SelectOptions, selector.WithNamespace(cfg.Namespace))
+	}
+	if cfg.EnvName != "" {
+		opts.SelectOptions = append(opts.SelectOptions, selector.WithDestinationEnvName(cfg.EnvName))
+	}
+	if cfg.SetName != "" {
+		opts.SelectOptions = append(opts.SelectOptions, selector.WithDestinationSetName(cfg.SetName))
+	}
+	if cfg.DisableServiceRouter {
+		opts.SelectOptions = append(opts.SelectOptions, selector.WithDisableServiceRouter())
+		opts.DisableServiceRouter = true
+	}
+	if cfg.ReportAnyErrToSelector {
+		opts.shouldErrReportToSelector = func(err error) bool { return true }
+	}
+	if cfg.Target != "" {
+		opts.Target = cfg.Target
+		return nil
+	}
+	if cfg.Discovery != "" {
+		d := discovery.Get(cfg.Discovery)
+		if d == nil {
+			return errs.NewFrameError(errs.RetServerSystemErr,
+				fmt.Sprintf("client config: discovery %s no registered", cfg.Discovery))
+		}
+		opts.SelectOptions = append(opts.SelectOptions, selector.WithDiscovery(d))
+	}
+	if cfg.ServiceRouter != "" {
+		r := servicerouter.Get(cfg.ServiceRouter)
+		if r == nil {
+			return errs.NewFrameError(errs.RetServerSystemErr,
+				fmt.Sprintf("client config: servicerouter %s no registered", cfg.ServiceRouter))
+		}
+		opts.SelectOptions = append(opts.SelectOptions, selector.WithServiceRouter(r))
+	}
+	if cfg.Loadbalance != "" {
+		balancer := loadbalance.Get(cfg.Loadbalance)
+		if balancer == nil {
+			return errs.NewFrameError(errs.RetServerSystemErr,
+				fmt.Sprintf("client config: balancer %s no registered", cfg.Loadbalance))
+		}
+		opts.SelectOptions = append(opts.SelectOptions, selector.WithLoadBalancer(balancer))
+	}
+	if cfg.Circuitbreaker != "" {
+		cb := circuitbreaker.Get(cfg.Circuitbreaker)
+		if cb == nil {
+			return errs.NewFrameError(errs.RetServerSystemErr,
+				fmt.Sprintf("client config: circuitbreaker %s no registered", cfg.Circuitbreaker))
+		}
+		opts.SelectOptions = append(opts.SelectOptions, selector.WithCircuitBreaker(cb))
+	}
+	return nil
+}
+
+// LoadClientFilterConfig loads client filter config by key.
+// Deprecated
+func (opts *Options) LoadClientFilterConfig(key string) error {
+	if opts.DisableFilter {
+		opts.Filters = filter.EmptyChain
+		return nil
+	}
+	cfg := Config(key)
+	for _, filterName := range cfg.Filter {
+		f := filter.GetClient(filterName)
+		if f == nil {
+			if filterName == DefaultSelectorFilterName {
+				opts.selectorFilterPosFixed = true
+				opts.Filters = append(opts.Filters, selectorFilter)
+				opts.FilterNames = append(opts.FilterNames, DefaultSelectorFilterName)
+				continue
+			}
+			return errs.NewFrameError(errs.RetServerSystemErr,
+				fmt.Sprintf("client config: filter %s no registered", filterName))
+		}
+		opts.Filters = append(opts.Filters, f)
+		opts.FilterNames = append(opts.FilterNames, filterName)
+	}
+	return nil
 }

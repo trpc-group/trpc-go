@@ -16,11 +16,41 @@ package http
 import (
 	"net/http"
 	"net/http/httptrace"
+
+	"trpc.group/trpc-go/trpc-go/transport"
 )
 
 // newValueDetachedTransport creates a new valueDetachedTransport.
 func newValueDetachedTransport(r http.RoundTripper) http.RoundTripper {
 	return &valueDetachedTransport{RoundTripper: r}
+}
+
+// roundTripperWithOptions configures an http.RoundTripper based on the provided RoundTripOptions.
+// If r implements clonableRoundTripper, it'll clone a new instance from r and applies the options to this new instance.
+func roundTripperWithOptions(r http.RoundTripper, opts transport.RoundTripOptions) http.RoundTripper {
+	if crt, ok := r.(clonableRoundTripper); ok {
+		r = crt.clone()
+	}
+	detachedTransport := r
+	if vdt, ok := r.(*valueDetachedTransport); ok {
+		detachedTransport = vdt.RoundTripper
+	}
+	tr, ok := detachedTransport.(*http.Transport)
+	if !ok {
+		return r
+	}
+	// Apply HTTP specific options from opts to the transport.
+	tr.MaxIdleConns = opts.HTTPOpts.Pool.MaxIdleConns
+	tr.MaxIdleConnsPerHost = opts.HTTPOpts.Pool.MaxIdleConnsPerHost
+	tr.MaxConnsPerHost = opts.HTTPOpts.Pool.MaxConnsPerHost
+	tr.IdleConnTimeout = opts.HTTPOpts.Pool.IdleConnTimeout
+	tr.DisableKeepAlives = opts.DisableConnectionPool
+	return r
+}
+
+// clonableRoundTripper defines an interface for round trippers that can create a clone of themselves.
+type clonableRoundTripper interface {
+	clone() http.RoundTripper
 }
 
 // valueDetachedTransport detaches ctx value before RoundTripping a http.Request.
@@ -49,4 +79,14 @@ func (vdt *valueDetachedTransport) CancelRequest(req *http.Request) {
 	if v, ok := vdt.RoundTripper.(canceler); ok {
 		v.CancelRequest(req)
 	}
+}
+
+// clone creates a copy of the valueDetachedTransport.
+func (vdt *valueDetachedTransport) clone() http.RoundTripper {
+	detachedTransport := vdt.RoundTripper
+	// Check if the embedded RoundTripper implements clonableRoundTripper and clone it if possible.
+	if crt, ok := detachedTransport.(clonableRoundTripper); ok {
+		detachedTransport = crt.clone()
+	}
+	return newValueDetachedTransport(detachedTransport)
 }

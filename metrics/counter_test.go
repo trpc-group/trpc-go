@@ -16,8 +16,8 @@ package metrics_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"trpc.group/trpc-go/trpc-go/metrics"
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_counter_Incr(t *testing.T) {

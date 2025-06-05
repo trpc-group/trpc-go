@@ -19,6 +19,7 @@ option  go_package ="trpc.group/trpc-go/trpc-go/examples/features/stream";
 
 // The stream service definition.
 service TestStream {
+  rpc UnaryCall(HelloReq) returns (HelloRsp);
   // Defined Client-side streaming RPC
   // Add stream in front of HelloReq
   rpc ClientStream (stream HelloReq) returns (HelloRsp);

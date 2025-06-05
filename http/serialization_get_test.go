@@ -141,3 +141,47 @@ func TestGetMarshal(t *testing.T) {
 	_, err := s.Marshal(require)
 	require.NotNil(err)
 }
+
+func TestCaseSensitive(t *testing.T) {
+	type HelloReq struct {
+		Msg string `json:"msg,omitempty"`
+	}
+
+	// GetSerializer is case-insensitive by default.
+	s := codec.GetSerializer(codec.SerializationTypeGet)
+
+	hello := &HelloReq{}
+	require.Nil(t, s.Unmarshal([]byte("msg=hello"), &hello))
+	require.Equal(t, "hello", hello.Msg)
+
+	hello = &HelloReq{}
+	require.Nil(t, s.Unmarshal([]byte("Msg=hello"), &hello))
+	require.Equal(t, "hello", hello.Msg)
+
+	hello = &HelloReq{}
+	require.Nil(t, s.Unmarshal([]byte("mSg=hello"), &hello))
+	require.Equal(t, "hello", hello.Msg)
+
+	// Remember to invoke codec.RegisterSerializer to register the new Serializer.
+	codec.RegisterSerializer(codec.SerializationTypeGet,
+		http.NewGetSerializationWithCaseSensitive("json", true))
+	// Remember to get the new codec.RegisterSerializer.
+	s = codec.GetSerializer(codec.SerializationTypeGet)
+
+	hello = &HelloReq{}
+	require.Nil(t, s.Unmarshal([]byte("msg=hello"), &hello))
+	require.Equal(t, "hello", hello.Msg)
+
+	hello = &HelloReq{}
+	require.Nil(t, s.Unmarshal([]byte("Msg=hello"), &hello))
+	require.Equal(t, "", hello.Msg)
+
+	hello = &HelloReq{}
+	require.Nil(t, s.Unmarshal([]byte("mSg=hello"), &hello))
+	require.Equal(t, "", hello.Msg)
+
+	// Set GetSerializer to the default case-insensitive state
+	// to avoid unexpected issues in subsequent tests.
+	codec.RegisterSerializer(codec.SerializationTypeGet,
+		http.NewGetSerializationWithCaseSensitive("json", false))
+}

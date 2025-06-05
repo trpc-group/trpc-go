@@ -22,7 +22,7 @@ import (
 func TestServiceRouterRegister(t *testing.T) {
 	Register("noop", &NoopServiceRouter{})
 	assert.NotNil(t, Get("noop"))
-	unregisterForTesting("noop")
+	delete(servicerouters, "noop")
 }
 
 func TestSetDefaultServiceRouter(t *testing.T) {

@@ -26,7 +26,10 @@ import (
 
 func main() {
 	// Create an attachment.
-	a := client.NewAttachment(bytes.NewReader([]byte("client attachment")))
+	bts := []byte("client attachment")
+	// bytes.NewReader additionally implements the Sizer interface,
+	// it can significantly reduce memory copying for large  attachments and reduce transmission time.
+	a := client.NewAttachment(bytes.NewReader(bts))
 
 	// Call UnaryEcho that send attachment along with messages.
 	c := pb.NewEchoClientProxy(client.WithTarget("ip://127.0.0.1:8000"))

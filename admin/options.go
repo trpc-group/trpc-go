@@ -18,37 +18,38 @@ import (
 )
 
 // Option Service configuration options.
-type Option func(*configuration)
+type Option func(*adminConfig)
 
 // WithAddr returns an Option which sets the address bound to admin, default: ":9028".
 // Supported formats:
 // 1. :80
 // 2. 0.0.0.0:80
 // 3. localhost:80
-// 4. 127.0.0.0:8001
+// 4. 127.0.0.0:80
+// 5. 10.0.0.2:8001
 func WithAddr(addr string) Option {
-	return func(config *configuration) {
+	return func(config *adminConfig) {
 		config.addr = addr
 	}
 }
 
 // WithTLS returns an Option which sets whether to use HTTPS.
 func WithTLS(isTLS bool) Option {
-	return func(config *configuration) {
+	return func(config *adminConfig) {
 		config.enableTLS = isTLS
 	}
 }
 
 // WithVersion returns an Option which sets the version number.
 func WithVersion(version string) Option {
-	return func(config *configuration) {
+	return func(config *adminConfig) {
 		config.version = version
 	}
 }
 
 // WithReadTimeout returns an Option which sets read timeout.
 func WithReadTimeout(readTimeout time.Duration) Option {
-	return func(config *configuration) {
+	return func(config *adminConfig) {
 		if readTimeout > 0 {
 			config.readTimeout = readTimeout
 		}
@@ -57,7 +58,7 @@ func WithReadTimeout(readTimeout time.Duration) Option {
 
 // WithWriteTimeout returns an Option which sets write timeout.
 func WithWriteTimeout(writeTimeout time.Duration) Option {
-	return func(config *configuration) {
+	return func(config *adminConfig) {
 		if writeTimeout > 0 {
 			config.writeTimeout = writeTimeout
 		}
@@ -66,14 +67,14 @@ func WithWriteTimeout(writeTimeout time.Duration) Option {
 
 // WithConfigPath returns an Option which sets the framework configuration file path.
 func WithConfigPath(configPath string) Option {
-	return func(config *configuration) {
+	return func(config *adminConfig) {
 		config.configPath = configPath
 	}
 }
 
 // WithSkipServe sets whether to skip starting the admin service.
 func WithSkipServe(isSkip bool) Option {
-	return func(config *configuration) {
+	return func(config *adminConfig) {
 		config.skipServe = isSkip
 	}
 }

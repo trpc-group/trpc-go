@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/naming/loadbalance"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 )
@@ -33,99 +32,100 @@ import (
 func TestConsistentHashGetOne(t *testing.T) {
 	ch := NewConsistentHash()
 
-	// test list 1
-	n, err := ch.Select("test", list1, loadbalance.WithKey("123"))
-	assert.Nil(t, err)
-	expectAddr := n.Address
-	n, err = ch.Select("test", list1, loadbalance.WithKey("123"))
-	assert.Nil(t, err)
-	assert.Equal(t, expectAddr, n.Address)
+	t.Run("list1", func(t *testing.T) {
+		n, err := ch.Select("test", list1, loadbalance.WithKey("123"))
+		assert.Nil(t, err)
+		expectAddr := n.Address
+		n, err = ch.Select("test", list1, loadbalance.WithKey("123"))
+		assert.Nil(t, err)
+		assert.Equal(t, expectAddr, n.Address)
 
-	n, err = ch.Select("test", list1, loadbalance.WithKey("123456"))
-	assert.Nil(t, err)
-	expectAddr = n.Address
-	n, err = ch.Select("test", list1, loadbalance.WithKey("123456"))
-	assert.Nil(t, err)
-	assert.Equal(t, expectAddr, n.Address)
+		n, err = ch.Select("test", list1, loadbalance.WithKey("123456"))
+		assert.Nil(t, err)
+		expectAddr = n.Address
+		n, err = ch.Select("test", list1, loadbalance.WithKey("123456"))
+		assert.Nil(t, err)
+		assert.Equal(t, expectAddr, n.Address)
 
-	n, err = ch.Select("test", list1, loadbalance.WithKey("12315"))
-	assert.Nil(t, err)
-	expectAddr = n.Address
-	n, err = ch.Select("test", list1, loadbalance.WithKey("12315"))
-	assert.Nil(t, err)
-	assert.Equal(t, expectAddr, n.Address)
+		n, err = ch.Select("test", list1, loadbalance.WithKey("12315"))
+		assert.Nil(t, err)
+		expectAddr = n.Address
+		n, err = ch.Select("test", list1, loadbalance.WithKey("12315"))
+		assert.Nil(t, err)
+		assert.Equal(t, expectAddr, n.Address)
+	})
+	t.Run("list4", func(t *testing.T) {
+		n, err := ch.Select("test", list4, loadbalance.WithKey("Pony"))
+		assert.Nil(t, err)
+		expectAddr := n.Address
+		n, err = ch.Select("test", list4, loadbalance.WithKey("Pony"))
+		assert.Nil(t, err)
+		assert.Equal(t, expectAddr, n.Address)
 
-	// test list 4
-	n, err = ch.Select("test", list4, loadbalance.WithKey("Pony"))
-	assert.Nil(t, err)
-	expectAddr = n.Address
-	n, err = ch.Select("test", list4, loadbalance.WithKey("Pony"))
-	assert.Nil(t, err)
-	assert.Equal(t, expectAddr, n.Address)
+		n, err = ch.Select("test", list4, loadbalance.WithKey("John"))
+		assert.Nil(t, err)
+		expectAddr = n.Address
+		n, err = ch.Select("test", list4, loadbalance.WithKey("John"))
+		assert.Nil(t, err)
+		assert.Equal(t, expectAddr, n.Address)
 
-	n, err = ch.Select("test", list4, loadbalance.WithKey("John"))
-	assert.Nil(t, err)
-	expectAddr = n.Address
-	n, err = ch.Select("test", list4, loadbalance.WithKey("John"))
-	assert.Nil(t, err)
-	assert.Equal(t, expectAddr, n.Address)
-
-	n, err = ch.Select("test", list4, loadbalance.WithKey("Jack"))
-	assert.Nil(t, err)
-	expectAddr = n.Address
-	n, err = ch.Select("test", list4, loadbalance.WithKey("Jack"))
-	assert.Nil(t, err)
-	assert.Equal(t, expectAddr, n.Address)
+		n, err = ch.Select("test", list4, loadbalance.WithKey("Jack"))
+		assert.Nil(t, err)
+		expectAddr = n.Address
+		n, err = ch.Select("test", list4, loadbalance.WithKey("Jack"))
+		assert.Nil(t, err)
+		assert.Equal(t, expectAddr, n.Address)
+	})
 }
 
 // Test whether key takes effect using custom.
 // The returned node should not change for the same key in the same node list.
 func TestCustomConsistentHashGetOne(t *testing.T) {
 	ch := NewCustomConsistentHash(murmur3.Sum64)
+	t.Run("list1", func(t *testing.T) {
+		n, err := ch.Select("test", list1, loadbalance.WithKey("123"))
+		assert.Nil(t, err)
+		expectAddr := n.Address
+		n, err = ch.Select("test", list1, loadbalance.WithKey("123"))
+		assert.Nil(t, err)
+		assert.Equal(t, expectAddr, n.Address)
 
-	// test list 1
-	n, err := ch.Select("test", list1, loadbalance.WithKey("123"))
-	assert.Nil(t, err)
-	expectAddr := n.Address
-	n, err = ch.Select("test", list1, loadbalance.WithKey("123"))
-	assert.Nil(t, err)
-	assert.Equal(t, expectAddr, n.Address)
+		n, err = ch.Select("test", list1, loadbalance.WithKey("123456"))
+		assert.Nil(t, err)
+		expectAddr = n.Address
+		n, err = ch.Select("test", list1, loadbalance.WithKey("123456"))
+		assert.Nil(t, err)
+		assert.Equal(t, expectAddr, n.Address)
 
-	n, err = ch.Select("test", list1, loadbalance.WithKey("123456"))
-	assert.Nil(t, err)
-	expectAddr = n.Address
-	n, err = ch.Select("test", list1, loadbalance.WithKey("123456"))
-	assert.Nil(t, err)
-	assert.Equal(t, expectAddr, n.Address)
+		n, err = ch.Select("test", list1, loadbalance.WithKey("12315"))
+		assert.Nil(t, err)
+		expectAddr = n.Address
+		n, err = ch.Select("test", list1, loadbalance.WithKey("12315"))
+		assert.Nil(t, err)
+		assert.Equal(t, expectAddr, n.Address)
+	})
+	t.Run("list4", func(t *testing.T) {
+		n, err := ch.Select("test", list4, loadbalance.WithKey("Pony"))
+		assert.Nil(t, err)
+		expectAddr := n.Address
+		n, err = ch.Select("test", list4, loadbalance.WithKey("Pony"))
+		assert.Nil(t, err)
+		assert.Equal(t, expectAddr, n.Address)
 
-	n, err = ch.Select("test", list1, loadbalance.WithKey("12315"))
-	assert.Nil(t, err)
-	expectAddr = n.Address
-	n, err = ch.Select("test", list1, loadbalance.WithKey("12315"))
-	assert.Nil(t, err)
-	assert.Equal(t, expectAddr, n.Address)
+		n, err = ch.Select("test", list4, loadbalance.WithKey("John"))
+		assert.Nil(t, err)
+		expectAddr = n.Address
+		n, err = ch.Select("test", list4, loadbalance.WithKey("John"))
+		assert.Nil(t, err)
+		assert.Equal(t, expectAddr, n.Address)
 
-	// test list 4
-	n, err = ch.Select("test", list4, loadbalance.WithKey("Pony"))
-	assert.Nil(t, err)
-	expectAddr = n.Address
-	n, err = ch.Select("test", list4, loadbalance.WithKey("Pony"))
-	assert.Nil(t, err)
-	assert.Equal(t, expectAddr, n.Address)
-
-	n, err = ch.Select("test", list4, loadbalance.WithKey("John"))
-	assert.Nil(t, err)
-	expectAddr = n.Address
-	n, err = ch.Select("test", list4, loadbalance.WithKey("John"))
-	assert.Nil(t, err)
-	assert.Equal(t, expectAddr, n.Address)
-
-	n, err = ch.Select("test", list4, loadbalance.WithKey("Jack"))
-	assert.Nil(t, err)
-	expectAddr = n.Address
-	n, err = ch.Select("test", list4, loadbalance.WithKey("Jack"))
-	assert.Nil(t, err)
-	assert.Equal(t, expectAddr, n.Address)
+		n, err = ch.Select("test", list4, loadbalance.WithKey("Jack"))
+		assert.Nil(t, err)
+		expectAddr = n.Address
+		n, err = ch.Select("test", list4, loadbalance.WithKey("Jack"))
+		assert.Nil(t, err)
+		assert.Equal(t, expectAddr, n.Address)
+	})
 }
 
 // Test hash-collision.
@@ -153,15 +153,18 @@ func TestHashCollision(t *testing.T) {
 
 	n, err := ch.Select("test", nodes, loadbalance.WithKey(magicKey+"a"), loadbalance.WithReplicas(2))
 	require.Nil(t, err)
-	log.Debug(n.Address)
+	t.Log(n.Address)
+
 	addresses[n.Address] = struct{}{}
 	n, err = ch.Select("test", nodes, loadbalance.WithKey(magicKey+"b"), loadbalance.WithReplicas(2))
 	require.Nil(t, err)
-	log.Debug(n.Address)
+	t.Log(n.Address)
+
 	addresses[n.Address] = struct{}{}
 	n, err = ch.Select("test", nodes, loadbalance.WithKey(magicKey+"c"), loadbalance.WithReplicas(2))
 	require.Nil(t, err)
-	log.Debug(n.Address)
+	t.Log(n.Address)
+
 	addresses[n.Address] = struct{}{}
 	require.Less(t, 1, len(addresses))
 }
@@ -171,8 +174,8 @@ func TestHashCollision(t *testing.T) {
 func TestNilList(t *testing.T) {
 	ch := NewConsistentHash()
 	n, err := ch.Select("test", nil, loadbalance.WithKey("123"))
-	assert.Nil(t, n)
 	assert.Equal(t, loadbalance.ErrNoServerAvailable, err)
+	assert.Nil(t, n)
 }
 
 // Test empty opt.
@@ -223,8 +226,9 @@ func TestInterval(t *testing.T) {
 
 	n, err = ch.Select("test", list4, loadbalance.WithKey("123"))
 	assert.Nil(t, err)
-	assert.Equal(t, false, isInList(n.Address, list2))
-	assert.Equal(t, true, isInList(n.Address, list4))
+
+	assert.NotContains(t, list2, n)
+	assert.Contains(t, list4, n)
 }
 
 // Test the influence to object mapping position if node is deleted.
@@ -248,7 +252,7 @@ func TestSubNode(t *testing.T) {
 
 	// Delete deletedAddress of list1.
 	// No key is effected except the key influenced by deletedAddress.
-	listTmp := deleteNode(deletedAddress, list1)
+	listTmp := deleteNode(t, deletedAddress, list1)
 
 	n, err = ch.Select("test", listTmp, loadbalance.WithKey("123"))
 	assert.Nil(t, err)
@@ -434,7 +438,9 @@ var list5 = []*registry.Node{
 	},
 }
 
-func deleteNode(address string, list []*registry.Node) []*registry.Node {
+func deleteNode(t *testing.T, address string, list []*registry.Node) []*registry.Node {
+	t.Helper()
+
 	ret := make([]*registry.Node, 0, len(list))
 	for _, n := range list {
 		if n.Address != address {
@@ -442,13 +448,4 @@ func deleteNode(address string, list []*registry.Node) []*registry.Node {
 		}
 	}
 	return ret
-}
-
-func isInList(address string, list []*registry.Node) bool {
-	for _, n := range list {
-		if n.Address == address {
-			return true
-		}
-	}
-	return false
 }

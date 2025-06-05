@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/html"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	testpb "trpc.group/trpc-go/trpc-go/test/protocols"
 )
 
@@ -51,20 +51,22 @@ func (s *TestSuite) testDetailedSpanOk() {
 	)
 	_, err = html.Parse(strings.NewReader(string(resp)))
 	require.Nil(s.T(), err)
-
 	strs := strings.Split(string(resp), "\n")
 	if len(strs) <= 2 {
 		return
 	}
-	spanID := strings.TrimSuffix(strings.TrimPrefix(strs[5], "  span: (client, "), ")")
+	const spanIDLineNumber = 6
+	spanID := strings.TrimSuffix(strings.TrimPrefix(strs[spanIDLineNumber], "  span: (client, "), ")")
 	spanID = strings.TrimSuffix(strings.TrimPrefix(spanID, "  span: (server, "), ")")
 	func() {
 		rpczURL := fmt.Sprintf("http://%s/cmds/rpcz/spans/%s", defaultAdminListenAddr, spanID)
-		_, err := httpRequest(
+		s.T().Log(rpczURL)
+		resp, err := httpRequest(
 			http.MethodGet,
 			rpczURL,
 			"",
 		)
+		s.T().Logf("\n%s", string(resp))
 		require.Nil(s.T(), err)
 	}()
 }

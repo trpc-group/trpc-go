@@ -30,7 +30,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	thttp "trpc.group/trpc-go/trpc-go/http"
@@ -39,6 +39,18 @@ import (
 	testpb "trpc.group/trpc-go/trpc-go/test/protocols"
 	httpdata "trpc.group/trpc-go/trpc-go/test/testdata"
 )
+
+func (s *TestSuite) TestSearch() {
+	s.startServer(
+		&testRESTfulService{},
+		server.WithTransport(thttp.NewRESTServerTransport(false)),
+		server.WithServerAsync(true),
+	)
+	url := fmt.Sprintf("http://%v/v1/knowledgebases/documents:search", s.listener.Addr())
+	rsp, err := http.Get(url)
+	require.Nilf(s.T(), err, "full err: %v", err)
+	require.Equal(s.T(), http.StatusOK, rsp.StatusCode)
+}
 
 func (s *TestSuite) TestHTTPRuleOK() {
 	for _, e := range allRESTfulServerEnv {
@@ -62,9 +74,8 @@ func (s *TestSuite) testHTTPRuleOK(e *restfulServerEnv) {
 				Username:     validUserNameForAuth,
 			})),
 		)
-		require.Condition(s.T(), func() bool {
-			return err == nil && rsp.StatusCode == http.StatusOK
-		})
+		require.Nil(s.T(), err)
+		require.Equal(s.T(), http.StatusOK, rsp.StatusCode)
 
 		var r testpb.SimpleResponse
 		mustUnmarshalProtoJSON(s.T(), rsp.Body, &r)
@@ -75,9 +86,8 @@ func (s *TestSuite) testHTTPRuleOK(e *restfulServerEnv) {
 	})
 	s.Run("don't fill user name ", func() {
 		rsp, err := http.Get(fmt.Sprintf("http://%v/UnaryCall/%s", s.listener.Addr(), validUserNameForAuth))
-		require.Condition(s.T(), func() bool {
-			return err == nil && rsp.StatusCode == http.StatusOK
-		})
+		require.Nil(s.T(), err)
+		require.Equal(s.T(), http.StatusOK, rsp.StatusCode)
 
 		var r testpb.SimpleResponse
 		mustUnmarshalProtoJSON(s.T(), rsp.Body, &r)
@@ -85,6 +95,36 @@ func (s *TestSuite) testHTTPRuleOK(e *restfulServerEnv) {
 			s.T().Log(err)
 		}
 		require.Equal(s.T(), "", r.Username)
+	})
+	s.Run("don't fill proxy path", func() {
+		rsp, err := http.Get(fmt.Sprintf("http://%v/UnaryCall/%s", s.listener.Addr(), proxyPathForRESTFulService))
+		require.Nil(s.T(), err)
+		require.Equal(s.T(), http.StatusOK, rsp.StatusCode)
+
+		var r testpb.SimpleResponse
+		mustUnmarshalProtoJSON(s.T(), rsp.Body, &r)
+		if err := rsp.Body.Close(); err != nil {
+			s.T().Log(err)
+		}
+		require.Equal(s.T(), proxyPathForRESTFulService, r.ProxyPath)
+	})
+	s.Run("fill proxy path", func() {
+		rsp, err := http.Post(
+			s.unaryCallCustomURL(),
+			"application/json",
+			bytes.NewReader(mustMarshalJSON(s.T(), &testpb.SimpleRequest{
+				ProxyPath: proxyPathForRESTFulService,
+			})),
+		)
+		require.Nil(s.T(), err)
+		require.Equal(s.T(), http.StatusOK, rsp.StatusCode)
+
+		var r testpb.SimpleResponse
+		mustUnmarshalProtoJSON(s.T(), rsp.Body, &r)
+		if err := rsp.Body.Close(); err != nil {
+			s.T().Log(err)
+		}
+		require.Equal(s.T(), proxyPathForRESTFulService, r.GetProxyPath())
 	})
 }
 
@@ -154,7 +194,7 @@ func (s *TestSuite) testContentTypeMultipartFormData(e *restfulServerEnv) {
 	})
 
 	r, _ := http.NewRequest(
-		"POST",
+		http.MethodPost,
 		fmt.Sprintf("http://%v/UnaryCall/%s", s.listener.Addr(), "TestContentTypeMultipartFormData"),
 		bytes.NewReader([]byte("")),
 	)
@@ -184,6 +224,7 @@ func (s *TestSuite) testDefaultHeaderMatcher(e *restfulServerEnv) {
 	type contextMessage struct {
 		ServerRPCName     string `json:"server-rpc-name"`
 		SerializationType int    `json:"serialization-type"`
+		RemoteAddr        string `json:"remote-addr"`
 	}
 
 	s.startServer(&testRESTfulService{
@@ -192,6 +233,7 @@ func (s *TestSuite) testDefaultHeaderMatcher(e *restfulServerEnv) {
 			bs, err := json.Marshal(&contextMessage{
 				ServerRPCName:     msg.ServerRPCName(),
 				SerializationType: msg.SerializationType(),
+				RemoteAddr:        msg.RemoteAddr().String(),
 			})
 			if err != nil {
 				return nil, err
@@ -200,7 +242,7 @@ func (s *TestSuite) testDefaultHeaderMatcher(e *restfulServerEnv) {
 			return &testpb.SimpleResponse{
 				Username: req.GetUsername(),
 				Payload: &testpb.Payload{
-					Type: testpb.PayloadType_COMPRESSIBLE,
+					Type: testpb.PayloadType_COMPRESSABLE,
 					Body: bs,
 				},
 			}, nil
@@ -225,6 +267,8 @@ func (s *TestSuite) testDefaultHeaderMatcher(e *restfulServerEnv) {
 
 	cm := contextMessage{}
 	mustUnmarshalJSON(s.T(), sr.Payload.Body, &cm)
+	require.Contains(s.T(), cm.RemoteAddr, "127.0.0.1")
+	cm.RemoteAddr = ""
 	require.Equal(
 		s.T(),
 		contextMessage{
@@ -233,6 +277,7 @@ func (s *TestSuite) testDefaultHeaderMatcher(e *restfulServerEnv) {
 		},
 		cm,
 	)
+
 }
 
 func (s *TestSuite) TestCustomHeaderMatcher() {
@@ -371,7 +416,6 @@ func (s *TestSuite) testWithStatusCodeOption(e *restfulServerEnv) {
 	s.startServer(
 		&testRESTfulService{
 			UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-				time.Sleep(time.Second)
 				return nil, &restful.WithStatusCode{
 					StatusCode: http.StatusRequestTimeout,
 					Err:        fmt.Errorf("test error"),
@@ -383,19 +427,17 @@ func (s *TestSuite) testWithStatusCodeOption(e *restfulServerEnv) {
 	)
 	s.T().Cleanup(func() { s.closeServer(nil) })
 
-	rsp, err := http.Post(
+	rsp, _ := http.Post(
 		s.unaryCallCustomURL(),
 		"application/json",
 		bytes.NewReader(mustMarshalJSON(s.T(), &testpb.SimpleRequest{})),
 	)
-	require.Condition(s.T(), func() bool {
-		return err == nil && rsp.StatusCode == http.StatusRequestTimeout
-	})
+	require.Equal(s.T(), http.StatusRequestTimeout, rsp.StatusCode)
 
 	bts, err := io.ReadAll(rsp.Body)
-	require.Condition(s.T(), func() bool {
-		return err == nil && bytes.Contains(bts, []byte(`"message":"test error"`))
-	})
+	require.Nil(s.T(), err)
+	require.Contains(s.T(), string(bts), `"message":"test error"`)
+
 	if err := rsp.Body.Close(); err != nil {
 		s.T().Log(err)
 	}
@@ -413,7 +455,7 @@ func (s *TestSuite) testRESTfulCustomErrorHandler(e *restfulServerEnv) {
 	errorHandler := func(_ context.Context, w http.ResponseWriter, _ *http.Request, e error) {
 
 		if _, err := w.Write([]byte(
-			fmt.Sprintf(`{"ret-code":%d, "ret-msg":"%s"}`, errs.Code(e), errs.Msg(e))),
+			fmt.Sprintf(`{"ret-code": %d, "ret-msg":" %s"}`, errs.Code(e), errs.Msg(e))),
 		); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
@@ -462,7 +504,7 @@ func (s *TestSuite) testRESTfulServerReceivedUnsupportedContentType(e *restfulSe
 			w.WriteHeader(http.StatusUnsupportedMediaType)
 			e = errs.Wrap(e, http.StatusUnsupportedMediaType, "Unsupported Media Type")
 		}
-		if _, err := fmt.Fprintf(w, `{"ret-code":%d, "ret-msg":"%s"}`, errs.Code(e), errs.Msg(e)); err != nil {
+		if _, err := fmt.Fprintf(w, `{"ret-code": %d, "ret-msg": "%s"}`, errs.Code(e), errs.Msg(e)); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}
@@ -500,7 +542,7 @@ func (s *TestSuite) testRESTfulClientReceivedUnsupportedContentType(e *restfulSe
 	const clientUnsupportedContentType = "client-unsupported-content-type"
 	errorHandler := func(_ context.Context, w http.ResponseWriter, r *http.Request, e error) {
 		w.Header().Set("Content-Type", clientUnsupportedContentType)
-		if _, err := fmt.Fprintf(w, `{"ret-code":%d, "ret-msg":"%s"}`, errs.Code(e), errs.Msg(e)); err != nil {
+		if _, err := fmt.Fprintf(w, `{"ret-code": %d, "ret-msg": "%s"}`, errs.Code(e), errs.Msg(e)); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}

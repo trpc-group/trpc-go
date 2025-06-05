@@ -4,13 +4,13 @@ English | [中文](README.zh_CN.md)
 
 Package `naming` can register nodes under the corresponding service name. In addition to `ip:port`, the registration information will also include the running environment, container and other customized metadata information. After the caller obtains all nodes based on the service name, the routing module filters the nodes based on metadata information. Finally, the load balancing algorithm selects a node from the nodes that meet the requirements to make the final request. The name provides a unified abstraction for service management and avoids the operation and maintenance difficulties caused by directly using `ip:port`.
 
-In tRPC-Go, the `register` package defines the registration specification of the server, and `discovery`, `servicerouter`, `loadbalance`, and `circuitebreaker` together form the `slector` package and define the client's service discovery specification.
+In tRPC-Go, the `register` package defines the registration specification of the server, and `discovery`, `servicerouter`, `loadbalance`, and `circuitebreaker` together form the `selector` package and define the client's service discovery specification.
 
 ## Principle
 
 Let's first look at the design of the `naming`:
 
-![naming design](/.resources-without-git-lfs/naming/naming.png)
+![naming design](https://git.woa.com/trpc-go/trpc-go/raw/master/.resources/naming/naming.png)
 
 Based on the above diagram, let's briefly introduce the approximate design and implementation.
 
@@ -35,6 +35,7 @@ Registry defines the common interface for service registration and supports cust
 LoadBalancer defines the common interface for load balancing, which takes in an array of Nodes and returns a load-balanced Node.
 
 trpc-go provides default implementations of load balancing algorithms such as round-robin and weighted round-robin. Businesses can also customize their own load balancing algorithms.
+
 - [Consistent Hash](/naming/loadbalance/consistenthash)
 - [Round-robin](/naming/loadbalance/roundrobin)
 - [Weighted Round-robin](/naming/loadbalance/weightroundrobin)
@@ -57,7 +58,7 @@ CircuitBreaker provides a common interface for determining whether a service nod
 
 ### How to use
 
-tRPC-Go supports [polaris mesh](https://github.com/trpc-ecosystem/go-naming-polarismesh), which can discovery nodes by service name. If the business sets the target when calling, the endpoint of the target will be used to discovery.
+tRPC-Go supports [polaris mesh](https://git.woa.com/trpc-go/trpc-naming-polaris), which can discovery nodes by service name. If the business sets the target when calling, the endpoint of the target will be used to discovery.
 
 ```go
 client.WithTarget(fmt.Sprintf("%s://%s", exampleScheme, exampleServiceName)),
@@ -68,6 +69,7 @@ Target is the backend service address in the format of `name://endpoint`. For ex
 The following example provides an implementation of custom service discovery for business use.
 
 1. Implement the Selector interface.
+
    ```go
    type exampleSelector struct{}
    // Select obtains a backend node by service name.
@@ -87,6 +89,7 @@ The following example provides an implementation of custom service discovery for
    ```
 
 2. Register the custom selector
+
    ```go
    var exampleScheme = "example"
    func init() {
@@ -95,6 +98,7 @@ The following example provides an implementation of custom service discovery for
    ```
 
 3. Set the service name
+
    ```go
    var exampleServiceName = "selector.example.trpc.test"
    client.WithTarget(fmt.Sprintf("%s://%s", exampleScheme, exampleServiceName))

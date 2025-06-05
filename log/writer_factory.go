@@ -15,7 +15,11 @@ package log
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"trpc.group/trpc-go/trpc-go/plugin"
 )
@@ -26,17 +30,104 @@ var (
 	// DefaultFileWriterFactory is the default file output implementation.
 	DefaultFileWriterFactory = &FileWriterFactory{}
 
-	writers = make(map[string]plugin.Factory)
+	// Deprecated: use coreLevelNewers instead.
+	// Because newers only be used by RegisterCoreNewer and GetCoreNewer, which both have been deprecated,
+	// there is no reason to use it.
+	newers          = make(map[string]CoreNewer)
+	coreLevelNewers = make(map[string]CoreLevelNewer)
 )
 
 // RegisterWriter registers log output writer. Writer may have multiple implementations.
+//
+// Deprecated: use RegisterCoreLevelNewer instead.
+// the type of the second input parameter of RegisterWriter is unreasonable,
+// as it does not allow you to clearly know that you must set the log and zapCore.Core in the Setup method
+// when implementing plugin.Factory. If the log level and zapCore are not set correctly in the Setup method,
+// errors may occur when using the logger.
 func RegisterWriter(name string, writer plugin.Factory) {
-	writers[name] = writer
+	coreLevelNewers[name] = &writerFactory{name: name, factory: writer}
 }
 
 // GetWriter gets log output writer, returns nil if not exist.
+//
+// Deprecated: use GetCoreLevelNewer instead.
+// Because RegisterWriter has been deprecated, there is no reason to call GetWriter.
 func GetWriter(name string) plugin.Factory {
-	return writers[name]
+	f, ok := coreLevelNewers[name].(*writerFactory)
+	if !ok || f == nil {
+		return nil
+	}
+	return f.factory
+}
+
+type writerFactory struct {
+	name    string
+	factory plugin.Factory
+}
+
+func (w *writerFactory) New(config OutputConfig) (zapcore.Core, error) {
+	decoder := &Decoder{OutputConfig: &config, Core: zapcore.NewNopCore()}
+
+	if err := w.factory.Setup(w.name, decoder); err != nil {
+		return nil, fmt.Errorf("setting up %s failed: %v", w.name, err)
+	}
+	return decoder.Core, nil
+}
+
+// NewCoreLevel implements CoreLevelNewer interface.
+func (w *writerFactory) NewCoreLevel(config OutputConfig) (zapcore.Core, zap.AtomicLevel, error) {
+	decoder := &Decoder{OutputConfig: &config, Core: zapcore.NewNopCore(), ZapLevel: zap.NewAtomicLevel()}
+
+	if err := w.factory.Setup(w.name, decoder); err != nil {
+		return nil, zap.NewAtomicLevel(), fmt.Errorf("setting up %s failed: %v", w.name, err)
+	}
+	return decoder.Core, decoder.ZapLevel, nil
+}
+
+// RegisterCoreNewer registers a CoreNewer for log output writer with name.
+// Deprecated: use RegisterCoreLevelNewer instead.
+// Because CoreNewer.New does not return the level associated with the
+// core, making it impossible to change the log level of the logger.
+func RegisterCoreNewer(name string, newer CoreNewer) {
+	newers[name] = newer
+}
+
+// GetCoreNewer returns a CoreNewer by name of log output writer.
+// Deprecated: use GetCoreLevelNewer instead.
+// Because RegisterCoreNewer has been deprecated, there is no reason to call GetCoreNewer.
+func GetCoreNewer(name string) (CoreNewer, bool) {
+	newer, ok := newers[name]
+	return newer, ok
+}
+
+// CoreNewer is the interface that wraps the New method.
+type CoreNewer interface {
+	// New creates a zapcore.Core from OutputConfig.
+	New(config OutputConfig) (zapcore.Core, error)
+}
+
+// RegisterCoreLevelNewer registers a CoreLevelNewer for log output writer with name.
+func RegisterCoreLevelNewer(name string, newer CoreLevelNewer) {
+	coreLevelNewers[name] = newer
+}
+
+// GetCoreLevelNewer returns a CoreLevelNewer by name of log output writer.
+func GetCoreLevelNewer(name string) (CoreLevelNewer, bool) {
+	newer, ok := coreLevelNewers[name]
+	return newer, ok
+}
+
+// CoreLevelNewer is an interface that encapsulates the NewCoreLevel method.
+// This interface has higher precedence than the embedded CoreNewer interface.
+// To ensure a strong association between the returned core and level, users
+// are strongly advised to implement this interface.
+type CoreLevelNewer interface {
+	// NewCoreLevel produces a zapcore.Core and yields the corresponding zap.AtomicLevel
+	// from the OutputConfig.
+	// The returned zap.AtomicLevel is required to maintain an intrinsic link with the returned zapcore.Core,
+	// implying that any modifications to the returned zap.AtomicLevel will echo in the returned zapcore.Core,
+	// as opposed to generating a transient one using zapcore.LevelOf(core).
+	NewCoreLevel(config OutputConfig) (zapcore.Core, zap.AtomicLevel, error)
 }
 
 // ConsoleWriterFactory is the console writer instance.

@@ -1,8 +1,11 @@
 [English](README.md) | 中文
 
+# tRPC-Go 网络传输层
+
 ## 背景
 
-tRPC 框架间支持多种通信方式，如 tcp、udp 等。对于 udp 协议，一个 udp 包就对应一个 RPC 请求或回包。对于 tcp 这样的流式协议，就需要框架额外做分包处理。为了隔离不同网络协议间的差异，tRPC-Go 提供了 transport 抽象。
+tRPC 框架间支持多种通信方式，如 tcp、udp 等。对于 udp 协议，一个 udp 包就对应一个 RPC 请求或回包。对于 tcp 这样的流式协议，就需要框架额外做分包处理。
+为了隔离不同网络协议间的差异，tRPC-Go 提供了 transport 抽象。
 
 ## 原理
 
@@ -25,13 +28,14 @@ type ClientTransport interface {
 }
 ```
 
-`RoundTrip` 方法实现了请求的发送与接收。它支支持多种连接模式，如连接池、多路复用。支持高性能网络库 tnet。可以通过 [`RoundTripOptions`](client_roundtrip_options.go) 设置它们，比如：
+`RoundTrip` 方法实现了请求的发送与接收。它支持多种连接模式，如连接池、多路复用。支持高性能网络库 tnet。
+可以通过 [`RoundTripOptions`](client_roundtrip_options.go) 设置它们，比如：
 
 ```go
 rsp, err := transport.RoundTrip(ctx, req,
-	transport.WithDialNetwork("tcp"),
+    transport.WithDialNetwork("tcp"),
     transport.WithDialAddress(":8888"),
-	transport.WithMultiplexed(true))
+    transport.WithMultiplexed(true))
 ```
 
 ## ServerTransport
@@ -71,9 +75,9 @@ client stream transport 用了与普通 RPC transport 相同的 `RoundTripOption
 
 ```go
 type ServerStreamTransport interface {
-	ServerTransport
-	Send(ctx context.Context, req []byte) error
-	Close(ctx context.Context)
+    ServerTransport
+    Send(ctx context.Context, req []byte) error
+    Close(ctx context.Context)
 }
 ```
 
@@ -81,6 +85,7 @@ type ServerStreamTransport interface {
 
 ## 分包
 
-tRPC 的包都由帧头、包头、包体组成。在 server 收到请求和 client 收到回包时（流式请求也适用），需要对原始数据流分割成一个个请求，然后交给对应的处理逻辑。[`codec.FramerBuild`](/codec/framer_builder.go) 和 [`codec.Framer`](/codec/framer_builder.go) 就是用来对数据流进行分包的。
+tRPC 的包都由帧头、包头、包体组成。在 server 收到请求和 client 收到回包时（流式请求也适用），需要对原始数据流分割成一个个请求，然后交给对应的处理逻辑。
+[`codec.FramerBuild`](/codec/framer_builder.go) 和 [`codec.Framer`](/codec/framer_builder.go) 就是用来对数据流进行分包的。
 
 在 client 端，可以通过 [`WithClientFramerBuilder`](client_roundtrip_options.go) 设置 frame builder，在 server 端，可以通过 [`WithServerFramerBuilder`](server_listenserve_options.go) 设置。

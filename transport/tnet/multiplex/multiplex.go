@@ -1,20 +1,7 @@
-//
-//
-// Tencent is pleased to support the open source community by making tRPC available.
-//
-// Copyright (C) 2023 THL A29 Limited, a Tencent company.
-// All rights reserved.
-//
-// If you have downloaded a copy of the tRPC source code from Tencent,
-// please note that tRPC source code is licensed under the  Apache 2.0 License,
-// A copy of the Apache 2.0 License is included in this file.
-//
-//
-
 //go:build linux || freebsd || dragonfly || darwin
 // +build linux freebsd dragonfly darwin
 
-// Package multiplex implements a connection pool that supports connection multiplexing.
+// Package multiplexed implements a connection pool that supports connection multiplexing.
 package multiplex
 
 import (
@@ -26,10 +13,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/go-multierror"
 	"go.uber.org/atomic"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
 	"trpc.group/trpc-go/tnet"
+	"trpc.group/trpc-go/tnet/tls"
 
+	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/internal/queue"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/metrics"
@@ -37,16 +28,11 @@ import (
 	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
 )
 
-/*
-	Pool, host, connection all have lock.
-	The process of acquiring a lock during connection creation:
-		host.mu.Lock ----> connection.mu.Lock ----> connection.mu.Unlock ----> host.mu.Unlock
-	The process of acquiring a lock during connection closure:
-		host.mu.Lock ----> 	host.mu.Unlock ----> connection.mu.Lock ----> connection.mu.Unlock
-*/
-
 const (
-	defaultDialTimeout = 200 * time.Millisecond
+	defaultDialTimeout          = 200 * time.Millisecond
+	defaultConnNumberPerHost    = 2
+	defaultMaxPickConnRetries   = 100
+	defaultConcurrentDialGroups = 1 // Default to 1 for backward compatibility.
 )
 
 var (
@@ -56,15 +42,21 @@ var (
 	ErrDuplicateID = errors.New("request ID already exist")
 	// ErrInvalid indicates the operation is invalid.
 	ErrInvalid = errors.New("it's invalid")
+	// ErrExceedMaxRetries indicates the operation exceed the max retries of get a virtual connection
+	ErrExceedMaxRetries = errors.New("exceed max retires")
 
-	errTooManyVirConns = errors.New("the number of virtual connections exceeds the limit")
+	errTooManyVirtualConns  = errors.New("the number of virtual connections exceeds the limit")
+	errTooManyConcreteConns = errors.New("the number of concrete connections exceeds the limit")
+	errNoAvailableConn      = errors.New("there is no avilable connection")
 )
 
-// PoolOption represents some settings for the multiplex pool.
+// PoolOption represents some settings for the multiplexed pool.
 type PoolOption struct {
-	dialTimeout                  time.Duration
-	maxConcurrentVirConnsPerConn int
-	enableMetrics                bool
+	dialTimeout                      time.Duration
+	maxConcurrentVirtualConnsPerConn int
+	enableMetrics                    bool
+	connectNumberPerHost             int
+	concurrentDialGroups             int // Number of singleflight groups per host for concurrent dials.
 }
 
 // OptPool is function to modify PoolOption.
@@ -77,11 +69,11 @@ func WithDialTimeout(timeout time.Duration) OptPool {
 	}
 }
 
-// WithMaxConcurrentVirConnsPerConn returns an OptPool which sets the number
+// WithMaxConcurrentVirtualConnsPerConn returns an OptPool which sets the number
 // of concurrent virtual connections per connection.
-func WithMaxConcurrentVirConnsPerConn(max int) OptPool {
+func WithMaxConcurrentVirtualConnsPerConn(max int) OptPool {
 	return func(o *PoolOption) {
-		o.maxConcurrentVirConnsPerConn = max
+		o.maxConcurrentVirtualConnsPerConn = max
 	}
 }
 
@@ -92,10 +84,31 @@ func WithEnableMetrics() OptPool {
 	}
 }
 
-// NewPool creates a new multiplex pool, which uses dialFunc to dial new connections.
+// WithConnectNumber returns an Option which sets the number of connections for each peer in the multiplex pool
+// and this Option only takes effect when MaxConcurrentVirtualConnsPerConn is 0.
+func WithConnectNumber(number int) OptPool {
+	return func(o *PoolOption) {
+		o.connectNumberPerHost = number
+	}
+}
+
+// WithConcurrentDialGroupsPerHost returns an OptPool which sets the number of concurrent dial groups.
+// Higher values allow more parallel connections to be established to the same host.
+// Default is 3 groups.
+func WithConcurrentDialGroupsPerHost(n int) OptPool {
+	return func(o *PoolOption) {
+		if n > 0 {
+			o.concurrentDialGroups = n
+		}
+	}
+}
+
+// NewPool creates a new multiplexed pool, which uses dialFunc to dial new connections.
 func NewPool(dialFunc connpool.DialFunc, opt ...OptPool) multiplexed.Pool {
 	opts := &PoolOption{
-		dialTimeout: defaultDialTimeout,
+		dialTimeout:          defaultDialTimeout,
+		connectNumberPerHost: defaultConnNumberPerHost,
+		concurrentDialGroups: defaultConcurrentDialGroups, // Initialize with default.
 	}
 	for _, o := range opt {
 		o(opts)
@@ -103,8 +116,10 @@ func NewPool(dialFunc connpool.DialFunc, opt ...OptPool) multiplexed.Pool {
 	m := &pool{
 		dialFunc:                     dialFunc,
 		dialTimeout:                  opts.dialTimeout,
-		maxConcurrentVirConnsPerConn: opts.maxConcurrentVirConnsPerConn,
+		maxConcurrentVirConnsPerConn: opts.maxConcurrentVirtualConnsPerConn,
+		connectNumberPerHost:         opts.connectNumberPerHost,
 		hosts:                        make(map[string]*host),
+		concurrentDialGroups:         opts.concurrentDialGroups, // Store the option.
 	}
 	if opts.enableMetrics {
 		go m.metrics()
@@ -118,82 +133,107 @@ type pool struct {
 	dialFunc                     connpool.DialFunc
 	dialTimeout                  time.Duration
 	maxConcurrentVirConnsPerConn int
+	connectNumberPerHost         int
 	hosts                        map[string]*host // key is network+address
 	mu                           sync.RWMutex
+	concurrentDialGroups         int // Number of singleflight groups per host.
 }
 
-// GetMuxConn gets a multiplexing connection to the address on named network.
-// Multiple MuxConns can multiplex on a real connection.
-func (p *pool) GetMuxConn(
+// GetVirtualConn gets a virtual connection to the address on named network.
+// Multiple VirtualConns can multiplex on a real connection.
+func (p *pool) GetVirtualConn(
 	ctx context.Context,
 	network string,
 	address string,
 	opts multiplexed.GetOptions,
-) (multiplexed.MuxConn, error) {
-	if opts.FP == nil {
-		return nil, errors.New("frame parser is not provided")
+) (multiplexed.VirtualConn, error) {
+	if opts.FramerBuilder == nil {
+		return nil, errors.New("framer builder is not provided")
 	}
-	host := p.getHost(network, address, opts)
+	host, err := p.getHost(ctx, network, address, opts)
+	if err != nil {
+		return nil, err
+	}
 
 	// Rlock here to make sure that host has not been closed. If host is closed, rLock
 	// will return false. And it also avoids reading host.conns while it is being modified.
 	if !host.mu.rLock() {
 		return nil, ErrConnClosed
 	}
-	virConn, err := newVirConn(ctx, host.conns, opts.VID, isClosedOrFull)
-	if virConn != nil || err != nil {
-		host.mu.rUnlock()
-		return virConn, err
+	// Try to pick single concrete conn with read lock
+	conn, err := host.tryPickConn()
+	// If error occurred, retry below
+	if err == nil {
+		vc, err := conn.newVirtualConn(ctx, opts.Msg)
+		if err == nil {
+			host.mu.rUnlock()
+			return vc, nil
+		}
+		if !isClosedOrFull(err) {
+			// Possible request id is duplicated, return directly
+			host.mu.rUnlock()
+			return nil, err
+		}
+		// Connection closed or exceed maxVirtualConnsPerConn, retry below
 	}
 	host.mu.rUnlock()
 
-	for {
-		// Lock here to ensure that the connection being created is not missed when reading host.conns,
-		// because singleflightDial will lock host.mu before adding the new connection to host.conns asynchronously.
+	// If all concrete connections have reached their capacity for virtual connections, the
+	// subsequent loop will attempt to retry creating a virtual connection on the existing
+	// concrete connections or establish a new concrete connection and then construct a
+	// virtual connection on it.
+	for i := 0; i < defaultMaxPickConnRetries; i++ {
 		if !host.mu.lock() {
+			// All concrete connection closed
 			return nil, ErrConnClosed
 		}
-		virConn, err = newVirConn(ctx, host.conns, opts.VID, isClosedOrFull)
-		if virConn != nil || err != nil {
-			host.mu.unlock()
-			return virConn, err
-		}
-		// if all connections are closed or can't take more virtual connection, create one.
-		dialing := host.singleflightDial()
+		// Must single flight dial here to avoid concurrent dial
+		isNewConn, dialing := host.pickConn()
 		host.mu.unlock()
 
-		conn, err := waitDialing(ctx, dialing)
+		// Waiting dial result from single flight dial or old conn
+		conn, err := waitConcreteConn(ctx, dialing)
 		if err != nil {
 			return nil, err
 		}
-		// create new connection when the number of virtual connections exceeds the limit.
-		virConn, err = newVirConn(ctx, []*connection{conn}, opts.VID, isFull)
-		if virConn != nil || err != nil {
-			return virConn, err
+
+		vc, err := conn.newVirtualConn(ctx, opts.Msg)
+		if err == nil {
+			return vc, nil
 		}
+		if isClosed(err) && isNewConn {
+			// New connection but it's closed, possible dial failed.
+			return nil, err
+		}
+		if isFull(err) {
+			// Connection exceed maxVirtualConnsPerConn, retry
+			continue
+		}
+		return nil, err
 	}
+	return nil, ErrExceedMaxRetries
 }
 
-func (p *pool) getHost(network string, address string, opts multiplexed.GetOptions) *host {
+func (p *pool) getHost(ctx context.Context, network string, address string, opts multiplexed.GetOptions) (*host, error) {
 	hostName := strings.Join([]string{network, address}, "_")
 	p.mu.RLock()
 	if h, ok := p.hosts[hostName]; ok {
 		p.mu.RUnlock()
-		return h
+		return h, nil
 	}
 	p.mu.RUnlock()
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if h, ok := p.hosts[hostName]; ok {
-		return h
+		return h, nil
 	}
 	h := &host{
 		network:  network,
 		address:  address,
 		hostName: hostName,
 		dialOpts: dialOption{
-			fp:            opts.FP,
+			framerBuilder: opts.FramerBuilder,
 			localAddr:     opts.LocalAddr,
 			caCertFile:    opts.CACertFile,
 			tlsCertFile:   opts.TLSCertFile,
@@ -201,14 +241,33 @@ func (p *pool) getHost(network string, address string, opts multiplexed.GetOptio
 			tlsServerName: opts.TLSServerName,
 			dialTimeout:   p.dialTimeout,
 		},
-		dialFunc:                     p.dialFunc,
-		maxConcurrentVirConnsPerConn: p.maxConcurrentVirConnsPerConn,
+		dialFunc:                         p.dialFunc,
+		maxConcurrentVirtualConnsPerConn: p.maxConcurrentVirConnsPerConn,
+		connectNumberPerHost:             p.connectNumberPerHost,
+		conns:                            make([]*connection, 0, p.connectNumberPerHost),
+		dialGroups:                       make([]*singleflight.Group, p.concurrentDialGroups),
+	}
+
+	// Initialize separate singleflight groups.
+	for i := 0; i < p.concurrentDialGroups; i++ {
+		h.dialGroups[i] = &singleflight.Group{}
+	}
+
+	if h.maxConcurrentVirtualConnsPerConn == 0 {
+		h.pickConn = h.pickConnFixedConcrete
+		h.tryPickConn = h.tryPickConnFixedConcrete
+	} else {
+		h.pickConn = h.pickConnUnlimited
+		h.tryPickConn = h.tryPickConnUnlimited
 	}
 	h.deleteHostFromPool = func() {
 		p.deleteHost(h)
 	}
+	if err := h.initialize(ctx); err != nil {
+		return nil, err
+	}
 	p.hosts[hostName] = h
-	return h
+	return h, nil
 }
 
 func (p *pool) deleteHost(h *host) {
@@ -233,7 +292,7 @@ func (p *pool) metrics() {
 }
 
 type dialOption struct {
-	fp            multiplexed.FrameParser
+	framerBuilder codec.FramerBuilder
 	localAddr     string
 	dialTimeout   time.Duration
 	caCertFile    string
@@ -244,52 +303,69 @@ type dialOption struct {
 
 // host manages all connections to the same network and address.
 type host struct {
-	network                      string
-	address                      string
-	hostName                     string
-	dialOpts                     dialOption
-	dialFunc                     connpool.DialFunc
-	sfg                          singleflight.Group
-	deleteHostFromPool           func()
-	mu                           stateRWMutex
-	conns                        []*connection
-	maxConcurrentVirConnsPerConn int
+	network                          string
+	address                          string
+	hostName                         string
+	dialOpts                         dialOption
+	dialFunc                         connpool.DialFunc
+	dialGroups                       []*singleflight.Group // Multiple singleflight groups for concurrent dials.
+	dialGroupIndex                   atomic.Uint32         // For round-robin selection of dial groups.
+	deleteHostFromPool               func()
+	maxConcurrentVirtualConnsPerConn int
+	connectNumberPerHost             int
+	pickConn                         func() (bool, <-chan singleflight.Result)
+	tryPickConn                      func() (*connection, error)
+	// mu not only ensures the concurrency safety of conns but also guarantees
+	// the closure safety of host, which means when the host is triggered to close,
+	// it ensures that there are no ongoing additions of connections, and further
+	// additions of connections are not allowed.
+	mu              stateRWMutex
+	conns           []*connection
+	roundRobinIndex atomic.Uint32
 }
 
 func (h *host) singleflightDial() <-chan singleflight.Result {
-	ch := h.sfg.DoChan(h.hostName, func() (connection interface{}, err error) {
-		rawConn, err := h.dialFunc(&connpool.DialOptions{
-			Network:       h.network,
-			Address:       h.address,
-			Timeout:       h.dialOpts.dialTimeout,
-			LocalAddr:     h.dialOpts.localAddr,
-			CACertFile:    h.dialOpts.caCertFile,
-			TLSCertFile:   h.dialOpts.tlsCertFile,
-			TLSKeyFile:    h.dialOpts.tlsKeyFile,
-			TLSServerName: h.dialOpts.tlsServerName,
-		})
-		if err != nil {
-			return nil, err
-		}
-		defer func() {
-			if err != nil {
-				rawConn.Close()
-			}
-		}()
-		conn, err := h.wrapRawConn(rawConn, h.dialOpts.fp)
-		if err != nil {
-			return nil, err
-		}
-		// storeConn will call h.mu.Lock
-		if err := h.storeConn(conn); err != nil {
-			return nil, fmt.Errorf("store connection failed, %w", err)
-		}
-		return conn, nil
+	// Round-robin select a singleflight group.
+	idx := h.dialGroupIndex.Inc() % uint32(len(h.dialGroups))
+	group := h.dialGroups[idx]
+
+	// Use the selected group for this dial operation.
+	ch := group.DoChan(h.hostName, func() (connection interface{}, err error) {
+		return h.dial()
 	})
 	return ch
 }
 
-func waitDialing(ctx context.Context, dialing <-chan singleflight.Result) (*connection, error) {
+func (h *host) dial() (*connection, error) {
+	rawConn, err := h.dialFunc(&connpool.DialOptions{
+		Network:       h.network,
+		Address:       h.address,
+		Timeout:       h.dialOpts.dialTimeout,
+		LocalAddr:     h.dialOpts.localAddr,
+		CACertFile:    h.dialOpts.caCertFile,
+		TLSCertFile:   h.dialOpts.tlsCertFile,
+		TLSKeyFile:    h.dialOpts.tlsKeyFile,
+		TLSServerName: h.dialOpts.tlsServerName,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			rawConn.Close()
+		}
+	}()
+	conn, err := h.wrapRawConn(rawConn, h.dialOpts.framerBuilder)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.storeConn(conn); err != nil {
+		return nil, fmt.Errorf("store connection failed, %w", err)
+	}
+	return conn, nil
+}
+
+func waitConcreteConn(ctx context.Context, dialing <-chan singleflight.Result) (*connection, error) {
 	select {
 	case result := <-dialing:
 		return expandSFResult(result)
@@ -298,31 +374,46 @@ func waitDialing(ctx context.Context, dialing <-chan singleflight.Result) (*conn
 	}
 }
 
-func (h *host) wrapRawConn(rawConn net.Conn, fp multiplexed.FrameParser) (*connection, error) {
-	// TODO: support tls
-	tc, ok := rawConn.(tnet.Conn)
+func (h *host) wrapRawConn(rawConn net.Conn, builder codec.FramerBuilder) (*connection, error) {
+	framer := builder.New(rawConn)
+	decoder, ok := framer.(codec.Decoder)
 	if !ok {
-		return nil, errors.New("dialed connection must implements tnet.Conn")
+		return nil, errors.New("framer must implements codec.Decoder")
 	}
-
-	c := &connection{
-		rawConn:               tc,
-		fp:                    fp,
-		idToVirConn:           newShardMap(defaultShardSize),
-		maxConcurrentVirConns: h.maxConcurrentVirConnsPerConn,
+	conn := &connection{
+		decoder:                   decoder,
+		copyFrame:                 !codec.IsSafeFramer(framer),
+		idToVirtualConn:           newShardMap(defaultShardSize),
+		maxConcurrentVirtualConns: h.maxConcurrentVirtualConnsPerConn,
 	}
-	c.deleteConnFromHost = func() {
-		if isLastConn := h.deleteConn(c); isLastConn {
+	conn.deleteConnFromHost = func() {
+		if isLastConn := h.deleteConn(conn); isLastConn {
 			h.deleteHostFromPool()
 		}
 	}
-	// TODO: support closing idle connections
-	c.rawConn.SetOnRequest(c.onRequest)
-	c.rawConn.SetOnClosed(func(tnet.Conn) error {
-		c.close(ErrConnClosed)
-		return nil
-	})
-	return c, nil
+	switch c := rawConn.(type) {
+	case tnet.Conn:
+		conn.rawConn = c
+		c.SetOnRequest(func(tnet.Conn) error {
+			return conn.onRequest()
+		})
+		c.SetOnClosed(func(tnet.Conn) error {
+			conn.close(ErrConnClosed)
+			return nil
+		})
+	case tls.Conn:
+		conn.rawConn = c
+		c.SetOnRequest(func(tls.Conn) error {
+			return conn.onRequest()
+		})
+		c.SetOnClosed(func(tls.Conn) error {
+			conn.close(ErrConnClosed)
+			return nil
+		})
+	default:
+		return nil, fmt.Errorf("dialed connection type %T does't implements tnet.Conn or tnet/tls.Conn", c)
+	}
+	return conn, nil
 }
 
 func (h *host) loadAllConns() ([]*connection, error) {
@@ -363,16 +454,16 @@ func (h *host) metrics() {
 	if err != nil {
 		return
 	}
-	var virConnNum uint32
+	var virtualConnNum uint32
 	for _, conn := range conns {
-		virConnNum += conn.idToVirConn.length()
+		virtualConnNum += conn.idToVirtualConn.length()
 	}
 	metrics.Gauge(strings.Join([]string{"trpc.MuxConcurrentConnections", h.network, h.address}, ".")).
 		Set(float64(len(conns)))
 	metrics.Gauge(strings.Join([]string{"trpc.MuxConcurrentVirConns", h.network, h.address}, ".")).
-		Set(float64(virConnNum))
-	log.Debugf("tnet multiplex status: network: %s, address: %s, connections number: %d,"+
-		"concurrent virtual connection number: %d\n", h.network, h.address, len(conns), virConnNum)
+		Set(float64(virtualConnNum))
+	log.Debugf("tnet multiplexed status: network: %s, address: %s, connections number: %d,"+
+		"concurrent virtual connection number: %d\n", h.network, h.address, len(conns), virtualConnNum)
 }
 
 func expandSFResult(result singleflight.Result) (*connection, error) {
@@ -382,35 +473,126 @@ func expandSFResult(result singleflight.Result) (*connection, error) {
 	return result.Val.(*connection), nil
 }
 
-// connection wraps the underlying tnet.Conn, and manages many virtualConnections.
-type connection struct {
-	rawConn               tnet.Conn
-	deleteConnFromHost    func()
-	fp                    multiplexed.FrameParser
-	isClosed              atomic.Bool
-	mu                    stateRWMutex
-	idToVirConn           *shardMap
-	maxConcurrentVirConns int
+func (h *host) initialize(ctx context.Context) error {
+	// Waiting for connection dialing to avoid concurrent execution with GetVirtualConnection and initialize
+	waitCh := make(chan error, 1)
+	eg := errgroup.Group{}
+	for i := 0; i < h.connectNumberPerHost; i++ {
+		eg.Go(func() error {
+			_, err := h.dial()
+			return err
+		})
+	}
+	go func() {
+		waitCh <- eg.Wait()
+		close(waitCh)
+	}()
+	select {
+	case err := <-waitCh:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
-func (c *connection) onRequest(conn tnet.Conn) error {
-	vid, buf, err := c.fp.Parse(conn)
+func (h *host) pickConnFixedConcrete() (bool, <-chan singleflight.Result) {
+	index := h.roundRobinIndex.Inc() % uint32(h.connectNumberPerHost)
+	if index < uint32(len(h.conns)) {
+		ch := make(chan singleflight.Result, 1)
+		ch <- singleflight.Result{Val: h.conns[index], Err: nil}
+		return false, ch
+	}
+	return true, h.singleflightDial()
+}
+
+func (h *host) pickConnUnlimited() (bool, <-chan singleflight.Result) {
+	for _, c := range h.conns {
+		// Executed with rwlock of host, it is not very necessary to lock conn.
+		// If the state of conn changed, we can retry above.
+		if c.rawConn.IsActive() && c.canTakeNewVirtualConn() {
+			ch := make(chan singleflight.Result, 1)
+			ch <- singleflight.Result{Val: c, Err: nil}
+			return false, ch
+		}
+	}
+	return true, h.singleflightDial()
+}
+
+func (h *host) tryPickConnFixedConcrete() (*connection, error) {
+	// Executed with rlock of host
+	index := h.roundRobinIndex.Inc() % uint32(h.connectNumberPerHost)
+	if index < uint32(len(h.conns)) {
+		return h.conns[index], nil
+	}
+	return nil, errNoAvailableConn
+}
+
+func (h *host) tryPickConnUnlimited() (*connection, error) {
+	for _, c := range h.conns {
+		// Executed with rlock of host, it is not very necessary to lock conn.
+		// If the state of conn changed, we can retry above.
+		if c.rawConn.IsActive() && c.canTakeNewVirtualConn() {
+			return c, nil
+		}
+	}
+	return nil, errNoAvailableConn
+}
+
+type stateConn interface {
+	net.Conn
+	IsActive() bool
+}
+
+// connection wraps the underlying tnet.Conn, and manages many virtualConnections.
+type connection struct {
+	rawConn                   stateConn
+	deleteConnFromHost        func()
+	decoder                   codec.Decoder
+	copyFrame                 bool
+	isClosed                  atomic.Bool
+	maxConcurrentVirtualConns int
+
+	// mu not only ensures the concurrency safety of idToVirtualConn but
+	// also guarantees the closure safety of connection, which means when
+	// the connection is triggered to close, it ensures that there are no
+	// ongoing additions of virtual connections, and further additions of
+	// virtual connections are not allowed.
+	mu              stateRWMutex
+	idToVirtualConn *shardMap
+}
+
+func (c *connection) onRequest() error {
+	rsp, err := c.decoder.Decode()
 	if err != nil {
 		c.close(err)
 		return err
 	}
-	vc, ok := c.idToVirConn.load(vid)
-	// If the virConn corresponding to the id cannot be found,
-	// the virConn has been closed and the current response is discarded.
+	vc, ok := c.idToVirtualConn.load(rsp.GetRequestID())
+	// If the virtualConn corresponding to the id cannot be found,
+	// the virtualConn has been closed and the current response is discarded.
 	if !ok {
 		return nil
 	}
-	vc.recvQueue.Put(buf)
+	c.dispatch(rsp, vc)
 	return nil
 }
 
-func (c *connection) canTakeNewVirConn() bool {
-	return c.maxConcurrentVirConns == 0 || c.idToVirConn.length() < uint32(c.maxConcurrentVirConns)
+func (c *connection) canTakeNewVirtualConn() bool {
+	return c.maxConcurrentVirtualConns == 0 || c.idToVirtualConn.length() < uint32(c.maxConcurrentVirtualConns)
+}
+
+func (c *connection) dispatch(rsp codec.TransportResponseFrame, vc *virtualConnection) {
+	if err := c.decoder.UpdateMsg(rsp, vc.msg); err != nil {
+		vc.close(err)
+		return
+	}
+	rspBuf := rsp.GetResponseBuf()
+	if c.copyFrame {
+		copyBuf := make([]byte, len(rspBuf))
+		copy(copyBuf, rspBuf)
+		rspBuf = copyBuf
+	}
+	vc.recvQueue.Put(rspBuf)
 }
 
 func (c *connection) close(cause error) {
@@ -418,23 +600,23 @@ func (c *connection) close(cause error) {
 		return
 	}
 	c.deleteConnFromHost()
-	c.deleteAllVirConn(cause)
+	c.deleteAllVirtualConn(cause)
 	c.rawConn.Close()
 }
 
-func (c *connection) deleteAllVirConn(cause error) {
+func (c *connection) deleteAllVirtualConn(cause error) {
 	if !c.mu.lock() {
 		return
 	}
 	defer c.mu.unlock()
 	c.mu.closeLocked()
-	for _, vc := range c.idToVirConn.loadAll() {
+	for _, vc := range c.idToVirtualConn.loadAll() {
 		vc.notifyRead(cause)
 	}
-	c.idToVirConn.reset()
+	c.idToVirtualConn.reset()
 }
 
-func (c *connection) newVirConn(ctx context.Context, vid uint32) (*virtualConnection, error) {
+func (c *connection) newVirtualConn(ctx context.Context, msg codec.Msg) (*virtualConnection, error) {
 	if !c.mu.rLock() {
 		return nil, ErrConnClosed
 	}
@@ -442,27 +624,29 @@ func (c *connection) newVirConn(ctx context.Context, vid uint32) (*virtualConnec
 	if !c.rawConn.IsActive() {
 		return nil, ErrConnClosed
 	}
-	// CanTakeNewVirConn and loadOrStore are not atomic, which may cause
-	// the actual concurrent virConn numbers to exceed the limit max value.
+	// CanTakeNewVirtualConn and loadOrStore are not atomic, which may cause
+	// the actual concurrent virtualConn numbers to exceed the limit max value.
 	// Implementing atomic functions requires higher lock granularity,
 	// which affects performance.
-	if !c.canTakeNewVirConn() {
-		return nil, errTooManyVirConns
+	if !c.canTakeNewVirtualConn() {
+		return nil, errTooManyVirtualConns
 	}
+	id := msg.RequestID()
 	ctx, cancel := context.WithCancel(ctx)
 	vc := &virtualConnection{
 		ctx:        ctx,
-		id:         vid,
+		msg:        msg,
+		id:         id,
 		cancelFunc: cancel,
 		recvQueue:  queue.New[[]byte](ctx.Done()),
 		write:      c.rawConn.Write,
 		localAddr:  c.rawConn.LocalAddr(),
 		remoteAddr: c.rawConn.RemoteAddr(),
-		deleteVirConnFromConn: func() {
-			c.deleteVirConn(vid)
+		deleteVirtualConnFromConn: func() {
+			c.deleteVirtualConn(id)
 		},
 	}
-	_, loaded := c.idToVirConn.loadOrStore(vc.id, vc)
+	_, loaded := c.idToVirtualConn.loadOrStore(vc.id, vc)
 	if loaded {
 		cancel()
 		return nil, ErrDuplicateID
@@ -470,25 +654,26 @@ func (c *connection) newVirConn(ctx context.Context, vid uint32) (*virtualConnec
 	return vc, nil
 }
 
-func (c *connection) deleteVirConn(id uint32) {
-	c.idToVirConn.delete(id)
+func (c *connection) deleteVirtualConn(id uint32) {
+	c.idToVirtualConn.delete(id)
 }
 
 var (
-	_ multiplexed.MuxConn = (*virtualConnection)(nil)
+	_ multiplexed.VirtualConn = (*virtualConnection)(nil)
 )
 
 type virtualConnection struct {
-	write                 func(b []byte) (int, error)
-	deleteVirConnFromConn func()
-	recvQueue             *queue.Queue[[]byte]
-	err                   atomic.Error
-	ctx                   context.Context
-	cancelFunc            context.CancelFunc
-	id                    uint32
-	isClosed              atomic.Bool
-	localAddr             net.Addr
-	remoteAddr            net.Addr
+	write                     func(b []byte) (int, error)
+	deleteVirtualConnFromConn func()
+	recvQueue                 *queue.Queue[[]byte]
+	msg                       codec.Msg
+	err                       atomic.Error
+	ctx                       context.Context
+	cancelFunc                context.CancelFunc
+	id                        uint32
+	isClosed                  atomic.Bool
+	localAddr                 net.Addr
+	remoteAddr                net.Addr
 }
 
 // Write writes data to the connection.
@@ -507,11 +692,11 @@ func (vc *virtualConnection) Read() ([]byte, error) {
 	if vc.isClosed.Load() {
 		return nil, vc.wrapError(ErrConnClosed)
 	}
-	rsp, ok := vc.recvQueue.Get()
+	bts, ok := vc.recvQueue.Get()
 	if !ok {
 		return nil, vc.wrapError(errors.New("received data failed"))
 	}
-	return rsp, nil
+	return bts, nil
 }
 
 // Close closes the connection.
@@ -540,15 +725,15 @@ func (vc *virtualConnection) notifyRead(cause error) {
 
 func (vc *virtualConnection) close(cause error) {
 	vc.notifyRead(cause)
-	vc.deleteVirConnFromConn()
+	vc.deleteVirtualConnFromConn()
 }
 
 func (vc *virtualConnection) wrapError(err error) error {
 	if loaded := vc.err.Load(); loaded != nil {
-		return fmt.Errorf("%w, %s", err, loaded.Error())
+		return multierror.Append(err, loaded).ErrorOrNil()
 	}
 	if ctxErr := vc.ctx.Err(); ctxErr != nil {
-		return fmt.Errorf("%w, %s", err, ctxErr.Error())
+		return multierror.Append(err, ctxErr).ErrorOrNil()
 	}
 	return err
 }
@@ -567,29 +752,17 @@ func filterOutConn(in []*connection, exclude *connection) []*connection {
 	return out
 }
 
-func newVirConn(
-	ctx context.Context,
-	conns []*connection,
-	vid uint32,
-	isTolerable func(error) bool,
-) (*virtualConnection, error) {
-	for _, conn := range conns {
-		virConn, err := conn.newVirConn(ctx, vid)
-		if isTolerable(err) {
-			continue
-		}
-		return virConn, err
-	}
-	return nil, nil
-}
-
 func isClosedOrFull(err error) bool {
-	if err == ErrConnClosed || err == errTooManyVirConns {
+	if err == ErrConnClosed || err == errTooManyVirtualConns {
 		return true
 	}
 	return false
 }
 
+func isClosed(err error) bool {
+	return err == ErrConnClosed
+}
+
 func isFull(err error) bool {
-	return err == errTooManyVirConns
+	return err == errTooManyVirtualConns
 }

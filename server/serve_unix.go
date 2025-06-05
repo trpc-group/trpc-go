@@ -11,8 +11,8 @@
 //
 //
 
-//go:build !windows
-// +build !windows
+//go:build aix || darwin || dragonfly || freebsd || netbsd || openbsd || solaris || linux
+// +build aix darwin dragonfly freebsd netbsd openbsd solaris linux
 
 package server
 
@@ -25,16 +25,19 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-multierror"
+	"golang.org/x/sys/unix"
+	ierror "trpc.group/trpc-go/trpc-go/internal/error"
+	igr "trpc.group/trpc-go/trpc-go/internal/graceful"
 
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/transport"
 )
 
 // DefaultServerCloseSIG are signals that trigger server shutdown.
-var DefaultServerCloseSIG = []os.Signal{syscall.SIGINT, syscall.SIGTERM, syscall.SIGSEGV}
+var DefaultServerCloseSIG = []os.Signal{unix.SIGINT, unix.SIGTERM, unix.SIGSEGV}
 
 // DefaultServerGracefulSIG is signal that triggers server graceful restart.
-var DefaultServerGracefulSIG = syscall.SIGUSR2
+var DefaultServerGracefulSIG = unix.SIGUSR2
 
 // Serve implements Service, starting all services that belong to the server.
 func (s *Server) Serve() error {
@@ -57,7 +60,7 @@ func (s *Server) Serve() error {
 				mu.Unlock()
 				s.failedServices.Store(n, srv)
 				time.Sleep(time.Millisecond * 300)
-				s.signalCh <- syscall.SIGTERM
+				s.signalCh <- unix.SIGTERM
 			}
 		}(name, service)
 	}
@@ -70,30 +73,58 @@ func (s *Server) Serve() error {
 	}
 
 	// graceful restart.
-	if sig == DefaultServerGracefulSIG {
-		if _, err := s.StartNewProcess(); err != nil {
+	if sig == DefaultServerGracefulSIG && !s.disableGracefulRestart {
+		s.muxRestartHook.Lock()
+		for _, f := range s.beforeGracefulRestartHooks {
+			f()
+		}
+		s.muxRestartHook.Unlock()
+		if err := igr.Restart(prepareGracefulRestart()); err != nil {
 			panic(err)
 		}
+		s.tryClose(ierror.GracefulRestart)
+	} else {
+		s.tryClose(ierror.NormalShutdown)
 	}
-	// try to close server.
-	s.tryClose()
 
 	if err != nil {
 		log.Errorf(`service serve errors: %+v
 Note: it is normal to have "use of closed network connection" error during hot restart.
-DO NOT panic.`, err)
+DO NOT panic (Reference: internal issues/791).`, err)
 	}
 	return err
 }
 
 // StartNewProcess starts a new process.
+// Deprecated: This function has been deprecated and will be removed in a future version.
 func (s *Server) StartNewProcess(args ...string) (uintptr, error) {
 	pid := os.Getpid()
 	log.Infof("process: %d, received graceful restart signal, so restart the process", pid)
 
-	// pass tcp listeners' Fds and udp conn's Fds
-	listenersFds := transport.GetListenersFds()
+	fds := prepareGracefulRestart()
+	childPID, err := syscall.ForkExec(os.Args[0], append(os.Args, args...), &syscall.ProcAttr{
+		Env:   os.Environ(),
+		Files: fds,
+	})
+	if err != nil {
+		log.Errorf("process: %d, failed to forkexec with err: %s", pid, err.Error())
+		return 0, err
+	}
 
+	return uintptr(childPID), nil
+}
+
+// SetDisableGracefulRestart sets whether to disable graceful restart or not.
+// SetDisableGracefulRestart(true) will not clear gracefulRestartHooks.
+func (s *Server) SetDisableGracefulRestart(disable bool) {
+	s.muxRestartHook.Lock()
+	s.disableGracefulRestart = disable
+	s.muxRestartHook.Unlock()
+}
+
+func prepareGracefulRestart() []uintptr {
+	// Only tnet still uses this function to get listener fds.
+	listenersFds := transport.GetListenersFds()
 	files := []uintptr{os.Stdin.Fd(), os.Stdout.Fd(), os.Stderr.Fd()}
 
 	os.Setenv(transport.EnvGraceRestart, "1")
@@ -101,21 +132,7 @@ func (s *Server) StartNewProcess(args ...string) (uintptr, error) {
 	os.Setenv(transport.EnvGraceRestartFdNum, strconv.Itoa(len(listenersFds)))
 	os.Setenv(transport.EnvGraceRestartPPID, strconv.Itoa(os.Getpid()))
 
-	files = append(files, prepareListenFds(listenersFds)...)
-
-	execSpec := &syscall.ProcAttr{
-		Env:   os.Environ(),
-		Files: files,
-	}
-
-	os.Args = append(os.Args, args...)
-	childPID, err := syscall.ForkExec(os.Args[0], os.Args, execSpec)
-	if err != nil {
-		log.Errorf("process: %d, failed to forkexec with err: %s", pid, err.Error())
-		return 0, err
-	}
-
-	return uintptr(childPID), nil
+	return append(files, prepareListenFds(listenersFds)...)
 }
 
 func prepareListenFds(fds []*transport.ListenFd) []uintptr {

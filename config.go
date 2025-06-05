@@ -24,16 +24,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	yaml "gopkg.in/yaml.v3"
-	"trpc.group/trpc-go/trpc-go/internal/expandenv"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
-
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
-	"trpc.group/trpc-go/trpc-go/internal/rand"
+	"trpc.group/trpc-go/trpc-go/internal/expandenv"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
+	"trpc.group/trpc-go/trpc-go/internal/random"
+	"trpc.group/trpc-go/trpc-go/internal/scope"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"trpc.group/trpc-go/trpc-go/plugin"
 	"trpc.group/trpc-go/trpc-go/rpcz"
+
+	"gopkg.in/yaml.v3"
 )
 
 // ServerConfigPath is the file path of trpc server config file.
@@ -63,53 +65,103 @@ func serverConfigPath() string {
 // 3. Client config.
 // 4. Plugins config.
 type Config struct {
-	Global struct {
-		Namespace     string `yaml:"namespace"`      // Namespace for the configuration.
-		EnvName       string `yaml:"env_name"`       // Environment name.
-		ContainerName string `yaml:"container_name"` // Container name.
-		LocalIP       string `yaml:"local_ip"`       // Local IP address.
-		EnableSet     string `yaml:"enable_set"`     // Y/N. Whether to enable Set. Default is N.
-		// Full set name with the format: [set name].[set region].[set group name].
-		FullSetName string `yaml:"full_set_name"`
-		// Size of the read buffer in bytes. <=0 means read buffer disabled. Default value will be used if not set.
-		ReadBufferSize *int `yaml:"read_buffer_size,omitempty"`
+	Global  GlobalCfg     `yaml:"global,omitempty"`  // Global configuration.
+	Server  ServerConfig  `yaml:"server,omitempty"`  // Server configuration.
+	Client  ClientConfig  `yaml:"client,omitempty"`  // Client configuration.
+	Plugins plugin.Config `yaml:"plugins,omitempty"` // Plugins configuration.
+}
+
+// GlobalCfg is the global configuration.
+type GlobalCfg struct {
+	Namespace     string `yaml:"namespace,omitempty"`      // Namespace for the configuration.
+	EnvName       string `yaml:"env_name,omitempty"`       // Environment name.
+	ContainerName string `yaml:"container_name,omitempty"` // Container name.
+	LocalIP       string `yaml:"local_ip,omitempty"`       // Local IP address.
+	EnableSet     string `yaml:"enable_set,omitempty"`     // Y/N. Whether to enable Set. Default is N.
+	// Full set name with the format: [set name].[set region].[set group name].
+	FullSetName string `yaml:"full_set_name,omitempty"`
+	// Size of the read buffer in bytes. <=0 means read buffer disabled. Default value will be used if not set.
+	ReadBufferSize *int `yaml:"read_buffer_size,omitempty"`
+	// MaxFrameSize is the maximum frame size (in bytes) set for both the client and server.
+	// The default value is 10485760 (10MB).
+	MaxFrameSize *int `yaml:"max_frame_size,omitempty"`
+	// PluginSetupTimeout is the setup timeout for each plugin, default 3 seconds.
+	PluginSetupTimeout *time.Duration `yaml:"plugin_setup_timeout,omitempty"`
+	// UpdateDataGOMAXPROCSInterval periodically update GOMAXPROCS.
+	// For more details, see https://git.woa.com/trpc-go/trpc-go/issues/891.
+	UpdateGOMAXPROCSInterval *time.Duration `yaml:"update_gomaxprocs_interval,omitempty"`
+	// RoundUpCPUQuota provides the option to enable rounding up the CPU quota. Default is false.
+	// 'go.uber.org/automaxprocs/maxprocs' library introduces round up option
+	// to improve CPU utilization on non-integer number of cores.
+	// For more details, see https://github.com/uber-go/automaxprocs/issues/78.
+	RoundUpCPUQuota bool `yaml:"round_up_cpu_quota,omitempty"`
+	// DisableGracefulRestart determines whether to disable graceful restart.
+	// For more details, see https://git.woa.com/trpc-go/trpc-go/issues/1015.
+	DisableGracefulRestart bool `yaml:"disable_graceful_restart,omitempty"`
+}
+
+// ServerConfig is the configuration for trpc server.
+type ServerConfig struct {
+	App       string      `yaml:"app,omitempty"`       // Application name.
+	Server    string      `yaml:"server,omitempty"`    // Server name.
+	BinPath   string      `yaml:"bin_path,omitempty"`  // Binary file path.
+	DataPath  string      `yaml:"data_path,omitempty"` // Data file path.
+	ConfPath  string      `yaml:"conf_path,omitempty"` // Configuration file path.
+	Admin     AdminConfig `yaml:"admin,omitempty"`     // Admin configuration.
+	Transport string      `yaml:"transport,omitempty"` // Transport type.
+	Network   string      `yaml:"network,omitempty"`   // Network type for all services. Default is tcp.
+	Protocol  string      `yaml:"protocol,omitempty"`  // Protocol type for all services. Default is trpc.
+
+	// CurrentSerializationType specifies the current serialization type.
+	// It's often used for transparent proxy without serialization.
+	// If current serialization type is not set, serialization type will be determined by
+	// serialization field of request protocol.
+	CurrentSerializationType *int `yaml:"current_serialization_type,omitempty"`
+	// CurrentCompressType specifies the current compress type.
+	CurrentCompressType *int `yaml:"current_compress_type,omitempty"`
+
+	Filter            []string         `yaml:"filter,omitempty"`             // Filters for all services.
+	StreamFilter      []string         `yaml:"stream_filter,omitempty"`      // Stream filters for all services.
+	Service           []*ServiceConfig `yaml:"service,omitempty"`            // Configuration for each individual service.
+	ReflectionService string           `yaml:"reflection_service,omitempty"` // Specify a Service as a reflection service.
+	// Minimum waiting time in milliseconds when closing the server to wait for deregister finish.
+	CloseWaitTime int `yaml:"close_wait_time,omitempty"`
+	// Maximum waiting time in milliseconds when closing the server to wait for requests to finish.
+	MaxCloseWaitTime int `yaml:"max_close_wait_time,omitempty"`
+	Timeout          int `yaml:"timeout,omitempty"` // Timeout in milliseconds.
+
+	// Overload control is the server global configuration for trpc-overload-control.
+	OverloadCtrl overloadctrl.Impl `yaml:"overload_ctrl,omitempty"`
+}
+
+// UnmarshalYAML implements yaml.Unmarshaler.
+// It mainly deals with overload control configuration.
+func (cfg *ServerConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type tmp ServerConfig
+	if err := unmarshal((*tmp)(cfg)); err != nil {
+		return err
 	}
-	Server struct {
-		App      string `yaml:"app"`       // Application name.
-		Server   string `yaml:"server"`    // Server name.
-		BinPath  string `yaml:"bin_path"`  // Binary file path.
-		DataPath string `yaml:"data_path"` // Data file path.
-		ConfPath string `yaml:"conf_path"` // Configuration file path.
-		Admin    struct {
-			IP           string      `yaml:"ip"`            // NIC IP to bind, e.g., 127.0.0.1.
-			Nic          string      `yaml:"nic"`           // NIC to bind.
-			Port         uint16      `yaml:"port"`          // Port to bind, e.g., 80. Default is 9028.
-			ReadTimeout  int         `yaml:"read_timeout"`  // Read timeout in milliseconds for admin HTTP server.
-			WriteTimeout int         `yaml:"write_timeout"` // Write timeout in milliseconds for admin HTTP server.
-			EnableTLS    bool        `yaml:"enable_tls"`    // Whether to enable TLS.
-			RPCZ         *RPCZConfig `yaml:"rpcz"`          // RPCZ configuration.
-		}
-		Transport    string           `yaml:"transport"`     // Transport type.
-		Network      string           `yaml:"network"`       // Network type for all services. Default is tcp.
-		Protocol     string           `yaml:"protocol"`      // Protocol type for all services. Default is trpc.
-		Filter       []string         `yaml:"filter"`        // Filters for all services.
-		StreamFilter []string         `yaml:"stream_filter"` // Stream filters for all services.
-		Service      []*ServiceConfig `yaml:"service"`       // Configuration for each individual service.
-		// Minimum waiting time in milliseconds when closing the server to wait for deregister finish.
-		CloseWaitTime int `yaml:"close_wait_time"`
-		// Maximum waiting time in milliseconds when closing the server to wait for requests to finish.
-		MaxCloseWaitTime int `yaml:"max_close_wait_time"`
-		Timeout          int `yaml:"timeout"` // Timeout in milliseconds.
-	}
-	Client  ClientConfig  `yaml:"client"`  // Client configuration.
-	Plugins plugin.Config `yaml:"plugins"` // Plugins configuration.
+	return cfg.OverloadCtrl.Build(overloadctrl.GetServer, &overloadctrl.ServiceMethodInfo{
+		MethodName: overloadctrl.AnyMethod,
+	})
+}
+
+// AdminConfig is the configuration for admin.
+type AdminConfig struct {
+	IP           string      `yaml:"ip,omitempty"`            // NIC IP to bind, e.g., 127.0.0.1.
+	Nic          string      `yaml:"nic,omitempty"`           // NIC to bind.
+	Port         uint16      `yaml:"port,omitempty"`          // Port to bind, e.g., 80. Default is 9028.
+	ReadTimeout  int         `yaml:"read_timeout,omitempty"`  // Read timeout in milliseconds for admin HTTP server.
+	WriteTimeout int         `yaml:"write_timeout,omitempty"` // Write timeout in milliseconds for admin HTTP server.
+	EnableTLS    bool        `yaml:"enable_tls,omitempty"`    // Whether to enable TLS.
+	RPCZ         *RPCZConfig `yaml:"rpcz,omitempty"`          // RPCZ configuration.
 }
 
 // RPCZConfig is the config for rpcz.GlobalRPCZ, and is a field of Config.Admin.
 type RPCZConfig struct {
-	Fraction   float64           `yaml:"fraction"`
-	Capacity   uint32            `yaml:"capacity"`
-	RecordWhen *RecordWhenConfig `yaml:"record_when"`
+	Fraction   float64           `yaml:"fraction,omitempty"`
+	Capacity   uint32            `yaml:"capacity,omitempty"`
+	RecordWhen *RecordWhenConfig `yaml:"record_when,omitempty"`
 }
 
 func (c *RPCZConfig) generate() *rpcz.Config {
@@ -163,19 +215,19 @@ var kindToNode = map[nodeKind]func() node{
 	kindHasAttributes:    func() node { return &hasAttributeNode{} },
 }
 
-var kinds = func() []nodeKind {
-	ks := make([]nodeKind, 0, len(kindToNode))
+func formatKindToNode(kindToNode map[nodeKind]func() node) string {
+	ks := make([]string, 0, len(kindToNode))
 	for k := range kindToNode {
-		ks = append(ks, k)
+		ks = append(ks, string(k))
 	}
-	return ks
-}()
+	return "[\"" + strings.Join(ks, "\", \"") + "\"]"
+}
 
 func generate(k nodeKind) (node, error) {
 	if fn, ok := kindToNode[k]; ok {
 		return fn(), nil
 	}
-	return nil, fmt.Errorf("unknown node: %s, valid node must be one of %v", k, kinds)
+	return nil, fmt.Errorf("unknown node: %s, valid node must be one of %v", k, formatKindToNode(kindToNode))
 }
 
 type shouldRecorder interface {
@@ -444,7 +496,7 @@ type samplingFractionNode struct {
 	recorder
 }
 
-var safeRand = rand.NewSafeRand(time.Now().UnixNano())
+var safeRand = random.New()
 
 func (n *samplingFractionNode) UnmarshalYAML(node *yaml.Node) error {
 	var f float64
@@ -462,7 +514,7 @@ type errorCodeNode struct {
 }
 
 func (n *errorCodeNode) UnmarshalYAML(node *yaml.Node) error {
-	var code trpcpb.TrpcRetCode
+	var code int
 	if err := node.Decode(&code); err != nil {
 		return fmt.Errorf("decoding errorCodeNode: %w", err)
 	}
@@ -509,50 +561,95 @@ func extractError(span rpcz.Span) (error, bool) {
 // ServiceConfig is a configuration for a single service. A server process might have multiple services.
 type ServiceConfig struct {
 	// Disable request timeout inherited from upstream service.
-	DisableRequestTimeout bool   `yaml:"disable_request_timeout"`
-	IP                    string `yaml:"ip"` // IP address to listen to.
+	DisableRequestTimeout bool   `yaml:"disable_request_timeout,omitempty"`
+	IP                    string `yaml:"ip,omitempty"` // IP address to listen to.
 	// Service name in the format: trpc.app.server.service. Used for naming the service.
-	Name string `yaml:"name"`
-	Nic  string `yaml:"nic"`  // Network Interface Card (NIC) to listen to. No need to configure.
-	Port uint16 `yaml:"port"` // Port to listen to.
+	Name string `yaml:"name,omitempty"`
+	Nic  string `yaml:"nic,omitempty"`  // Network Interface Card (NIC) to listen to. No need to configure.
+	Port uint16 `yaml:"port,omitempty"` // Port to listen to.
 	// Address to listen to. If set, ipport will be ignored. Otherwise, ipport will be used.
-	Address  string `yaml:"address"`
-	Network  string `yaml:"network"`  // Network type like tcp/udp.
-	Protocol string `yaml:"protocol"` // Protocol type like trpc.
+	Address  string `yaml:"address,omitempty"`
+	Network  string `yaml:"network,omitempty"`  // Network type like tcp/udp.
+	Protocol string `yaml:"protocol,omitempty"` // Protocol type like trpc.
+
+	// CurrentSerializationType specifies the current serialization type.
+	// It's often used for transparent proxy without serialization.
+	// If current serialization type is not set, serialization type will be determined by
+	// serialization field of request protocol.
+	CurrentSerializationType *int `yaml:"current_serialization_type,omitempty"`
+	// CurrentCompressType specifies the current compress type.
+	CurrentCompressType *int `yaml:"current_compress_type,omitempty"`
+
 	// Longest time in milliseconds for a handler to handle a request.
-	Timeout int `yaml:"timeout"`
-	// Maximum idle time in milliseconds for a server connection. Default is 1 minute.
-	Idletime          int      `yaml:"idletime"`
-	DisableKeepAlives bool     `yaml:"disable_keep_alives"`    // Disables keep-alives.
-	Registry          string   `yaml:"registry"`               // Registry to use, e.g., polaris.
-	Filter            []string `yaml:"filter"`                 // Filters for the service.
-	StreamFilter      []string `yaml:"stream_filter"`          // Stream filters for the service.
-	TLSKey            string   `yaml:"tls_key"`                // Server TLS key.
-	TLSCert           string   `yaml:"tls_cert"`               // Server TLS certificate.
-	CACert            string   `yaml:"ca_cert"`                // CA certificate to validate client certificate.
-	ServerAsync       *bool    `yaml:"server_async,omitempty"` // Whether to enable server asynchronous mode.
+	Timeout int `yaml:"timeout,omitempty"`
+
+	// ReadTimeout specifies the maximum duration in milliseconds for reading a request
+	// from a client connection in this service.
+	//
+	// If not set, the read timeout will default to the same value as the idle timeout.
+	//
+	// It is important to distinguish between "timeout" and "read_timeout":
+	//  - timeout: the maximum duration allowed for a handler to process a request.
+	//  - read_timeout: the maximum duration allowed for reading a request from a client connection.
+	//
+	// As for the difference between "read_timeout" and "idletime":
+	// Under the current implementation, if read_timeout is reached but idletime is not,
+	// the server will attempt to read requests from the connection again. This means the reading process
+	// is interrupted by the read timeout at regular intervals, and the connection is only closed if the
+	// idle timeout is reached.
+	//
+	// By default, read_timeout is set to the idletime's default value, which is 60 seconds.
+	// This extended duration can cause the graceful restart process to seem sluggish.
+	// However, setting read_timeout to a smaller value might lead to the server closing the client
+	// connection prematurely, potentially resulting in the client receiving errors
+	// such as error code 141.
+	ReadTimeout int `yaml:"read_timeout,omitempty"`
+
+	Method map[string]*ServiceMethodConfig `yaml:"method,omitempty"`
+
+	// Maximum idle time in milliseconds for a server connection. Default is 60000 (1 minute).
+	Idletime          int      `yaml:"idletime,omitempty"`
+	DisableKeepAlives bool     `yaml:"disable_keep_alives,omitempty"` // Disables keep-alives.
+	Registry          string   `yaml:"registry,omitempty"`            // Registry to use, e.g., polaris.
+	Filter            []string `yaml:"filter,omitempty"`              // Filters for the service.
+	StreamFilter      []string `yaml:"stream_filter,omitempty"`       // Stream filters for the service.
+	TLSKey            string   `yaml:"tls_key,omitempty"`             // Server TLS key.
+	TLSCert           string   `yaml:"tls_cert,omitempty"`            // Server TLS certificate.
+	CACert            string   `yaml:"ca_cert,omitempty"`             // CA certificate to validate client certificate.
+	ServerAsync       *bool    `yaml:"server_async,omitempty"`        // Whether to enable server asynchronous mode.
 	// MaxRoutines is the maximum number of goroutines for server asynchronous mode.
 	// Requests exceeding MaxRoutines will be queued. Prolonged overages may lead to OOM!
 	// MaxRoutines is not the solution to alleviate server overloading.
-	MaxRoutines int    `yaml:"max_routines"`
-	Writev      *bool  `yaml:"writev,omitempty"` // Whether to enable writev.
-	Transport   string `yaml:"transport"`        // Transport type.
+	MaxRoutines int    `yaml:"max_routines,omitempty"`
+	Writev      *bool  `yaml:"writev,omitempty"`    // Whether to enable writev.
+	Transport   string `yaml:"transport,omitempty"` // Transport type.
+
+	OverloadCtrl overloadctrl.Impl `yaml:"overload_ctrl,omitempty"` // Overload control.
+	// For compatibility with the old version. Only the first element will be used if not empty.
+	OverloadCtrls []string `yaml:"overload_ctrls,omitempty"`
+}
+
+// ServiceMethodConfig is the configuration for method.
+type ServiceMethodConfig struct {
+	Timeout *int `yaml:"timeout,omitempty"` // ms
 }
 
 // ClientConfig is the configuration for the client to request backends.
 type ClientConfig struct {
-	Network        string                  `yaml:"network"`        // Network for all backends. Default is tcp.
-	Protocol       string                  `yaml:"protocol"`       // Protocol for all backends. Default is trpc.
-	Filter         []string                `yaml:"filter"`         // Filters for all backends.
-	StreamFilter   []string                `yaml:"stream_filter"`  // Stream filters for all backends.
-	Namespace      string                  `yaml:"namespace"`      // Namespace for all backends.
-	Transport      string                  `yaml:"transport"`      // Transport type.
-	Timeout        int                     `yaml:"timeout"`        // Timeout in milliseconds.
-	Discovery      string                  `yaml:"discovery"`      // Discovery mechanism.
-	ServiceRouter  string                  `yaml:"servicerouter"`  // Service router.
-	Loadbalance    string                  `yaml:"loadbalance"`    // Load balancing algorithm.
-	Circuitbreaker string                  `yaml:"circuitbreaker"` // Circuit breaker configuration.
-	Service        []*client.BackendConfig `yaml:"service"`        // Configuration for each individual backend.
+	Network         string                  `yaml:"network,omitempty"`          // Network for all backends. Default is tcp.
+	Protocol        string                  `yaml:"protocol,omitempty"`         // Protocol for all backends. Default is trpc.
+	Filter          []string                `yaml:"filter,omitempty"`           // Filters for all backends.
+	StreamFilter    []string                `yaml:"stream_filter,omitempty"`    // Stream filters for all backends.
+	Namespace       string                  `yaml:"namespace,omitempty"`        // Callee Namespace for all backends.
+	CallerNamespace string                  `yaml:"caller_namespace,omitempty"` // Caller Namespace of current service.
+	Transport       string                  `yaml:"transport,omitempty"`        // Transport type.
+	Timeout         int                     `yaml:"timeout,omitempty"`          // Timeout in milliseconds.
+	Discovery       string                  `yaml:"discovery,omitempty"`        // Discovery mechanism.
+	ServiceRouter   string                  `yaml:"servicerouter,omitempty"`    // Service router.
+	Loadbalance     string                  `yaml:"loadbalance,omitempty"`      // Load balancing algorithm.
+	Circuitbreaker  string                  `yaml:"circuitbreaker,omitempty"`   // Circuit breaker configuration.
+	Scope           scope.Scope             `yaml:"scope,omitempty"`            // Scope is the current scope of the global client.
+	Service         []*client.BackendConfig `yaml:"service,omitempty"`          // Configuration for each individual backend.
 }
 
 // trpc server config, set after the framework setup and the yaml config file is parsed.
@@ -565,10 +662,10 @@ func init() {
 func defaultConfig() *Config {
 	cfg := &Config{}
 	cfg.Global.EnableSet = "N"
-	cfg.Server.Network = "tcp"
-	cfg.Server.Protocol = "trpc"
-	cfg.Client.Network = "tcp"
-	cfg.Client.Protocol = "trpc"
+	cfg.Server.Network = protocol.TCP
+	cfg.Server.Protocol = protocol.TRPC
+	cfg.Client.Network = protocol.TCP
+	cfg.Client.Protocol = protocol.TRPC
 	return cfg
 }
 
@@ -609,6 +706,7 @@ func parseConfigFromFile(configPath string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	cfg := defaultConfig()
 	if err := yaml.Unmarshal(expandenv.ExpandEnv(buf), cfg); err != nil {
 		return nil, err
@@ -624,6 +722,12 @@ func Setup(cfg *Config) error {
 	if err := SetupClients(&cfg.Client); err != nil {
 		return err
 	}
+	// notify that plugins' setup is done
+	// since client config is not yet registered when plugins are set up, it is better not to use client within plugin
+	// setup. Options are preferred than client config if client must be used. plugin.WaitForDone should be called
+	// async to use client after plugins' setup done, by the plugin which needs to use client to send requests and
+	// relies on client config during its setup.
+	plugin.SetupFinished()
 	return nil
 }
 
@@ -656,6 +760,7 @@ func SetupClients(cfg *ClientConfig) error {
 			ServiceRouter:  cfg.ServiceRouter,
 			Loadbalance:    cfg.Loadbalance,
 			Circuitbreaker: cfg.Circuitbreaker,
+			Scope:          cfg.Scope,
 		}); err != nil {
 			return err
 		}
@@ -665,10 +770,6 @@ func SetupClients(cfg *ClientConfig) error {
 
 // RepairConfig repairs the Config by filling in some fields with default values.
 func RepairConfig(cfg *Config) error {
-	// nic -> ip
-	if err := repairServiceIPWithNic(cfg); err != nil {
-		return err
-	}
 	// set default read buffer size
 	if cfg.Global.ReadBufferSize == nil {
 		readerSize := codec.DefaultReaderSize
@@ -686,7 +787,6 @@ func RepairConfig(cfg *Config) error {
 	const defaultIP = "0.0.0.0"
 	setDefault(&cfg.Global.LocalIP, defaultIP)
 	setDefault(&cfg.Server.Admin.IP, cfg.Global.LocalIP)
-
 	// protocol network ip empty
 	for _, serviceCfg := range cfg.Server.Service {
 		setDefault(&serviceCfg.Protocol, cfg.Server.Protocol)
@@ -694,6 +794,13 @@ func RepairConfig(cfg *Config) error {
 		setDefault(&serviceCfg.IP, cfg.Global.LocalIP)
 		setDefault(&serviceCfg.Transport, cfg.Server.Transport)
 		setDefault(&serviceCfg.Address, net.JoinHostPort(serviceCfg.IP, strconv.Itoa(int(serviceCfg.Port))))
+
+		if cfg.Server.CurrentSerializationType != nil && serviceCfg.CurrentSerializationType == nil {
+			serviceCfg.CurrentSerializationType = cfg.Server.CurrentSerializationType
+		}
+		if cfg.Server.CurrentCompressType != nil && serviceCfg.CurrentCompressType == nil {
+			serviceCfg.CurrentCompressType = cfg.Server.CurrentCompressType
+		}
 
 		// server async mode by default
 		if serviceCfg.ServerAsync == nil {
@@ -708,17 +815,27 @@ func RepairConfig(cfg *Config) error {
 		if serviceCfg.Timeout == 0 {
 			serviceCfg.Timeout = cfg.Server.Timeout
 		}
+		// If service overload control is not provided, use the server overload control by default.
+		if serviceCfg.OverloadCtrl.Builder == "" {
+			serviceCfg.OverloadCtrl = cfg.Server.OverloadCtrl
+		}
 		if serviceCfg.Idletime == 0 {
 			serviceCfg.Idletime = defaultIdleTimeout
 			if serviceCfg.Timeout > defaultIdleTimeout {
 				serviceCfg.Idletime = serviceCfg.Timeout
 			}
 		}
+		if serviceCfg.ReadTimeout == 0 {
+			serviceCfg.ReadTimeout = serviceCfg.Idletime
+		}
 	}
 
+	// If client callee namespace is not provided, use the global namespace by default.
 	setDefault(&cfg.Client.Namespace, cfg.Global.Namespace)
+	// If client caller namespace is not provided, use the global namespace by default, too.
+	setDefault(&cfg.Client.CallerNamespace, cfg.Global.Namespace)
 	for _, backendCfg := range cfg.Client.Service {
-		repairClientConfig(backendCfg, &cfg.Client)
+		repairClientConfig(backendCfg, &cfg.Client, cfg.Global.LocalIP)
 	}
 	return nil
 }
@@ -727,7 +844,7 @@ func RepairConfig(cfg *Config) error {
 func repairServiceIPWithNic(cfg *Config) error {
 	for index, item := range cfg.Server.Service {
 		if item.IP == "" {
-			ip := getIP(item.Nic)
+			ip := GetIP(item.Nic)
 			if ip == "" && item.Nic != "" {
 				return fmt.Errorf("can't find service IP by the NIC: %s", item.Nic)
 			}
@@ -737,7 +854,7 @@ func repairServiceIPWithNic(cfg *Config) error {
 	}
 
 	if cfg.Server.Admin.IP == "" {
-		ip := getIP(cfg.Server.Admin.Nic)
+		ip := GetIP(cfg.Server.Admin.Nic)
 		if ip == "" && cfg.Server.Admin.Nic != "" {
 			return fmt.Errorf("can't find admin IP by the NIC: %s", cfg.Server.Admin.Nic)
 		}
@@ -746,16 +863,19 @@ func repairServiceIPWithNic(cfg *Config) error {
 	return nil
 }
 
-func repairClientConfig(backendCfg *client.BackendConfig, clientCfg *ClientConfig) {
+func repairClientConfig(backendCfg *client.BackendConfig, clientCfg *ClientConfig, localIP string) {
 	// service name in proto file will be used as key for backend config by default
 	// generally, service name in proto file is the same as the backend service name.
 	// therefore, no need to config backend service name
 	setDefault(&backendCfg.Callee, backendCfg.ServiceName)
 	setDefault(&backendCfg.ServiceName, backendCfg.Callee)
 	setDefault(&backendCfg.Namespace, clientCfg.Namespace)
+	setDefault(&backendCfg.CallerNamespace, clientCfg.CallerNamespace)
 	setDefault(&backendCfg.Network, clientCfg.Network)
 	setDefault(&backendCfg.Protocol, clientCfg.Protocol)
 	setDefault(&backendCfg.Transport, clientCfg.Transport)
+	setDefault(&backendCfg.Scope, clientCfg.Scope)
+	setDefault(&backendCfg.LocalIP, localIP)
 	if backendCfg.Target == "" {
 		setDefault(&backendCfg.Discovery, clientCfg.Discovery)
 		setDefault(&backendCfg.ServiceRouter, clientCfg.ServiceRouter)
@@ -766,13 +886,13 @@ func repairClientConfig(backendCfg *client.BackendConfig, clientCfg *ClientConfi
 		backendCfg.Timeout = clientCfg.Timeout
 	}
 	// Global filter is at front and is deduplicated.
-	backendCfg.Filter = deduplicate(clientCfg.Filter, backendCfg.Filter)
-	backendCfg.StreamFilter = deduplicate(clientCfg.StreamFilter, backendCfg.StreamFilter)
+	backendCfg.Filter = Deduplicate(clientCfg.Filter, backendCfg.Filter)
+	backendCfg.StreamFilter = Deduplicate(clientCfg.StreamFilter, backendCfg.StreamFilter)
 }
 
 // getMillisecond returns time.Duration by the input value in milliseconds.
-func getMillisecond(sec int) time.Duration {
-	return time.Millisecond * time.Duration(sec)
+func getMillisecond(ms int) time.Duration {
+	return time.Millisecond * time.Duration(ms)
 }
 
 // setDefault points dst to def if dst is not nil and points to empty string.
@@ -780,4 +900,29 @@ func setDefault(dst *string, def string) {
 	if dst != nil && *dst == "" {
 		*dst = def
 	}
+}
+
+// UnmarshalYAML implements yaml.Unmarshaler.
+// Used for compatibility of the field overload_ctrls.
+func (cfg *ServiceConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type tmp ServiceConfig
+	if err := unmarshal((*tmp)(cfg)); err != nil {
+		return err
+	}
+
+	// ensure compatibility
+	if len(cfg.OverloadCtrls) > 1 {
+		return errors.New("multiple overload controllers are not supported any more")
+	}
+	if len(cfg.OverloadCtrls) == 1 && cfg.OverloadCtrl.Builder != "" {
+		return errors.New("both overload_ctrl and overload_ctrls are set")
+	}
+	if len(cfg.OverloadCtrls) == 1 {
+		cfg.OverloadCtrl.Builder = cfg.OverloadCtrls[0]
+	}
+
+	return cfg.OverloadCtrl.Build(overloadctrl.GetServer, &overloadctrl.ServiceMethodInfo{
+		ServiceName: cfg.Name,
+		MethodName:  overloadctrl.AnyMethod,
+	})
 }

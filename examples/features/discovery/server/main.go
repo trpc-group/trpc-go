@@ -19,13 +19,13 @@ import (
 	"fmt"
 	"log"
 
-	trpc "trpc.group/trpc-go/trpc-go"
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	"trpc.group/trpc-go/trpc-go"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 func main() {
 	s := trpc.NewServer()
-	pb.RegisterGreeterService(s, &impl{})
+	pb.RegisterGreeterService(s.Service("trpc.examples.discovery.Discovery"), &impl{})
 	if err := s.Serve(); err != nil {
 		fmt.Println(err)
 	}

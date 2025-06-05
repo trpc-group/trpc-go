@@ -20,6 +20,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestProvider(t *testing.T) {
@@ -33,10 +34,11 @@ func TestProvider(t *testing.T) {
 	// watch
 	cb := func(path string, data []byte) {}
 	p.Watch(cb)
-	os.WriteFile("../testdata/trpc_go.yaml", buf, 664)
+	require.Nil(t, os.WriteFile("../testdata/trpc_go.yaml", buf, 664))
 
 	p.disabledWatcher = true
-	p.watcher.Close()
+	require.Nil(t, p.watcher.Close())
+
 	_, err = p.Read("../testdata/trpc_go.yaml1")
 	assert.NotNil(t, err)
 }
@@ -57,8 +59,12 @@ func TestIsModified(t *testing.T) {
 	assert.Zero(t, got)
 	assert.False(t, ok)
 
-	os.WriteFile(filename, []byte("test"), 664)
-	defer os.Remove(filename)
+	require.Nil(t, os.WriteFile(filename, []byte("test"), 664))
+	t.Cleanup(func() {
+		if err := os.Remove(filename); err != nil {
+			t.Log(err)
+		}
+	})
 	got, ok = p.isModified(fsnotify.Event{Op: fsnotify.Write, Name: filename})
 	assert.NotZero(t, got)
 	assert.True(t, ok)

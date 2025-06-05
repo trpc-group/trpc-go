@@ -1,3 +1,5 @@
+[TOC]
+
 English | [中文](README.zh_CN.md)
 
 # RPCZ
@@ -18,6 +20,7 @@ type Event struct {
     Time time.Time
 }
 ```
+
 In a normal RPC call, a series of events will occur, for example, the Client side of the request is sent in chronological order, and generally the following series of events will occur.
 
 1. start running the pre-interceptor
@@ -74,7 +77,7 @@ There are two types of Span in rpcz:
 
 - client-Span: describes the actions of the client during the interval from the start of the request to the receipt of the reply (covering the series of events on the client side described in the previous section Event).
 - server-Span: describes the operation of the server from the time it starts receiving requests to the time it finishes sending replies (covers the series of events on the server side described in the previous section Event).
-  When server-Span runs a user-defined processing function, it may create a client to call a downstream service, so server-Span will contain several sub-client-Span.
+   When server-Span runs a user-defined processing function, it may create a client to call a downstream service, so server-Span will contain several sub-client-Span.
 
 ```
 server-Span
@@ -131,17 +134,37 @@ So "RPCZ" refers to various types of RPCs, and this does hold true from a distri
 
 The term "RPCZ" first came from Google's internal RPC framework Stubby, based on which Google implemented a similar function in the open source grpc channelz [8], which not only includes information about various channels, but also covers trace information.
 After that, Baidu's open source brpc implemented a non-distributed trace tool based on the distributed trace system Dapper paper [9] published by google, imitating channelz named brpc-rpcz [10].
-The next step is that users need a tool similar to brpc-rpcz for debugging and optimization in tRPC, so tRPC-Cpp first supports similar functionality, still keeping the name RPCZ.
+The next step is that users need a tool similar to brpc-rpcz for debugging and optimization in tRPC, so tRPC-Cpp first supports similar functionality [11, 12], still keeping the name RPCZ.
 
-The last thing is to support similar functionality to "RPCZ" in tRPC-Go. During the implementation process, it was found that with the development of distributed tracing systems, open source systems of opentracing [11] and opentelemetry [12] emerged in the community.
+The last thing is to support similar functionality to "RPCZ" in tRPC-Go. During the implementation process, it was found that with the development of distributed tracing systems, open source systems of opentracing [13] and opentelemetry [14] emerged in the community, and the company also made tianji pavilion [15] internally.
 tRPC-Go-RPCZ partially borrows the go language implementation of opentelemetry-trace for span and event design, and can be considered as a trace system inside the tRPC-Go framework.
 Strictly speaking, tRPC-Go-RPCZ is non-distributed, because there is no communication between the different services at the protocol level.
 Now it seems that brpc, tRPC-Cpp and the tRPC-Go implementation of rpcz, named spanz, might be more in line with the original meaning of the suffix "-z".
 
-
 ## How to configure rpcz
 
 The configuration of rpcz includes basic configuration, advanced configuration and code configuration, see `config_test.go` for more configuration examples.
+
+For custom transports, in addition to configuring rpcz, you also need to inject spans.
+The following example shows how to first create a root span named 'client' in a custom client transport, and then create a child span named 'SendMessage' from that span.
+
+```go
+type ClientTransport struct {}
+func (ct *ClientTransport) RoundTrip( ctx context.Context, reqBody []byte, callOpts ...transport.RoundTripOption) (rspBody []byte, err error) {
+    span, end, ctx := rpcz.NewSpanContext(ctx, "client")
+    defer func() {
+        span.SetAttribute(rpcz.TRPCAttributeError, err)
+        end.End()
+    }()
+    
+    _, end = span.NewChild("SendMessage")
+    // Write data to connection.
+    err = c.tcpWriteFrame(ctx, conn, reqData)
+    end.End()
+    
+    ...
+}
+```
 
 ### Supporting for different tRPC-GO versions
 
@@ -182,15 +205,15 @@ Only Spans that are sampled before both creation and commit will eventually be c
 
 | Sampled before Span creation? | Sampled before Span commit? | Will the Span eventually be collected? |
 |:------------------------------|:---------------------------:|:--------------------------------------:|
-| true                          |            true             |                  true                  | 
-| true                          |            false            |                 false                  | 
-| false                         |            true             |                 false                  | 
-| false                         |            false            |                 false                  | 
+| true                          |            true             |                  true                  |
+| true                          |            false            |                 false                  |
+| false                         |            true             |                 false                  |
+| false                         |            false            |                 false                  |
 
 ##### Sampling before Span creation
 
 Span is created only when it is sampled, otherwise it is not created, which avoids a series of subsequent operations on Span and thus reduces the performance overhead to a large extent.
-The sampling policy with fixed sampling rate [13] has only one configurable floating-point parameter `rpcz.fraction`, for example, `rpcz.fraction` is 0.0001, which means one request is sampled for every 10000 (1/0.0001) requests.
+The sampling policy with fixed sampling rate [16, 17] has only one configurable floating-point parameter `rpcz.fraction`, for example, `rpcz.fraction` is 0.0001, which means one request is sampled for every 10000 (1/0.0001) requests.
 When `rpcz.fraction` is less than 0, it is fetched up by 0. When `rpcz.fraction` is greater than 1, it is fetched down by 1.
 
 ##### Sampling before Span commit
@@ -199,26 +222,43 @@ Spans that have been created will record all kinds of information in the rpc, bu
 In this case, it is necessary to sample only the Span that you needs before the Span is finally committed.
 rpcz provides a flexible external interface that allows you to set the `rpcz.record_when` field in the configuration file to customize the sampling logic before the service is started.
 "record_when" provides three common boolean operations: "AND", "OR", and "NOT",
-as well as seven basic operations that return boolean values: "__min_request_size", "__min_response_size", "__error_code", "__error_message", "__rpc_name", "__min_duration", and "__has_attribute". It should be noted that "record_when" itself is an "AND" operation.
+as well as eight basic operations that return boolean values: "__min_request_size", "__min_response_size", "__error_code", "__error_message", "__rpc_name", "__min_duration", "__has_attribute"  and "__sampling_fraction".
+It should be noted that "record_when" itself is an "AND" operation.
 By combining these operations in any way, you can flexibly filter out the Spans of interest.
 
 ```yaml
-server:
+server:  # server configuration.
   admin:
-    rpcz:
-      record_when:
-        error_codes: [0,]      
-        min_duration: 1000ms # ms or s
-        sampling_fraction: 1 # [0.0, 1.0]
+    ip: 127.0.0.1  # ip.
+    port: 9528  # default: 9028.
+    rpcz:  # tool that monitors the running state of RPC, recording various things that happen in a rpc.
+      fraction: 0.0  # sample rate, 0.0 <= fraction <= 1.0. default value is 0.
+      record_when: #  record_when is actually an AND operation
+        - AND:
+            - __min_request_size: 30  # record span whose request_size is greater than__min_request_size in bytes.
+            - __min_response_size: 40  # record span whose response_size is greater than __min_response_size in bytes.
+        - OR:
+            - __error_code: 1  # record span whose error codes is 1.
+            - __error_code: 2  # record span whose error codes is  2.
+            - __error_message: "unknown" # record span whose error messages contain  "unknown".
+            - __error_message: "not found" # record span whose error messages contain  "not found".
+        - NOT: {__rpc_name: "/trpc.app.server.service/method1"}  # record span whose RPCName doesn't contain __rpc_name.
+        - NOT: # record span whose RPCName doesn't contain "/trpc.app.server.service/method2, or "/trpc.app.server.service/method3".
+            OR:
+              - __rpc_name: "/trpc.app.server.service/method2"
+              - __rpc_name: "/trpc.app.server.service/method3"
+        - __min_duration: 1000ms  # record span whose duration is greater than __min_duration.
+        # record span that has the attribute: name1, and name1's value contains "value1"
+        # valid attribute form: (key, value) only one space character after comma character, and key can't contain comma(',') character.
+        - __has_attribute:  (name1, value1)
+        # record span that has the attribute: name2, and name2's value contains "value2".
+        - __has_attribute:  (name2, value2)
+        - __sampling_fraction: 1.0 # [0, 1], default value is 1.
 ```
-
-- `error_codes`: Only sample spans containing any of these error codes, e.g. 0(RetOk), 21(RetServerTimeout).
-- `min_duration`: Only sample spans that last longer than `min_duration`, which can be used for time-consuming analysis.
-- `sampling_fraction`: The sampling rate, in the range of `[0, 1]`.
 
 #### Example of configuration
 
-##### Submitting the span that contains error code 1 (RetServerDecodeFail), the error message contains the string "unknown", and the duration is greater than 1 second.
+##### Submitting the span that contains error code 1 (RetServerDecodeFail), the error message contains the string "unknown", and the duration is greater than 1 second
 
 ```yaml
 server:
@@ -233,7 +273,6 @@ server:
         - __min_duration: 1000ms
         - __sampling_fraction: 1         
 ```
-
 
 Note: "record_when" itself is an "AND" node, and it can also be written in the following ways:
 
@@ -291,7 +330,7 @@ server:
             - __sampling_fraction: 1         
 ```
 
-##### Submitting the span that contains error code 1 (RetServerDecodeFail) or 21 (RetServerTimeout), or the duration is greater than 2 seconds with a probability of 1/2.
+##### Submitting the span that contains error code 1 (RetServerDecodeFail) or 21 (RetServerTimeout), or the duration is greater than 2 seconds with a probability of 1/2
 
 ```yaml
 server:
@@ -303,13 +342,13 @@ server:
       capacity: 10000
       record_when:
         - OR:
-            - error_code: 1
-            - error_code: 21
-            - min_duration: 2s
+            - __error_code: 1
+            - __error_code: 21
+            - __min_duration: 2s
         - __sampling_fraction: 0.5      
 ```
 
-##### Submitting the span that has a duration greater than 10 seconds, contains the string "TDXA/Transfer" in the rpc name, and the error message does not contain the string "pseudo".
+##### Submitting the span that has a duration greater than 10 seconds, contains the string "TDXA/Transfer" in the rpc name, and the error message does not contain the string "pseudo"
 
 ```yaml
 server:
@@ -336,17 +375,17 @@ After reading the configuration file and before the service starts, rpcz can be 
 type ShouldRecord = func(Span) bool
 ```
 
-##### commits only for Span containing the "SpecialAttribute" attribute
+#### commits only for Span containing the "SpecialAttribute" attribute
 
 ```go
 const attributeName = "SpecialAttribute"
 rpcz.GlobalRPCZ = rpcz.NewRPCZ(&rpcz.Config{
-Fraction: 1.0,
-Capacity: 1000,
-ShouldRecord: func(s rpcz.Span) bool {
-_, ok = s.Attribute(attributeName)
-return ok
-},
+    Fraction: 1.0,
+    Capacity: 1000,
+    ShouldRecord: func(s rpcz.Span) bool {
+        _, ok = s.Attribute(attributeName)
+        return ok
+    },
 })
 ```
 
@@ -358,19 +397,19 @@ To query the summary information of the last num span, you can access the follow
 http://ip:port/cmds/rpcz/spans?num=xxx
 ```
 
-For example, executing `curl http://ip:port/cmds/rpcz/spans?num=2` will return the summary information for 2 spans as follows.
+For example, executing `curl "http://ip:port/cmds/rpcz/spans?num=2"` will return the summary information for 2 spans as follows.
 
 ```html
 1:
-span: (client, 65744150616107367)
-time: (Dec 1 20:57:43.946627, Dec 1 20:57:43.946947)
-duration: (0, 319.792µs, 0)
-attributes: (RPCName, /trpc.testing.end2end.TestTRPC/EmptyCall), (Error, <nil>)
-  2:
+  span: (client, 65744150616107367)
+    time: (Dec 1 20:57:43.946627, Dec 1 20:57:43.946947)
+    duration: (0, 319.792µs, 0)
+    attributes: (RPCName, /trpc.testing.end2end.TestTRPC/EmptyCall), (Error, <nil>)
+2:
   span: (server, 1844470940819923952)
-  time: (Dec 1 20:57:43.946677, Dec 1 20:57:43.946912)
-  duration: (0, 235.5µs, 0)
-  attributes: (RequestSize, 125),(ResponseSize, 18),(RPCName, /trpc.testing.end2end.TestTRPC/EmptyCall),(Error, success)
+    time: (Dec 1 20:57:43.946677, Dec 1 20:57:43.946912)
+    duration: (0, 235.5µs, 0)
+    attributes: (RequestSize, 125),(ResponseSize, 18),(RPCName, /trpc.testing.end2end.TestTRPC/EmptyCall),(Error, success)
 ```
 
 The summary information for each span matches the following template.
@@ -414,9 +453,9 @@ To query the details of a span containing an id, you can access the following ur
 http://ip:port/cmds/rpcz/spans/{id}
 ```
 
-For example, execute `curl http://ip:port/cmds/rpcz/spans/6673650005084645130` to query the details of a span with the span id 6673650005084645130.
+For example, execute `curl "http://ip:port/cmds/rpcz/spans/6673650005084645130"` to query the details of a span with the span id 6673650005084645130.
 
-```
+```log
 span: (server, 6673650005084645130)
   time: (Dec  2 10:43:55.295935, Dec  2 10:43:55.399262)
   duration: (0, 103.326ms, 0)
@@ -561,7 +600,7 @@ A new `event` field has been added to the span details, along with an embedded s
 
 Note that the values of middleDur and postDur in endTime, duration may be ``unknown'', for example, the above span contains the following subspan.
 
-```
+```log
 span: (sleep, 6673650005084645130)
 time: (Dec 2 10:43:55.297876, unknown)
 duration: (1.698709ms, unknown, unknown)
@@ -574,18 +613,18 @@ You can call `rpcz.SpanFromContext`[^2] to get the current `Span` in the `contex
 
 ```go
 type Span interface {
-// AddEvent adds an event.
-AddEvent(name string)
+    // AddEvent adds an event.
+    AddEvent(name string)
 
-// SetAttribute sets Attribute with (name, value).
-SetAttribute(name string, value interface{})
+    // SetAttribute sets Attribute with (name, value).
+    SetAttribute(name string, value interface{})
 
-// ID returns SpanID.
-ID() SpanID
+    // ID returns SpanID.
+    ID() SpanID
 
-// NewChild creates a child span from current span.
-// Ender ends this span if related operation is completed. 
-NewChild(name string) (Span, Ender)
+    // NewChild creates a child span from current span.
+    // Ender ends this span if related operation is completed. 
+    NewChild(name string) (Span, Ender)
 }
 ```
 
@@ -629,16 +668,20 @@ end.End()
 
 ## Reference
 
-- [1] https://en.wikipedia.org/wiki/Event_(UML)
-- [2] https://en.wikipedia.org/wiki/Event_(computing)
-- [3] https://opentelemetry.io/docs/instrumentation/go/manual/#events
-- [4] https://opentelemetry.io/docs/instrumentation/go/api/tracing/#starting-and-ending-a-span
-- [5] https://opentelemetry.io/docs/concepts/observability-primer/#spans
-- [6] span-id represented as an 8-byte array, satisfying the w3c trace-context specification. https://www.w3.org/TR/trace-context/#parent-id
-- [7] https://en.wiktionary.org/wiki/-z#English
-- [8] https://github.com/grpc/proposal/blob/master/A14-channelz.md
-- [9] Dapper, a Large-Scale Distributed Systems Tracing Infrastructure: http://static.googleusercontent.com/media/research.google.com/en// pubs/archive/36356.pdf
-- [10] brpc-rpcz: https://github.com/apache/incubator-brpc/blob/master/docs/cn/rpcz.md
-- [11] opentracing: https://opentracing.io/
-- [12] opentelemetry: https://opentelemetry.io/
-- [13] open-telemetry-sdk-go-traceIDRatioSampler: https://github.com/open-telemetry/opentelemetry-go/blob/main/sdk/trace/sampling.go
+- [1] <https://en.wikipedia.org/wiki/Event_(UML)>
+- [2] <https://en.wikipedia.org/wiki/Event_(computing)>
+- [3] <https://opentelemetry.io/docs/instrumentation/go/manual/#events>
+- [4] <https://opentelemetry.io/docs/instrumentation/go/api/tracing/#starting-and-ending-a-span>
+- [5] <https://opentelemetry.io/docs/concepts/observability-primer/#spans>
+- [6] span-id represented as an 8-byte array, satisfying the w3c trace-context specification. <https://www.w3.org/TR/trace-context/#parent-id>
+- [7] <https://en.wiktionary.org/wiki/-z#English>
+- [8] <https://github.com/grpc/proposal/blob/master/A14-channelz.md>
+- [9] Dapper, a Large-Scale Distributed Systems Tracing Infrastructure: <http://static.googleusercontent.com/media/research.google.com/en//> pubs/archive/36356.pdf
+- [10] brpc-rpcz: <https://github.com/apache/incubator-brpc/blob/master/docs/cn/rpcz.md>
+- [11] tRPC-Cpp rpcz wiki. todo
+- [12] tRPC-Cpp rpcz proposal. <https://git.woa.com/trpc/trpc-proposal/blob/master/L17-cpp-rpcz.md>
+- [13] opentracing: <https://opentracing.io/>
+- [14] opentelemetry: <https://opentelemetry.io/>
+- [15] <https://tpstelemetry.pages.woa.com/>
+- [16] open-telemetry 2.0-sdk-go: <https://git.woa.com/opentelemetry/opentelemetry-go-ecosystem/blob/master/sdk/trace/dyeing_sampler.go>
+- [17] open-telemetry-sdk-go- traceIDRatioSampler: <https://github.com/open-telemetry/opentelemetry-go/blob/main/sdk/trace/sampling.go>

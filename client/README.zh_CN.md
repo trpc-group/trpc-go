@@ -2,7 +2,6 @@
 
 # tRPC-Go Client 模块
 
-
 ## 背景
 
 客户端通过桩代码发起 RPC 请求，请求会经过框架的 client 模块，进行服务发现，执行拦截器，序列化，压缩等，最后通过 transport 模块发送到网络中；而接收到网络响应后，会执行解压缩，反序列化，执行拦截器，最终返回响应给用户。client 模块中的每个步骤都是可以自定义的，用户可以自定义服务发现方式，自定义拦截器，自定义序列化和压缩等。
@@ -46,17 +45,17 @@ rsp, err := proxy.Hello(
 
 ```yaml
 client: # 客户端配置
-  timeout: 1000 # 所有请求最长处理时间(ms)
+  timeout: 1000 # 所有请求最长处理时间 (ms)
   namespace: Development # 所有请求服务端的环境
   filter: # 所有请求的拦截器
     - debuglog # 使用 debuglog 打印具体请求和响应数据
   service: # 请求特定服务端的配置
     - callee: trpc.test.helloworld.Greeter # 请求服务端协议文件的 service name, 如果 callee 和下面的 name 一样，那只需要配置其中之一即可
       name: trpc.test.helloworld.Greeter1 # 请求服务名字路由的 service name
-      target: ip://127.0.0.1:8000 # 服务端地址，如果 name 可以直接用作服务发现，则可以不用配置，例如 ip://ip:port， polaris://servicename
+      target: ip://127.0.0.1:8000 # 服务端地址，如果 name 可以直接用作服务发现，则可以不用配置，例如 ip://ip:port，polaris://servicename
       network: tcp # 请求的网络类型 tcp udp
       protocol: trpc # 应用层协议 trpc http
-      timeout: 800 # 请求超时时间(ms)
+      timeout: 800 # 请求超时时间 (ms)
       serialization: 0 # 序列化方式 0-pb 2-json 3-flatbuffer，默认不用配置
       compression: 1 # 压缩方式 1-gzip 2-snappy 3-zlib，默认不用配置
 ```
@@ -92,7 +91,7 @@ client:
 
 而通过类似 `redis.NewClientProxy("trpc.a.b.c")` 等（包括 database 下面所有插件以及 http）生成的 client，默认 service name 就是用户自己输入的字符串，所以 client 寻找配置时**以 NewClientProxy 的输入参数为 key**（即以上的 `trpc.a.b.c`）来匹配
 
-同时，框架还支持了同时以 `callee` 及 `name` 为 key 来寻找配置，比如以下两个客户端配置共享了相同的 `callee`, 但是 `name` 不同:
+同时，框架还支持了同时以 `callee` 及 `name` 为 key 来寻找配置，比如以下两个客户端配置共享了相同的 `callee`, 但是 `name` 不同：
 
 ```yaml
 client:

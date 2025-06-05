@@ -17,16 +17,16 @@ package main
 import (
 	"context"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/log"
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 func main() {
 	// Create a server and register service.
 	s := trpc.NewServer()
-	pb.RegisterGreeterService(s, &greeterServiceImpl{})
+	pb.RegisterGreeterService(s.Service("trpc.test.helloworld.Greeter"), &greeterServiceImpl{})
 
 	// Start serving.
 	if err := s.Serve(); err != nil {
@@ -41,7 +41,7 @@ type greeterServiceImpl struct{}
 func (s *greeterServiceImpl) SayHello(ctx context.Context, req *pb.HelloRequest) (*pb.HelloReply, error) {
 	rsp := &pb.HelloReply{}
 
-	log.Debugf("SayHello recv req:%s", req)
+	log.Debugf("SayHello recv req: %s", req)
 
 	// We can get the specified key-value through GetMetaData api.
 	// If there is not the key-value, nil will be returned.
@@ -58,7 +58,7 @@ func (s *greeterServiceImpl) SayHello(ctx context.Context, req *pb.HelloRequest)
 func (s *greeterServiceImpl) SayHi(ctx context.Context, req *pb.HelloRequest) (*pb.HelloReply, error) {
 	rsp := &pb.HelloReply{}
 
-	log.Debugf("SayHi recv req:%s", req)
+	log.Debugf("SayHi recv req: %s", req)
 
 	// Get all key-value pairs of metadata by for-range.
 	msg := codec.Message(ctx)

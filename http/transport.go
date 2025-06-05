@@ -26,10 +26,8 @@ import (
 	"io"
 	"net"
 	"net/http"
-	stdhttp "net/http"
 	"net/http/httptrace"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,13 +35,17 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
-	icontext "trpc.group/trpc-go/trpc-go/internal/context"
-	"trpc.group/trpc-go/trpc-go/internal/reuseport"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	icodec "trpc.group/trpc-go/trpc-go/internal/codec"
+	icontext "trpc.group/trpc-go/trpc-go/internal/context"
+	igr "trpc.group/trpc-go/trpc-go/internal/graceful"
+	"trpc.group/trpc-go/trpc-go/internal/http/fastop"
+	inet "trpc.group/trpc-go/trpc-go/internal/net"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
+	"trpc.group/trpc-go/trpc-go/internal/rpczenable"
 	itls "trpc.group/trpc-go/trpc-go/internal/tls"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/rpcz"
@@ -51,51 +53,65 @@ import (
 )
 
 func init() {
-	st := NewServerTransport(func() *stdhttp.Server { return &stdhttp.Server{} })
-	DefaultServerTransport = st
-	DefaultHTTP2ServerTransport = st
 	// Server transport (protocol file service).
-	transport.RegisterServerTransport("http", st)
-	transport.RegisterServerTransport("http2", st)
+	transport.RegisterServerTransport(protocol.HTTP, DefaultServerTransport)
+	transport.RegisterServerTransport(protocol.HTTPS, DefaultHTTPSServerTransport)
+	transport.RegisterServerTransport(protocol.HTTP2, DefaultHTTP2ServerTransport)
 	// Server transport (no protocol file service).
-	transport.RegisterServerTransport("http_no_protocol", st)
-	transport.RegisterServerTransport("http2_no_protocol", st)
+	transport.RegisterServerTransport(protocol.HTTPNoProtocol, DefaultServerTransport)
+	transport.RegisterServerTransport(protocol.HTTPSNoProtocol, DefaultHTTPSServerTransport)
+	transport.RegisterServerTransport(protocol.HTTP2NoProtocol, DefaultHTTP2ServerTransport)
 	// Client transport.
-	transport.RegisterClientTransport("http", DefaultClientTransport)
-	transport.RegisterClientTransport("http2", DefaultHTTP2ClientTransport)
+	transport.RegisterClientTransport(protocol.HTTP, DefaultClientTransport)
+	transport.RegisterClientTransport(protocol.HTTPS, DefaultHTTPSClientTransport)
+	transport.RegisterClientTransport(protocol.HTTP2, DefaultHTTP2ClientTransport)
 }
 
 // DefaultServerTransport is the default server http transport.
-var DefaultServerTransport transport.ServerTransport
+var DefaultServerTransport = NewServerTransport(transport.WithReusePort(true))
+
+// DefaultHTTPSServerTransport is the default server https transport.
+var DefaultHTTPSServerTransport = makeServerHTTPSExplicit(NewServerTransport(transport.WithReusePort(true)))
 
 // DefaultHTTP2ServerTransport is the default server http2 transport.
-var DefaultHTTP2ServerTransport transport.ServerTransport
+var DefaultHTTP2ServerTransport = NewServerTransport(transport.WithReusePort(true))
 
 // ServerTransport is the http transport layer.
 type ServerTransport struct {
-	newServer func() *stdhttp.Server
-	reusePort bool
-	enableH2C bool
+	Server        *http.Server // Support external configuration.
+	opts          *transport.ServerTransportOptions
+	explicitHTTPS bool
 }
 
-// NewServerTransport creates a new ServerTransport which implement transport.ServerTransport.
-// The parameter newStdHttpServer is used to create the underlying stdhttp.Server when ListenAndServe, and that server
-// is modified by opts of this function and ListenAndServe.
-func NewServerTransport(
-	newStdHttpServer func() *stdhttp.Server,
-	opts ...OptServerTransport,
-) *ServerTransport {
-	st := ServerTransport{newServer: newStdHttpServer}
-	for _, opt := range opts {
-		opt(&st)
+func makeServerHTTPSExplicit(t transport.ServerTransport) transport.ServerTransport {
+	s, ok := t.(*ServerTransport)
+	if !ok {
+		panic(fmt.Sprintf("makeServerHTTPSExplicit expects %T, got %T", (*ServerTransport)(nil), t))
 	}
-	return &st
+	s.explicitHTTPS = true
+	return s
+}
+
+// NewServerTransport creates http transport.
+// The default idle time is set 1 min in config.go,
+// which can be customized through ServerTransportOption.
+func NewServerTransport(opt ...transport.ServerTransportOption) transport.ServerTransport {
+	opts := &transport.ServerTransportOptions{}
+
+	// Write func options to field opts.
+	for _, o := range opt {
+		o(opts)
+	}
+	s := &ServerTransport{
+		opts: opts,
+	}
+	return s
 }
 
 // ListenAndServe handles configuration.
 func (t *ServerTransport) ListenAndServe(ctx context.Context, opt ...transport.ListenServeOption) error {
 	opts := &transport.ListenServeOptions{
-		Network: "tcp",
+		Network: protocol.TCP,
 	}
 	for _, o := range opt {
 		o(opts)
@@ -110,7 +126,7 @@ var emptyBuf []byte
 
 func (t *ServerTransport) listenAndServeHTTP(ctx context.Context, opts *transport.ListenServeOptions) error {
 	// All trpc-go http server transport only register this http.Handler.
-	serveFunc := func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	serveFunc := func(w http.ResponseWriter, r *http.Request) {
 		h := &Header{Request: r, Response: w}
 		ctx := WithHeader(r.Context(), h)
 
@@ -126,25 +142,33 @@ func (t *ServerTransport) listenAndServeHTTP(ctx context.Context, opts *transpor
 			}
 		}()
 
-		span, ender, ctx := rpcz.NewSpanContext(ctx, "http-server")
-		defer ender.End()
-		span.SetAttribute(rpcz.HTTPAttributeURL, r.URL)
-		span.SetAttribute(rpcz.HTTPAttributeRequestContentLength, r.ContentLength)
+		var (
+			span  rpcz.Span
+			ender rpcz.Ender
+		)
+		if rpczenable.Enabled {
+			span, ender, ctx = rpcz.NewSpanContext(ctx, "http-server")
+			defer ender.End()
+			span.SetAttribute(rpcz.HTTPAttributeURL, r.URL)
+			span.SetAttribute(rpcz.HTTPAttributeRequestContentLength, r.ContentLength)
+		}
 
 		// Records LocalAddr and RemoteAddr to Context.
-		localAddr, ok := h.Request.Context().Value(stdhttp.LocalAddrContextKey).(net.Addr)
+		localAddr, ok := h.Request.Context().Value(http.LocalAddrContextKey).(net.Addr)
 		if ok {
 			msg.WithLocalAddr(localAddr)
 		}
-		raddr, _ := net.ResolveTCPAddr("tcp", h.Request.RemoteAddr)
-		msg.WithRemoteAddr(raddr)
+		remoteAddr := inet.ResolveAddress(protocol.TCP, h.Request.RemoteAddr)
+		msg.WithRemoteAddr(remoteAddr)
 		_, err := opts.Handler.Handle(ctx, emptyBuf)
 		if err != nil {
-			span.SetAttribute(rpcz.TRPCAttributeError, err)
-			log.Errorf("http server transport handle fail:%v", err)
+			if rpczenable.Enabled {
+				span.SetAttribute(rpcz.TRPCAttributeError, err)
+			}
+			log.Errorf("http server transport handle fail: %v", err)
 			if err == ErrEncodeMissingHeader || errors.Is(err, errs.ErrServerNoResponse) {
 				w.WriteHeader(http.StatusInternalServerError)
-				_, _ = w.Write([]byte(fmt.Sprintf("http server handle error: %+v", err)))
+				fmt.Fprintf(w, "http server handle error: %+v", err)
 			}
 			return
 		}
@@ -155,34 +179,45 @@ func (t *ServerTransport) listenAndServeHTTP(ctx context.Context, opts *transpor
 		return err
 	}
 
-	if err := t.serve(ctx, s, opts); err != nil {
-		return err
-	}
-	return nil
+	t.configureHTTPServer(s, opts)
+
+	return t.serve(ctx, s, opts)
 }
 
-func (t *ServerTransport) serve(ctx context.Context, s *stdhttp.Server, opts *transport.ListenServeOptions) error {
-	ln := opts.Listener
-	if ln == nil {
-		var err error
-		ln, err = t.getListener(opts.Network, s.Addr)
-		if err != nil {
-			return fmt.Errorf("http server transport get listener err: %w", err)
-		}
+func (t *ServerTransport) serve(ctx context.Context, s *http.Server, opts *transport.ListenServeOptions) error {
+	ln, err := getListener(opts, t.opts.ReusePort)
+	if err != nil {
+		return fmt.Errorf("http server transport get listener err: %w", err)
 	}
 
 	if err := transport.SaveListener(ln); err != nil {
 		return fmt.Errorf("save http listener error: %w", err)
 	}
-
+	ln = igr.UnwrapListener(ln)
+	if t.explicitHTTPS &&
+		(len(opts.TLSCertFile) == 0 || len(opts.TLSKeyFile) == 0) {
+		return errors.New("server uses 'https' protocol, but some of the cert/key files are not provided, " +
+			"please consider either setting the protocol to 'http' or providing all the necessary files for 'https'")
+	}
 	if len(opts.TLSKeyFile) != 0 && len(opts.TLSCertFile) != 0 {
+		// We have already initialized the TLSConfig and created a cert pool for ClientCAs.
+		// Therefore, we only need to load the TLS key pairs here.
+		certs, err := itls.LoadTLSKeyPairs(opts.TLSCertFile, opts.TLSKeyFile)
+		if err != nil {
+			return fmt.Errorf("load tls key pairs err: %w", err)
+		}
+		// If opts.CACertFile is empty, TLSConfig will be nil. Check it first.
+		if s.TLSConfig == nil {
+			s.TLSConfig = &tls.Config{}
+		}
+		s.TLSConfig.Certificates = certs
+
 		go func() {
-			if err := s.ServeTLS(
-				tcpKeepAliveListener{ln.(*net.TCPListener)},
-				opts.TLSCertFile,
-				opts.TLSKeyFile,
-			); err != stdhttp.ErrServerClosed {
-				log.Errorf("serve TLS failed: %w", err)
+			// The TLSConfig has been initialized, including ClientCAs and Certificates.
+			// Therefore, it is only necessary to pass empty cert and key files to ServeTLS.
+			if err := s.ServeTLS(tcpKeepAliveListener{ln.(*net.TCPListener)},
+				"", ""); err != http.ErrServerClosed {
+				log.Errorf("serve TLS failed: %v", err)
 			}
 		}()
 	} else {
@@ -191,63 +226,58 @@ func (t *ServerTransport) serve(ctx context.Context, s *stdhttp.Server, opts *tr
 		}()
 	}
 
-	// Reuse ports: Kernel distributes IO ReadReady events to multiple cores and threads to accelerate IO efficiency.
-	if t.reusePort {
-		go func() {
-			<-ctx.Done()
-			_ = s.Shutdown(context.TODO())
-		}()
-	}
+	opts.ActiveCnt.Add(1)
 	go func() {
-		<-opts.StopListening
-		ln.Close()
+		<-ctx.Done()
+		_ = s.Shutdown(context.Background())
+		opts.ActiveCnt.Add(-1)
 	}()
+
 	return nil
 }
 
-func (t *ServerTransport) getListener(network, addr string) (net.Listener, error) {
-	var ln net.Listener
-	v, _ := os.LookupEnv(transport.EnvGraceRestart)
-	ok, _ := strconv.ParseBool(v)
-	if ok {
-		// Find the passed listener.
-		pln, err := transport.GetPassedListener(network, addr)
-		if err != nil {
-			return nil, err
-		}
-		ln, ok = pln.(net.Listener)
-		if !ok {
-			return nil, fmt.Errorf("invalid listener type, want net.Listener, got %T", pln)
-		}
-		return ln, nil
+func getListener(opts *transport.ListenServeOptions, reusePort bool) (net.Listener, error) {
+	if opts.Listener != nil {
+		return opts.Listener, nil
 	}
 
-	if t.reusePort {
-		ln, err := reuseport.Listen(network, addr)
-		if err != nil {
-			return nil, fmt.Errorf("http reuseport listen error:%v", err)
-		}
-		return ln, nil
+	return igr.Listen(opts.Network, opts.Address, reusePort)
+}
+
+// configureHTTPServer sets properties of http server.
+func (t *ServerTransport) configureHTTPServer(svr *http.Server, opts *transport.ListenServeOptions) {
+	if t.Server != nil {
+		svr.ReadTimeout = t.Server.ReadTimeout
+		svr.ReadHeaderTimeout = t.Server.ReadHeaderTimeout
+		svr.WriteTimeout = t.Server.WriteTimeout
+		svr.MaxHeaderBytes = t.Server.MaxHeaderBytes
+		svr.IdleTimeout = t.Server.IdleTimeout
+		svr.ConnState = t.Server.ConnState
+		svr.ErrorLog = t.Server.ErrorLog
+		svr.ConnContext = t.Server.ConnContext
 	}
 
-	ln, err := net.Listen(network, addr)
-	if err != nil {
-		return nil, fmt.Errorf("http listen error:%v", err)
+	idleTimeout := opts.IdleTimeout
+	if t.opts.IdleTimeout > 0 {
+		idleTimeout = t.opts.IdleTimeout
 	}
-	return ln, nil
+	svr.IdleTimeout = idleTimeout
 }
 
 // newHTTPServer creates http server.
-func (t *ServerTransport) newHTTPServer(
-	serveFunc func(w stdhttp.ResponseWriter, r *stdhttp.Request),
-	opts *transport.ListenServeOptions,
-) (*stdhttp.Server, error) {
-	s := t.newServer()
-	s.Addr = opts.Address
-	s.Handler = stdhttp.HandlerFunc(serveFunc)
-	if t.enableH2C {
+func (t *ServerTransport) newHTTPServer(serveFunc func(w http.ResponseWriter, r *http.Request),
+	opts *transport.ListenServeOptions) (*http.Server, error) {
+	s := &http.Server{
+		Addr:    opts.Address,
+		Handler: http.HandlerFunc(serveFunc),
+	}
+	if opts.DisableKeepAlives {
+		s.SetKeepAlivesEnabled(false)
+	}
+	// Enable h2c without tls.
+	if t.opts.EnableH2C {
 		h2s := &http2.Server{}
-		s.Handler = h2c.NewHandler(stdhttp.HandlerFunc(serveFunc), h2s)
+		s.Handler = h2c.NewHandler(http.HandlerFunc(serveFunc), h2s)
 		return s, nil
 	}
 	if len(opts.CACertFile) != 0 { // Enable two-way authentication to verify client certificate.
@@ -256,15 +286,9 @@ func (t *ServerTransport) newHTTPServer(
 		}
 		certPool, err := itls.GetCertPool(opts.CACertFile)
 		if err != nil {
-			return nil, fmt.Errorf("http server get ca cert file error:%v", err)
+			return nil, fmt.Errorf("http server get ca cert file error: %v", err)
 		}
 		s.TLSConfig.ClientCAs = certPool
-	}
-	if opts.DisableKeepAlives {
-		s.SetKeepAlivesEnabled(false)
-	}
-	if opts.IdleTimeout > 0 {
-		s.IdleTimeout = opts.IdleTimeout
 	}
 	return s, nil
 }
@@ -290,15 +314,28 @@ func (ln tcpKeepAliveListener) Accept() (net.Conn, error) {
 
 // ClientTransport client side http transport.
 type ClientTransport struct {
-	stdhttp.Client // http client, exposed variables, allow user to customize settings.
-	opts           *transport.ClientTransportOptions
-	tlsClients     map[string]*stdhttp.Client // Different certificate file use different TLS client.
-	tlsLock        sync.RWMutex
-	http2Only      bool
+	http.Client   // http client, exposed variables, allow user to customize settings.
+	opts          *transport.ClientTransportOptions
+	tlsClients    map[string]*http.Client // Different certificate file use different TLS client.
+	tlsLock       sync.RWMutex
+	http2Only     bool
+	explicitHTTPS bool
+}
+
+func makeClientHTTPSExplicit(t transport.ClientTransport) transport.ClientTransport {
+	s, ok := t.(*ClientTransport)
+	if !ok {
+		panic(fmt.Sprintf("makeClientHTTPSExplicit expects %T, got %T", (*ClientTransport)(nil), t))
+	}
+	s.explicitHTTPS = true
+	return s
 }
 
 // DefaultClientTransport default client http transport.
 var DefaultClientTransport = NewClientTransport(false)
+
+// DefaultHTTPSClientTransport is the default client https transport.
+var DefaultHTTPSClientTransport = makeClientHTTPSExplicit(NewClientTransport(false))
 
 // DefaultHTTP2ClientTransport default client http2 transport.
 var DefaultHTTP2ClientTransport = NewClientTransport(true)
@@ -311,25 +348,36 @@ func NewClientTransport(http2Only bool, opt ...transport.ClientTransportOption) 
 	for _, o := range opt {
 		o(opts)
 	}
+
+	var tr http.RoundTripper
+	if opts.NewHTTPClientTransport != nil {
+		tr = NewRoundTripper(opts.NewHTTPClientTransport())
+	} else {
+		tr = NewRoundTripper(StdHTTPTransport)
+	}
+
 	return &ClientTransport{
 		opts: opts,
-		Client: stdhttp.Client{
-			Transport: NewRoundTripper(StdHTTPTransport),
+		Client: http.Client{
+			Transport: tr,
 		},
-		tlsClients: make(map[string]*stdhttp.Client),
+		tlsClients: make(map[string]*http.Client),
 		http2Only:  http2Only,
 	}
 }
 
 func (ct *ClientTransport) getRequest(reqHeader *ClientReqHeader,
-	reqBody []byte, msg codec.Msg, opts *transport.RoundTripOptions) (*stdhttp.Request, error) {
+	reqBody []byte, msg codec.Msg, opts *transport.RoundTripOptions) (*http.Request, error) {
 	req, err := ct.newRequest(reqHeader, reqBody, msg, opts)
 	if err != nil {
 		return nil, err
 	}
 
 	if reqHeader.Header != nil {
-		req.Header = make(stdhttp.Header)
+		if req.Header == nil { // 🤔 This check is rarely true, as http.NewRequest always makes the Header beforehand.
+			// Create the header just in time to prevent any potential trampling.
+			req.Header = make(http.Header)
+		}
 		for h, val := range reqHeader.Header {
 			req.Header[h] = val
 		}
@@ -337,19 +385,20 @@ func (ct *ClientTransport) getRequest(reqHeader *ClientReqHeader,
 	if len(reqHeader.Host) != 0 {
 		req.Host = reqHeader.Host
 	}
-	req.Header.Set(TrpcCaller, msg.CallerServiceName())
-	req.Header.Set(TrpcCallee, msg.CalleeServiceName())
-	req.Header.Set(TrpcTimeout, strconv.Itoa(int(msg.RequestTimeout()/time.Millisecond)))
+	fastop.CanonicalHeaderSet(req.Header, canonicalTrpcCaller, msg.CallerServiceName())
+	fastop.CanonicalHeaderSet(req.Header, canonicalTrpcCallerMethod, msg.CallerMethod())
+	fastop.CanonicalHeaderSet(req.Header, canonicalTrpcCallee, msg.CalleeServiceName())
+	fastop.CanonicalHeaderSet(req.Header, canonicalTrpcTimeout, strconv.FormatInt(msg.RequestTimeout().Milliseconds(), 10))
 	if opts.DisableConnectionPool {
-		req.Header.Set(Connection, "close")
+		fastop.CanonicalHeaderSet(req.Header, Connection, "close")
 		req.Close = true
 	}
 	if t := msg.CompressType(); icodec.IsValidCompressType(t) && t != codec.CompressTypeNoop {
-		req.Header.Set("Content-Encoding", compressTypeContentEncoding[t])
+		fastop.CanonicalHeaderSet(req.Header, canonicalContentEncoding, compressTypeContentEncoding[t])
 	}
 	if msg.SerializationType() != codec.SerializationTypeNoop {
-		if len(req.Header.Get("Content-Type")) == 0 {
-			req.Header.Set("Content-Type",
+		if len(fastop.CanonicalHeaderGet(req.Header, canonicalContentType)) == 0 {
+			fastop.CanonicalHeaderSet(req.Header, canonicalContentType,
 				serializationTypeContentType[msg.SerializationType()])
 		}
 	}
@@ -362,7 +411,10 @@ func (ct *ClientTransport) getRequest(reqHeader *ClientReqHeader,
 	return req, nil
 }
 
-func (ct *ClientTransport) setTransInfo(msg codec.Msg, req *stdhttp.Request) error {
+func (ct *ClientTransport) setTransInfo(msg codec.Msg, req *http.Request) error {
+	// Delay the allocation of a map to avoid unnecessary memory allocation.
+	// When adding new branches to the subsequent code, please remember to
+	// check if the map is nil and construct it promptly.
 	var m map[string]string
 	if md := msg.ClientMetaData(); len(md) > 0 {
 		m = make(map[string]string, len(md))
@@ -377,7 +429,8 @@ func (ct *ClientTransport) setTransInfo(msg codec.Msg, req *stdhttp.Request) err
 			m = make(map[string]string)
 		}
 		m[TrpcDyeingKey] = ct.encodeString(msg.DyeingKey())
-		req.Header.Set(TrpcMessageType, strconv.Itoa(int(trpcpb.TrpcMessageType_TRPC_DYEING_MESSAGE)))
+		fastop.CanonicalHeaderSet(req.Header, canonicalTrpcMessageType,
+			strconv.Itoa(int(trpc.TrpcMessageType_TRPC_DYEING_MESSAGE)))
 	}
 
 	if msg.EnvTransfer() != "" {
@@ -386,7 +439,9 @@ func (ct *ClientTransport) setTransInfo(msg codec.Msg, req *stdhttp.Request) err
 		}
 		m[TrpcEnv] = ct.encodeString(msg.EnvTransfer())
 	} else {
-		// If msg.EnvTransfer() empty, transmitted env info in req.TransInfo should be cleared
+		// If msg.EnvTransfer() empty, transmitted env info in req.TransInfo should be cleared.
+		// The map needs to be constructed only when assigning values to it.
+		// It is valid to check existence of an element in a nil map.
 		if _, ok := m[TrpcEnv]; ok {
 			m[TrpcEnv] = ""
 		}
@@ -397,40 +452,47 @@ func (ct *ClientTransport) setTransInfo(msg codec.Msg, req *stdhttp.Request) err
 		if err != nil {
 			return errs.NewFrameError(errs.RetClientValidateFail, "http client json marshal metadata fail: "+err.Error())
 		}
-		req.Header.Set(TrpcTransInfo, string(val))
+		fastop.CanonicalHeaderSet(req.Header, canonicalTrpcTransInfo, string(val))
 	}
 
 	return nil
 }
 
 func (ct *ClientTransport) newRequest(reqHeader *ClientReqHeader,
-	reqBody []byte, msg codec.Msg, opts *transport.RoundTripOptions) (*stdhttp.Request, error) {
+	reqBody []byte, msg codec.Msg, opts *transport.RoundTripOptions) (*http.Request, error) {
 	if reqHeader.Request != nil {
 		return reqHeader.Request, nil
 	}
-	scheme := reqHeader.Schema
-	if scheme == "" {
-		if len(opts.CACertFile) > 0 || strings.HasSuffix(opts.Address, ":443") {
-			scheme = "https"
-		} else {
-			scheme = "http"
-		}
-	}
 
 	body := reqHeader.ReqBody
-	if body == nil {
+	if body == nil && reqHeader.Method != http.MethodGet { // Body can still be nil if method is GET.
 		body = bytes.NewReader(reqBody)
 	}
 
-	request, err := stdhttp.NewRequest(
+	request, err := http.NewRequest(
 		reqHeader.Method,
-		fmt.Sprintf("%s://%s%s", scheme, opts.Address, msg.ClientRPCName()),
+		fmt.Sprintf("%s://%s%s", ct.inferScheme(reqHeader.Schema, opts), opts.Address, msg.ClientRPCName()),
 		body)
 	if err != nil {
 		return nil, errs.NewFrameError(errs.RetClientNetErr,
 			"http client transport NewRequest: "+err.Error())
 	}
 	return request, nil
+}
+
+func (ct *ClientTransport) inferScheme(scheme string, opts *transport.RoundTripOptions) string {
+	if ct.explicitHTTPS {
+		return protocol.HTTPS // This is the raison d'être of the "explicitHTTPS" flag.
+	}
+	// The following logic is retained for backward compatibility 🤔.
+	if scheme == "" {
+		if len(opts.CACertFile) > 0 || strings.HasSuffix(opts.Address, ":443") {
+			scheme = protocol.HTTPS
+		} else {
+			scheme = protocol.HTTP
+		}
+	}
+	return scheme
 }
 
 func (ct *ClientTransport) encodeBytes(in []byte) string {
@@ -447,7 +509,7 @@ func (ct *ClientTransport) encodeString(in string) string {
 	return base64.StdEncoding.EncodeToString([]byte(in))
 }
 
-// RoundTrip sends and receives http packets, put http response into ctx,
+// RoundTrip sends and receives http packets, puts http response into ctx,
 // no need to return rspBuf here.
 func (ct *ClientTransport) RoundTrip(
 	ctx context.Context,
@@ -455,15 +517,9 @@ func (ct *ClientTransport) RoundTrip(
 	callOpts ...transport.RoundTripOption,
 ) (rspBody []byte, err error) {
 	msg := codec.Message(ctx)
-	reqHeader, ok := msg.ClientReqHead().(*ClientReqHeader)
-	if !ok {
-		return nil, errs.NewFrameError(errs.RetClientEncodeFail,
-			"http client transport: ReqHead should be type of *http.ClientReqHeader")
-	}
-	rspHeader, ok := msg.ClientRspHead().(*ClientRspHeader)
-	if !ok {
-		return nil, errs.NewFrameError(errs.RetClientEncodeFail,
-			"http client transport: RspHead should be type of *http.ClientRspHeader")
+	reqHeader, rspHeader, err := ct.validateHeaders(msg)
+	if err != nil {
+		return nil, err
 	}
 
 	var opts transport.RoundTripOptions
@@ -479,6 +535,7 @@ func (ct *ClientTransport) RoundTrip(
 	trace := &httptrace.ClientTrace{
 		GotConn: func(info httptrace.GotConnInfo) {
 			msg.WithRemoteAddr(info.Conn.RemoteAddr())
+			msg.WithLocalAddr(info.Conn.LocalAddr())
 		},
 	}
 	reqCtx := ctx
@@ -500,29 +557,57 @@ func (ct *ClientTransport) RoundTrip(
 	}()
 	request := req.WithContext(httptrace.WithClientTrace(reqCtx, trace))
 
-	client, err := ct.getStdHTTPClient(opts.CACertFile, opts.TLSCertFile,
-		opts.TLSKeyFile, opts.TLSServerName)
+	client, err := ct.getStdHTTPClient(opts)
 	if err != nil {
 		return nil, err
 	}
 
+	// Use DecorateRequest to make the final modifications to the request before sending it out.
+	if reqHeader.DecorateRequest != nil {
+		request = reqHeader.DecorateRequest(request)
+	}
+
 	rspHeader.Response, err = client.Do(request)
 	if err != nil {
-		if e, ok := err.(*url.Error); ok {
-			if e.Timeout() {
-				return nil, errs.NewFrameError(errs.RetClientTimeout,
-					"http client transport RoundTrip timeout: "+err.Error())
-			}
-		}
-		if ctx.Err() == context.Canceled {
-			return nil, errs.NewFrameError(errs.RetClientCanceled,
-				"http client transport RoundTrip canceled: "+err.Error())
-		}
-		return nil, errs.NewFrameError(errs.RetClientNetErr,
-			"http client transport RoundTrip: "+err.Error())
+		return nil, ct.handleRoundTripError(err, ctx.Err())
 	}
-	decorateWithCancel(rspHeader, cancel)
+
+	if rspHeader.ManualReadBody {
+		// Only need to decorate with cancel when it is in manual read body mode.
+		decorateWithCancel(rspHeader, cancel)
+	}
 	return emptyBuf, nil
+}
+
+// validateHeaders validates request and response headers.
+func (ct *ClientTransport) validateHeaders(msg codec.Msg) (*ClientReqHeader, *ClientRspHeader, error) {
+	reqHeader, ok := msg.ClientReqHead().(*ClientReqHeader)
+	if !ok {
+		return nil, nil, errs.NewFrameError(errs.RetClientEncodeFail,
+			fmt.Sprintf("http client transport: ReqHead should be type of *http.ClientReqHeader, current type: %T", reqHeader))
+	}
+
+	rspHeader, ok := msg.ClientRspHead().(*ClientRspHeader)
+	if !ok {
+		return nil, nil, errs.NewFrameError(errs.RetClientEncodeFail,
+			fmt.Sprintf("http client transport: RspHead should be type of *http.ClientRspHeader, current type: %T", rspHeader))
+	}
+
+	return reqHeader, rspHeader, nil
+}
+
+// handleRoundTripError handles errors during RoundTrip.
+func (ct *ClientTransport) handleRoundTripError(err error, ctxErr error) error {
+	if e, ok := err.(*url.Error); ok && e.Timeout() {
+		return errs.NewFrameError(errs.RetClientTimeout,
+			"http client transport RoundTrip timeout: "+err.Error())
+	}
+	if ctxErr == context.Canceled {
+		return errs.NewFrameError(errs.RetClientCanceled,
+			"http client transport RoundTrip canceled: "+err.Error())
+	}
+	return errs.NewFrameError(errs.RetClientNetErr,
+		"http client transport RoundTrip: "+err.Error())
 }
 
 func decorateWithCancel(rspHeader *ClientRspHeader, cancel context.CancelFunc) {
@@ -567,13 +652,18 @@ func (b *responseBodyWithCancel) Close() error {
 	return b.ReadCloser.Close()
 }
 
-func (ct *ClientTransport) getStdHTTPClient(caFile, certFile,
-	keyFile, serverName string) (*stdhttp.Client, error) {
-	if len(caFile) == 0 { // HTTP requests share one client.
+func (ct *ClientTransport) getStdHTTPClient(opts transport.RoundTripOptions) (*http.Client, error) {
+	// HTTP requests share one client.
+	if len(opts.CACertFile) == 0 && !ct.explicitHTTPS {
+		// Update transport, like connection pool configurations.
+		ct.Client.Transport = roundTripperWithOptions(ct.Client.Transport, opts)
 		return &ct.Client, nil
 	}
+	if opts.CACertFile == "" { // For explicit HTTPS, caFile must not be empty.
+		opts.CACertFile = "none" // If it is, set it to "none" to use tlsConf.InsecureSkipVerify=true.
+	}
 
-	cacheKey := fmt.Sprintf("%s-%s-%s", caFile, certFile, serverName)
+	cacheKey := fmt.Sprintf("%s-%s-%s", opts.CACertFile, opts.TLSCertFile, opts.TLSServerName)
 	ct.tlsLock.RLock()
 	cli, ok := ct.tlsClients[cacheKey]
 	ct.tlsLock.RUnlock()
@@ -588,11 +678,11 @@ func (ct *ClientTransport) getStdHTTPClient(caFile, certFile,
 		return cli, nil
 	}
 
-	conf, err := itls.GetClientConfig(serverName, caFile, certFile, keyFile)
+	conf, err := itls.GetClientConfig(opts.TLSServerName, opts.CACertFile, opts.TLSCertFile, opts.TLSKeyFile)
 	if err != nil {
-		return nil, err
+		return nil, errs.WrapFrameError(err, errs.RetClientConnectFail, "getting standard http client failed")
 	}
-	client := &stdhttp.Client{
+	client := &http.Client{
 		CheckRedirect: ct.Client.CheckRedirect,
 		Timeout:       ct.Client.Timeout,
 	}
@@ -601,17 +691,23 @@ func (ct *ClientTransport) getStdHTTPClient(caFile, certFile,
 			TLSClientConfig: conf,
 		}
 	} else {
-		tr := StdHTTPTransport.Clone()
+		var tr *http.Transport
+		if ct.opts.NewHTTPClientTransport != nil {
+			tr = ct.opts.NewHTTPClientTransport()
+		} else {
+			tr = StdHTTPTransport.Clone()
+		}
 		tr.TLSClientConfig = conf
 		client.Transport = NewRoundTripper(tr)
+		client.Transport = roundTripperWithOptions(client.Transport, opts)
 	}
 	ct.tlsClients[cacheKey] = client
 	return client, nil
 }
 
 // StdHTTPTransport all RoundTripper object used by http and https.
-var StdHTTPTransport = &stdhttp.Transport{
-	Proxy: stdhttp.ProxyFromEnvironment,
+var StdHTTPTransport = &http.Transport{
+	Proxy: http.ProxyFromEnvironment,
 	DialContext: (&net.Dialer{
 		Timeout:   30 * time.Second,
 		KeepAlive: 30 * time.Second,

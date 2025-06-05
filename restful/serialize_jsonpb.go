@@ -31,23 +31,15 @@ func init() {
 
 // JSONPBSerializer is used for content-Type: application/json.
 // It's based on google.golang.org/protobuf/encoding/protojson.
-//
-// This serializer will firstly try jsonpb's serialization. If object does not
-// conform to protobuf proto.Message interface, the serialization will switch to
-// json-iterator.
 type JSONPBSerializer struct {
 	AllowUnmarshalNil bool // allow unmarshalling nil body
+	// UnquoteString is used to unquote the string/bytes if the original data
+	// type is string/bytes.
+	UnquoteString bool
 }
 
 // JSONAPI is a copy of jsoniter.ConfigCompatibleWithStandardLibrary.
 // github.com/json-iterator/go is faster than Go's standard json library.
-//
-// Deprecated: This global variable is exportable due to backward comparability issue but
-// should not be modified. If users want to change the default behavior of
-// internal JSON serialization, please use register your customized serializer
-// function like:
-//
-//	restful.RegisterSerializer(yourOwnJSONSerializer)
 var JSONAPI = jsoniter.ConfigCompatibleWithStandardLibrary
 
 // Marshaller is a configurable protojson marshaler.
@@ -59,7 +51,20 @@ var Unmarshaller = protojson.UnmarshalOptions{DiscardUnknown: true}
 // Marshal implements Serializer.
 // Unlike Serializers in trpc-go/codec, Serializers in trpc-go/restful
 // could be used to marshal a field of a tRPC message.
-func (*JSONPBSerializer) Marshal(v interface{}) ([]byte, error) {
+func (j *JSONPBSerializer) Marshal(v interface{}) ([]byte, error) {
+	if j.UnquoteString {
+		// If the type of v is string/bytes, the normal marshalling will cause
+		// the string/bytes to be additionally quoted and the control characters
+		// will be degraded to normal characters.
+		// Therefore, we explicitly check the type for manual marshalling.
+		if val, ok := v.(*[]byte); ok && val != nil {
+			return *val, nil
+		}
+		if val, ok := v.(*string); ok && val != nil {
+			return []byte(*val), nil
+		}
+		// Fall back to the normal cases.
+	}
 	msg, ok := v.(proto.Message)
 	if !ok { // marshal a field of a tRPC message
 		return marshal(v)
@@ -124,7 +129,7 @@ func marshalNonProtoField(v interface{}) ([]byte, error) {
 			}
 			// assignment
 			m[fmt.Sprintf("%v", key.Interface())] = (*jsoniter.RawMessage)(&out)
-			if Marshaller.Indent != "" { // 指定 indent
+			if Marshaller.Indent != "" { // specify indent
 				return JSONAPI.MarshalIndent(v, "", Marshaller.Indent)
 			}
 			return JSONAPI.Marshal(v)
@@ -165,6 +170,17 @@ func (j *JSONPBSerializer) Unmarshal(data []byte, v interface{}) error {
 	if len(data) == 0 && j.AllowUnmarshalNil {
 		return nil
 	}
+	if j.UnquoteString {
+		if val, ok := v.(*[]byte); ok && val != nil {
+			*val = data
+			return nil
+		}
+		if val, ok := v.(*string); ok && val != nil {
+			*val = string(data)
+			return nil
+		}
+		// Fall back to the normal cases.
+	}
 	msg, ok := v.(proto.Message)
 	if !ok { // unmarshal a field of a tRPC message
 		return unmarshal(data, v)
@@ -187,9 +203,12 @@ func unmarshal(data []byte, v interface{}) error {
 // TODO: performance optimization.
 func unmarshalNonProtoField(data []byte, v interface{}) error {
 	rv := reflect.ValueOf(v)
-	if rv.Kind() != reflect.Ptr { // Must be pointer type.
+
+	// must be ptr
+	if rv.Kind() != reflect.Ptr {
 		return fmt.Errorf("%T is not a pointer", v)
 	}
+
 	// get the value to which the pointer points
 	for rv.Kind() == reflect.Ptr {
 		if rv.IsNil() { // New an object if nil
@@ -201,6 +220,7 @@ func unmarshalNonProtoField(data []byte, v interface{}) error {
 		}
 		rv = rv.Elem()
 	}
+
 	// can only unmarshal numeric enum
 	if _, ok := rv.Interface().(wrappedEnum); ok {
 		var x interface{}
@@ -247,7 +267,8 @@ func unmarshalNonProtoField(data []byte, v interface{}) error {
 		}
 		kind := rv.Type().Key().Kind()
 		for key, value := range m { // unmarshal (k, v) one by one
-			convertedKey, err := convert(key, kind) // convert key
+			// convert key
+			convertedKey, err := convert(key, kind)
 			if err != nil {
 				return err
 			}
@@ -263,6 +284,7 @@ func unmarshalNonProtoField(data []byte, v interface{}) error {
 			rv.SetMapIndex(reflect.ValueOf(convertedKey), rn.Elem())
 		}
 	}
+
 	return JSONAPI.Unmarshal(data, v)
 }
 

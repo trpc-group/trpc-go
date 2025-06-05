@@ -32,6 +32,7 @@ type Options struct {
 	EnvKey               string
 	SourceMetadata       map[string]string
 	DestinationMetadata  map[string]string
+	Broadcast            bool // Broadcast is used to broadcast to all nodes.
 }
 
 // Option modifies the Options.
@@ -46,8 +47,8 @@ func WithContext(ctx context.Context) Option {
 
 // WithNamespace returns an Option which sets namespace.
 func WithNamespace(namespace string) Option {
-	return func(opts *Options) {
-		opts.Namespace = namespace
+	return func(o *Options) {
+		o.Namespace = namespace
 	}
 }
 
@@ -131,5 +132,12 @@ func WithDestinationMetadata(key string, val string) Option {
 			o.DestinationMetadata = make(map[string]string)
 		}
 		o.DestinationMetadata[key] = val
+	}
+}
+
+// WithBroadcast returns an Option which determines whether to broadcast.
+func WithBroadcast(b bool) Option {
+	return func(opts *Options) {
+		opts.Broadcast = b
 	}
 }

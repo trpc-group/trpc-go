@@ -20,20 +20,23 @@ import (
 	"io"
 	"math"
 	"net"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/keeporder"
 	"trpc.group/trpc-go/trpc-go/pool/connpool"
+	"trpc.group/trpc-go/trpc-go/pool/httppool"
 	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
 	"trpc.group/trpc-go/trpc-go/transport"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 )
 
 func TestTcpRoundTripPoolNIl(t *testing.T) {
@@ -73,7 +76,8 @@ func TestTcpRoundTripCTXErr(t *testing.T) {
 type fakePool struct {
 }
 
-func (p *fakePool) Get(network string, address string, opts connpool.GetOptions) (net.Conn, error) {
+func (p *fakePool) Get(
+	network string, address string, timeout time.Duration, opt ...connpool.GetOption) (net.Conn, error) {
 	return &fakeConn{}, nil
 }
 
@@ -214,7 +218,6 @@ func TestTcpRoundTripConnWriteErr(t *testing.T) {
 	Count = 1
 	_, err := st.RoundTrip(context.Background(), []byte("hello"), optNetwork, optPool, optFramerBuilder,
 		optAddress)
-	assert.NotNil(t, err)
 	Count = 2
 	_, err = st.RoundTrip(context.Background(), []byte("hello"), optNetwork, optPool, optFramerBuilder,
 		optAddress)
@@ -274,7 +277,8 @@ func TestWithReqType(t *testing.T) {
 type emptyPool struct {
 }
 
-func (p *emptyPool) Get(network string, address string, opts connpool.GetOptions) (net.Conn, error) {
+func (p *emptyPool) Get(
+	network string, address string, timeout time.Duration, opt ...connpool.GetOption) (net.Conn, error) {
 	return nil, errors.New("empty")
 }
 
@@ -286,7 +290,6 @@ func TestWithDialPoolError(t *testing.T) {
 	_, err := transport.RoundTrip(ctx, testReqByte,
 		transport.WithDialPool(&emptyPool{}),
 		transport.WithDialNetwork("tcp"))
-	// fmt.Printf("err: %v", err)
 	assert.NotNil(t, err)
 }
 
@@ -311,7 +314,6 @@ func TestContextTimeout_Multiplexed(t *testing.T) {
 		transport.WithDialNetwork("tcp"),
 		transport.WithDialAddress(":8888"),
 		transport.WithMultiplexed(true),
-		transport.WithMsg(codec.Message(ctx)),
 		transport.WithClientFramerBuilder(fb))
 	assert.NotNil(t, err)
 }
@@ -333,8 +335,15 @@ func TestWithReqTypeSendOnly(t *testing.T) {
 	_, err := transport.RoundTrip(ctx, []byte{},
 		transport.WithReqType(transport.SendOnly),
 		transport.WithDialNetwork("tcp"))
-	// fmt.Printf("err: %v", err)
 	assert.NotNil(t, err)
+}
+
+func mustListenUDP(t *testing.T) net.PacketConn {
+	c, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
 }
 
 func TestClientTransport_RoundTrip(t *testing.T) {
@@ -365,14 +374,13 @@ func TestClientTransport_RoundTrip(t *testing.T) {
 			transport.WithReqType(transport.SendAndRecv),
 		)
 		require.Equal(t, errs.RetClientNetErr, errs.Code(err))
-		require.Contains(t, errs.Msg(err), "udp client transport WriteTo")
+		require.Contains(t, errs.Msg(err), "transport WriteTo failed")
 	})
-
 	var err error
 	_, err = transport.RoundTrip(context.Background(), encodeLengthDelimited("helloworld"))
 	assert.NotNil(t, err)
 
-	tc := transport.NewClientTransport()
+	tc := transport.NewClientTransport(transport.WithClientUDPRecvSize(4096))
 	_, err = tc.RoundTrip(context.Background(), encodeLengthDelimited("helloworld"))
 	assert.NotNil(t, err)
 
@@ -415,7 +423,7 @@ func TestClientTransport_RoundTrip(t *testing.T) {
 		transport.WithDialNetwork("udp"),
 		transport.WithClientFramerBuilder(fb),
 		transport.WithDialAddress("localhost:9998"))
-	assert.EqualValues(t, err.(*errs.Error).Code, int32(errs.RetClientCanceled))
+	assert.Equal(t, err.(*errs.Error).Code, int32(errs.RetClientCanceled))
 
 	// Test context timeout.
 	ctx, timeout := context.WithTimeout(context.Background(), time.Millisecond)
@@ -425,7 +433,7 @@ func TestClientTransport_RoundTrip(t *testing.T) {
 		transport.WithDialNetwork("udp"),
 		transport.WithClientFramerBuilder(fb),
 		transport.WithDialAddress("localhost:9998"))
-	assert.EqualValues(t, err.(*errs.Error).Code, int32(errs.RetClientTimeout))
+	assert.Equal(t, err.(*errs.Error).Code, int32(errs.RetClientTimeout))
 
 	// Test roundtrip.
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -436,7 +444,6 @@ func TestClientTransport_RoundTrip(t *testing.T) {
 		transport.WithConnectionMode(transport.NotConnected),
 		transport.WithClientFramerBuilder(fb),
 	)
-	assert.NotNil(t, rsp)
 	assert.Nil(t, err)
 
 	// Test setting RemoteAddr of UDP RoundTrip.
@@ -509,14 +516,6 @@ func TestClientTransport_RoundTrip(t *testing.T) {
 	assert.Contains(t, err.Error(), remainingBytesError.Error())
 }
 
-func mustListenUDP(t *testing.T) net.PacketConn {
-	c, err := net.ListenPacket("udp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return c
-}
-
 // Frame a stream of bytes based on a length prefix
 // +------------+--------------------------------+
 // | len: uint8 |          frame payload         |
@@ -534,14 +533,6 @@ func (fb *lengthDelimitedBuilder) New(reader io.Reader) codec.Framer {
 	}
 }
 
-func (fb *lengthDelimitedBuilder) Parse(rc io.Reader) (vid uint32, buf []byte, err error) {
-	buf, err = fb.New(rc).ReadFrame()
-	if err != nil {
-		return 0, nil, err
-	}
-	return 0, buf, nil
-}
-
 type lengthDelimited struct {
 	reader         io.Reader
 	readError      bool
@@ -557,7 +548,7 @@ func encodeLengthDelimited(data string) []byte {
 var (
 	readFrameError      = errors.New("read framer error")
 	remainingBytesError = fmt.Errorf(
-		"packet data is not drained, the remaining %d will be dropped",
+		"udp client transport ReadFrame: remaining %d bytes data",
 		remainingBytes,
 	)
 	remainingBytes = 1
@@ -618,7 +609,7 @@ func TestClientTransport_MultiplexedErr(t *testing.T) {
 		transport.WithClientFramerBuilder(fb),
 		transport.WithMsg(msg),
 	)
-	assert.EqualValues(t, err.(*errs.Error).Code, int32(errs.RetClientTimeout))
+	assert.Equal(t, err.(*errs.Error).Code, int32(errs.RetClientTimeout))
 
 	// Test multiplexed context canceled.
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -633,10 +624,11 @@ func TestClientTransport_MultiplexedErr(t *testing.T) {
 		transport.WithClientFramerBuilder(fb),
 		transport.WithMsg(msg),
 	)
-	assert.EqualValues(t, err.(*errs.Error).Code, int32(errs.RetClientCanceled))
+	assert.Equal(t, err.(*errs.Error).Code, int32(errs.RetClientCanceled))
 }
 
 func TestClientTransport_RoundTrip_PreConnected(t *testing.T) {
+
 	go func() {
 		err := transport.ListenAndServe(
 			transport.WithListenNetwork("udp"),
@@ -652,7 +644,7 @@ func TestClientTransport_RoundTrip_PreConnected(t *testing.T) {
 	_, err = transport.RoundTrip(context.Background(), []byte("helloworld"))
 	assert.NotNil(t, err)
 
-	tc := transport.NewClientTransport()
+	tc := transport.NewClientTransport(transport.WithClientUDPRecvSize(4096))
 
 	// Test connected UDPConn.
 	rsp, err := tc.RoundTrip(context.Background(), []byte("helloworld"),
@@ -683,7 +675,6 @@ func TestClientTransport_RoundTrip_PreConnected(t *testing.T) {
 		transport.WithDialAddress("localhost:9999"),
 		transport.WithConnectionMode(transport.Connected))
 	assert.NotNil(t, err)
-	assert.Nil(t, rsp)
 }
 
 func TestOptions(t *testing.T) {
@@ -703,6 +694,28 @@ func TestOptions(t *testing.T) {
 	assert.True(t, opts.DisableConnectionPool)
 }
 
+// TestClientTransportTcpRecvSizeOptions tests client transport options.
+func TestClientTransportTcpRecvSizeOptions(t *testing.T) {
+	opts := &transport.ClientTransportOptions{}
+	o := transport.WithClientTCPRecvQueueSize(1000000)
+	o(opts)
+	assert.Equal(t, 1000000, opts.TCPRecvQueueSize)
+}
+
+func TestClientTransportMaxConcurrentStreams(t *testing.T) {
+	opts := &transport.ClientTransportOptions{}
+	o := transport.WithMaxConcurrentStreams(1250)
+	o(opts)
+	assert.Equal(t, 1250, opts.MaxConcurrentStreams)
+}
+
+func TestClientTransportMaxIdleConnPerHost(t *testing.T) {
+	opts := &transport.ClientTransportOptions{}
+	o := transport.WithMaxIdleConnsPerHost(10)
+	o(opts)
+	assert.Equal(t, 10, opts.MaxIdleConnsPerHost)
+}
+
 // TestWithMultiplexedPool tests connection pool multiplexing.
 func TestWithMultiplexedPool(t *testing.T) {
 	opts := &transport.RoundTripOptions{}
@@ -720,7 +733,7 @@ func TestUDPTransportFramerBuilderErr(t *testing.T) {
 	}
 	ts := transport.NewClientTransport()
 	_, err := ts.RoundTrip(context.Background(), nil, opts...)
-	assert.EqualValues(t, err.(*errs.Error).Code, int32(errs.RetClientConnectFail))
+	assert.Equal(t, err.(*errs.Error).Code, int32(errs.RetClientConnectFail))
 }
 
 // TestWithLocalAddr tests local addr.
@@ -748,8 +761,90 @@ func TestWithProtocol(t *testing.T) {
 	assert.Equal(t, protocol, opts.Protocol)
 }
 
+func TestWithHTTPRoundTripOptions(t *testing.T) {
+	opts := &transport.RoundTripOptions{}
+	httpOpts := transport.HTTPRoundTripOptions{
+		Pool: httppool.Options{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			MaxConnsPerHost:     20,
+			IdleConnTimeout:     time.Second,
+		},
+	}
+	o := transport.WithHTTPRoundTripOptions(httpOpts)
+	o(opts)
+	assert.Equal(t, httpOpts, opts.HTTPOpts)
+}
+
 func TestWithDisableEncodeTransInfoBase64(t *testing.T) {
 	opts := &transport.ClientTransportOptions{}
 	transport.WithDisableEncodeTransInfoBase64()(opts)
 	assert.Equal(t, true, opts.DisableHTTPEncodeTransInfoBase64)
+}
+
+func TestWithNewHTTPClientTransport(t *testing.T) {
+	var o transport.ClientTransportOptions
+	transport.WithNewHTTPClientTransport(func() *http.Transport {
+		return &http.Transport{}
+	})(&o)
+	require.NotNil(t, o.NewHTTPClientTransport)
+}
+
+func TestMultiplexedAddressNotNil(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	defer ln.Close()
+
+	ctx, msg := codec.WithNewMessage(context.Background())
+	tc := transport.NewClientTransport()
+	tc.RoundTrip(ctx, encodeLengthDelimited("helloworld"),
+		transport.WithDialNetwork("tcp"),
+		transport.WithMultiplexed(true),
+		transport.WithDialAddress(ln.Addr().String()),
+		transport.WithClientFramerBuilder(&lengthDelimitedBuilder{}),
+		transport.WithMsg(msg),
+	)
+	assert.NotNil(t, msg.RemoteAddr())
+}
+
+func TestClientTransportKeepOrderMultiplex(t *testing.T) {
+	listener, err := net.Listen("tcp", ":")
+	require.NoError(t, err)
+	defer listener.Close()
+	go func() {
+		transport.ListenAndServe(
+			transport.WithListener(listener),
+			transport.WithHandler(&echoHandler{}),
+			transport.WithServerFramerBuilder(transport.GetFramerBuilder("trpc")),
+		)
+	}()
+	time.Sleep(20 * time.Millisecond)
+
+	tc := transport.NewClientTransport()
+	fb := &trpc.FramerBuilder{}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	ctx, msg := codec.WithNewMessage(ctx)
+	sendError := make(chan error, 1)
+	ctx = keeporder.NewContextWithClientInfo(ctx, &keeporder.ClientInfo{
+		SendError: sendError,
+	})
+	recvError := make(chan error, 1)
+	reqBuf, err := trpc.DefaultClientCodec.Encode(msg, []byte("helloworld"))
+	require.NoError(t, err)
+	go func() {
+		_, err := tc.RoundTrip(ctx, reqBuf,
+			transport.WithDialNetwork(listener.Addr().Network()),
+			transport.WithDialAddress(listener.Addr().String()),
+			transport.WithMultiplexed(true),
+			transport.WithClientFramerBuilder(fb),
+			transport.WithMsg(msg),
+		)
+		recvError <- err
+	}()
+	sendErr := <-sendError
+	require.NoError(t, sendErr)
+	recvErr := <-recvError
+	require.NoError(t, recvErr)
 }

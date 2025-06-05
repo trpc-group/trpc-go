@@ -13,10 +13,12 @@
 
 package multiplexed
 
-// GetOptions get conn configuration.
+import "trpc.group/trpc-go/trpc-go/codec"
+
+// GetOptions gets conn configuration.
 type GetOptions struct {
-	FP  FrameParser
-	VID uint32
+	FramerBuilder codec.FramerBuilder
+	Msg           codec.Msg
 
 	CACertFile    string // CA certificate.
 	TLSCertFile   string // Client certificate.
@@ -26,10 +28,11 @@ type GetOptions struct {
 
 	LocalAddr string
 
-	network  string
-	address  string
-	isStream bool
-	nodeKey  string
+	network       string
+	address       string
+	virtualConnID uint32
+	isStream      bool
+	nodeKey       string
 }
 
 // NewGetOptions creates GetOptions.
@@ -37,9 +40,9 @@ func NewGetOptions() GetOptions {
 	return GetOptions{}
 }
 
-// WithFrameParser sets the FrameParser of a single Get.
-func (o *GetOptions) WithFrameParser(fp FrameParser) {
-	o.FP = fp
+// WithFramerBuilder returns an Option which sets the FramerBuilder.
+func (o *GetOptions) WithFramerBuilder(fb codec.FramerBuilder) {
+	o.FramerBuilder = fb
 }
 
 // WithDialTLS returns an Option which sets the client to support TLS.
@@ -50,9 +53,9 @@ func (o *GetOptions) WithDialTLS(certFile, keyFile, caFile, serverName string) {
 	o.TLSServerName = serverName
 }
 
-// WithVID returns an Option which sets virtual connection ID.
-func (o *GetOptions) WithVID(vid uint32) {
-	o.VID = vid
+// WithMsg returns an Option which sets Msg.
+func (o *GetOptions) WithMsg(msg codec.Msg) {
+	o.Msg = msg
 }
 
 // WithLocalAddr returns an Option which sets the local address when
@@ -63,8 +66,9 @@ func (o *GetOptions) WithLocalAddr(addr string) {
 }
 
 func (o *GetOptions) update(network, address string) error {
-	if o.FP == nil {
-		return ErrFrameParserNil
+	o.virtualConnID = o.Msg.RequestID()
+	if o.FramerBuilder == nil {
+		return ErrFrameBuilderNil
 	}
 	isStream, err := isStream(network)
 	if err != nil {

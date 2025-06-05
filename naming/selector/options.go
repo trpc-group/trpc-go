@@ -34,8 +34,8 @@ type Options struct {
 	Ctx context.Context
 	// Key is the hash key of stateful routing.
 	Key string
-	// Replicas is the replicas of a single node for stateful routing. It's optional, and used to
-	// address hash ring.
+	// Replicas is the replicas of a single node for stateful routing.
+	// It's optional, and used to address hash ring.
 	Replicas int
 	// EnvKey is the environment key.
 	EnvKey string
@@ -60,6 +60,8 @@ type Options struct {
 	DestinationMetadata map[string]string
 	// LoadBalanceType is the load balance type.
 	LoadBalanceType string
+	// Broadcast is used to broadcast to all nodes.
+	Broadcast bool
 
 	// EnvTransfer is the environment of upstream server.
 	EnvTransfer          string
@@ -139,6 +141,14 @@ func WithDiscovery(d discovery.Discovery) Option {
 func WithServiceRouter(r servicerouter.ServiceRouter) Option {
 	return func(o *Options) {
 		o.ServiceRouter = r
+	}
+}
+
+// WithLoadBalance returns an Option which sets load balance.
+// Deprecated: use WithLoadBalancer instead.
+func WithLoadBalance(b loadbalance.LoadBalancer) Option {
+	return func(o *Options) {
+		o.LoadBalancer = b
 	}
 }
 
@@ -245,5 +255,13 @@ func WithDestinationMetadata(key string, val string) Option {
 		}
 		o.DestinationMetadata[key] = val
 		o.ServiceRouterOptions = append(o.ServiceRouterOptions, servicerouter.WithDestinationMetadata(key, val))
+	}
+}
+
+// WithBroadcast returns an Option which determines whether to broadcast.
+func WithBroadcast(b bool) Option {
+	return func(o *Options) {
+		o.Broadcast = b
+		o.ServiceRouterOptions = append(o.ServiceRouterOptions, servicerouter.WithBroadcast(b))
 	}
 }

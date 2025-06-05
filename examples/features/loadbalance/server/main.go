@@ -19,10 +19,10 @@ import (
 	"fmt"
 	"log"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/errs"
 
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 // ServerImpl implements service.
@@ -45,7 +45,7 @@ func main() {
 	s := trpc.NewServer()
 
 	// Register service.
-	pb.RegisterGreeterService(s, &ServerImpl{})
+	pb.RegisterGreeterService(s.Service("trpc.examples.loadbalance.Loadbalance"), &ServerImpl{})
 
 	// Serve and listen.
 	if err := s.Serve(); err != nil {

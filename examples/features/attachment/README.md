@@ -11,4 +11,3 @@ So the overhead the cost of serialization, deserialization, and related memory c
 
 If the server starts successfully, you will see a INFO log containing "trpc service:trpc.examples.echo.Echo launch success, tcp:127.0.0.1:8000, serving" in the terminal.
 If the client call is successful, you will see a INFO logs containing "received attachment: server attachment" in the terminal.
-

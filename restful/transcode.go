@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -26,7 +27,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"trpc.group/trpc-go/trpc-go/errs"
-	"trpc.group/trpc-go/trpc-go/internal/dat"
+	"trpc.group/trpc-go/trpc-go/restful/dat"
 )
 
 const (
@@ -50,80 +51,13 @@ type transcoder struct {
 	serviceImpl          interface{}
 }
 
-// transcodeParams are params required for transcoding.
-type transcodeParams struct {
-	reqCompressor  Compressor
-	respCompressor Compressor
-	reqSerializer  Serializer
-	respSerializer Serializer
-	body           io.Reader
-	fieldValues    map[string]string
-	form           url.Values
-}
-
-// paramsPool is the transcodeParams pool.
-var paramsPool = sync.Pool{
-	New: func() interface{} {
-		return &transcodeParams{}
-	},
-}
-
-// putBackParams puts transcodeParams back to pool.
-func putBackParams(params *transcodeParams) {
-	params.reqCompressor = nil
-	params.respCompressor = nil
-	params.reqSerializer = nil
-	params.respSerializer = nil
-	params.body = nil
-	params.fieldValues = nil
-	params.form = nil
-	paramsPool.Put(params)
-}
-
-// transcode transcodes tRPC/httpjson.
-func (tr *transcoder) transcode(
-	stubCtx context.Context,
-	params *transcodeParams,
-) (proto.Message, []byte, error) {
-	// init tRPC request
-	protoReq := tr.input()
-
-	// transcode body
-	if err := tr.transcodeBody(protoReq, params.body, params.reqCompressor,
-		params.reqSerializer); err != nil {
-		return nil, nil, errs.New(errs.RetServerDecodeFail, err.Error())
-	}
-
-	// transcode fieldValues from url path matching
-	if err := tr.transcodeFieldValues(protoReq, params.fieldValues); err != nil {
-		return nil, nil, errs.New(errs.RetServerDecodeFail, err.Error())
-	}
-
-	// transcode query params
-	if err := tr.transcodeQueryParams(protoReq, params.form); err != nil {
-		return nil, nil, errs.New(errs.RetServerDecodeFail, err.Error())
-	}
-
-	// tRPC Stub handling
-	rsp, err := tr.handle(stubCtx, protoReq)
-	if err != nil {
-		return nil, nil, err
-	}
-	var protoResp proto.Message
-	if rsp == nil {
-		protoResp = tr.output()
-	} else {
-		protoResp = rsp.(proto.Message)
-	}
-
-	// response
-	// HttpRule.response_body only specifies serialization of fields.
-	// So compression would be custom.
-	buf, err := tr.transcodeResp(protoResp, params.respSerializer)
-	if err != nil {
-		return nil, nil, errs.New(errs.RetServerEncodeFail, err.Error())
-	}
-	return protoResp, buf, nil
+// requestParams are params required for transcoding.
+type requestParams struct {
+	compressor  Compressor
+	serializer  Serializer
+	body        io.Reader
+	fieldValues map[string]string
+	form        url.Values
 }
 
 // bodyBufferPool is the pool of http request body buffer.
@@ -131,6 +65,24 @@ var bodyBufferPool = sync.Pool{
 	New: func() interface{} {
 		return bytes.NewBuffer(make([]byte, defaultBodyBufferSize))
 	},
+}
+
+func (tr *transcoder) transcodeRequest(p requestParams) (ProtoMessage, error) {
+	protoReq := tr.input()
+
+	if err := tr.transcodeBody(protoReq, p.body, p.compressor, p.serializer); err != nil {
+		return nil, errs.Wrapf(err, errs.RetServerDecodeFail, "transcoding body %v", p.body)
+	}
+
+	if err := transcodeFieldValues(protoReq, p.fieldValues); err != nil {
+		return nil, errs.Wrapf(err, errs.RetServerDecodeFail, "transcoding field values %v", p.fieldValues)
+	}
+
+	if err := tr.transcodeQueryParams(protoReq, p.form); err != nil {
+		return nil, errs.Wrapf(err, errs.RetServerDecodeFail, "transcoding query parameters %v", p.form)
+	}
+
+	return protoReq, nil
 }
 
 // transcodeBody transcodes tRPC/httpjson by http request body.
@@ -165,7 +117,7 @@ func (tr *transcoder) transcodeBody(protoReq proto.Message, body io.Reader, c Co
 	}
 
 	// field mask will be set for PATCH method.
-	if tr.httpMethod == "PATCH" && tr.body.Body() != "*" {
+	if tr.httpMethod == http.MethodPatch && tr.body.Body() != "*" {
 		return setFieldMask(protoReq.ProtoReflect(), tr.body.Body())
 	}
 
@@ -173,7 +125,7 @@ func (tr *transcoder) transcodeBody(protoReq proto.Message, body io.Reader, c Co
 }
 
 // transcodeFieldValues transcodes tRPC/httpjson by fieldValues from url path matching.
-func (tr *transcoder) transcodeFieldValues(msg proto.Message, fieldValues map[string]string) error {
+func transcodeFieldValues(msg proto.Message, fieldValues map[string]string) error {
 	for fieldPath, value := range fieldValues {
 		if err := PopulateMessage(msg, strings.Split(fieldPath, "."), []string{value}); err != nil {
 			return err
@@ -190,12 +142,13 @@ func (tr *transcoder) transcodeQueryParams(msg proto.Message, form url.Values) e
 	}
 
 	for key, values := range form {
+		fieldPath := strings.Split(key, ".")
 		// filter fields specified by HttpRule pattern and body
-		if tr.dat != nil && tr.dat.CommonPrefixSearch(strings.Split(key, ".")) {
+		if tr.dat != nil && tr.dat.CommonPrefixSearch(fieldPath) {
 			continue
 		}
 		// populate proto message
-		if err := PopulateMessage(msg, strings.Split(key, "."), values); err != nil {
+		if err := PopulateMessage(msg, fieldPath, values); err != nil {
 			if !tr.discardUnknownParams || !errors.Is(err, ErrTraverseNotFound) {
 				return err
 			}
@@ -206,23 +159,37 @@ func (tr *transcoder) transcodeQueryParams(msg proto.Message, form url.Values) e
 }
 
 // handle does tRPC Stub handling.
-func (tr *transcoder) handle(ctx context.Context, reqBody interface{}) (interface{}, error) {
+func (tr *transcoder) handle(ctx context.Context, reqBody interface{}) (proto.Message, error) {
 	filters := tr.router.opts.FilterFunc()
 	serviceImpl := tr.serviceImpl
 	handleFunc := func(ctx context.Context, reqBody interface{}) (interface{}, error) {
 		return tr.handler(serviceImpl, ctx, reqBody)
 	}
-	return filters.Filter(ctx, reqBody, handleFunc)
+	rsp, err := filters.Filter(ctx, reqBody, handleFunc)
+	if err != nil {
+		return nil, err
+	}
+
+	if rsp == nil {
+		// this may happen when cors filter fires preflight logic:
+		//   https://git.woa.com/trpc-go/trpc-filter/blob/cors/v0.1.4/cors/cors.go#L217
+		return tr.output(), nil
+	}
+	r, ok := rsp.(proto.Message)
+	if !ok {
+		return nil, fmt.Errorf(
+			"expected a proto.Message as the response type during restful transcoding, but received %T",
+			rsp)
+	}
+	return r, nil
 }
 
-// transcodeResp transcodes tRPC/httpjson by response.
-func (tr *transcoder) transcodeResp(protoResp proto.Message, s Serializer) ([]byte, error) {
-	// marshal
-	var obj interface{}
+// transcodeResponse transcodes tRPC/httpjson by response.
+// HttpRule.response_body only specifies serialization of fields.
+// So compression would be custom.
+func (tr *transcoder) transcodeResponse(m proto.Message, s Serializer) ([]byte, error) {
 	if tr.respBody == nil {
-		obj = protoResp
-	} else {
-		obj = tr.respBody.Locate(protoResp)
+		return s.Marshal(m)
 	}
-	return s.Marshal(obj)
+	return s.Marshal(tr.respBody.Locate(m))
 }

@@ -1,0 +1,19 @@
+global:  # Global configuration
+  namespace: Development  # Environment type, with two types: production and development
+  env_name: test  # Environment name, used for multiple environments in non-production environment
+
+server:  # Server configuration
+  app: examples  # Application name for the business
+  server: rspobsoleted  # Process service name
+  bin_path: /usr/local/trpc/bin/  # Path for binary executable files and framework configuration files
+  conf_path: /usr/local/trpc/conf/  # Path for business configuration files
+  data_path: /usr/local/trpc/data/  # Path for business data files
+  service:  # Services provided by the business, can have multiple
+    - name: trpc.examples.rspobsoleted.RspObsoletedExample  # Route name of the service
+      ip: 127.0.0.1  # IP address for service listening, can use placeholders ${ip}, choose between ip and nic, ip has priority
+      # nic: eth0
+      port: 8000  # Port for service listening, can use placeholders ${port}
+      network: tcp  # Network listening type, tcp or udp
+      protocol: trpc  # Application layer protocol, trpc or http
+      transport: tnet  # Need to delete this line when protocol is http, tnet does not support http protocol temporarily
+      timeout: 1000  # Maximum processing time for requests, in milliseconds

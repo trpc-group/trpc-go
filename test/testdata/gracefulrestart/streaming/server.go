@@ -19,7 +19,7 @@ import (
 	"os"
 	"strconv"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/test"
 	testpb "trpc.group/trpc-go/trpc-go/test/protocols"
 )
@@ -40,7 +40,7 @@ func main() {
 				for range in.GetResponseParameters() {
 					if err := stream.Send(&testpb.StreamingOutputCallResponse{
 						Payload: &testpb.Payload{
-							Type: testpb.PayloadType_COMPRESSIBLE,
+							Type: testpb.PayloadType_COMPRESSABLE,
 							Body: []byte(strconv.Itoa(os.Getpid())),
 						},
 					}); err != nil {

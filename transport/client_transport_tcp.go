@@ -16,14 +16,18 @@ package transport
 import (
 	"context"
 	"net"
-	"time"
 
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/keeporder"
 	"trpc.group/trpc-go/trpc-go/internal/report"
+	"trpc.group/trpc-go/trpc-go/internal/rpczenable"
 	"trpc.group/trpc-go/trpc-go/pool/connpool"
 	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
 	"trpc.group/trpc-go/trpc-go/rpcz"
+	"trpc.group/trpc-go/trpc-go/transport/internal/dialer"
+	ierrs "trpc.group/trpc-go/trpc-go/transport/internal/errs"
+	imsg "trpc.group/trpc-go/trpc-go/transport/internal/msg"
 )
 
 // tcpRoundTrip sends tcp request. It supports send, sendAndRcv, keepalive and multiplex.
@@ -38,104 +42,65 @@ func (c *clientTransport) tcpRoundTrip(ctx context.Context, reqData []byte,
 		return nil, errs.NewFrameError(errs.RetClientConnectFail,
 			"tcp client transport: framer builder empty")
 	}
-
-	conn, err := c.dialTCP(ctx, opts)
+	var (
+		span  rpcz.Span
+		ender rpcz.Ender
+	)
+	if rpczenable.Enabled {
+		span = rpcz.SpanFromContext(ctx)
+		_, ender = span.NewChild("DialTCP")
+	}
+	conn, err := dialer.DialTCP(ctx, dialer.DialOptions{
+		Network:               opts.Network,
+		Address:               opts.Address,
+		LocalAddr:             opts.LocalAddr,
+		Dial:                  connpool.Dial,
+		DialTimeout:           opts.DialTimeout,
+		Pool:                  opts.Pool,
+		FramerBuilder:         opts.FramerBuilder,
+		DisableConnectionPool: opts.DisableConnectionPool,
+		Protocol:              opts.Protocol,
+		CACertFile:            opts.CACertFile,
+		TLSCertFile:           opts.TLSCertFile,
+		TLSKeyFile:            opts.TLSKeyFile,
+		TLSServerName:         opts.TLSServerName,
+	})
+	if rpczenable.Enabled {
+		ender.End()
+	}
+	msg := codec.Message(ctx)
 	if err != nil {
+		msg = imsg.WithLocalAddr(msg, opts.Network, opts.LocalAddr)
 		return nil, err
 	}
 	// TCP connection is exclusively multiplexed. Close determines whether connection should be put
 	// back into the connection pool to be reused.
 	defer conn.Close()
-	msg := codec.Message(ctx)
 	msg.WithRemoteAddr(conn.RemoteAddr())
 	msg.WithLocalAddr(conn.LocalAddr())
 
-	if ctx.Err() == context.Canceled {
-		return nil, errs.NewFrameError(errs.RetClientCanceled,
-			"tcp client transport canceled before Write: "+ctx.Err().Error())
-	}
-	if ctx.Err() == context.DeadlineExceeded {
-		return nil, errs.NewFrameError(errs.RetClientTimeout,
-			"tcp client transport timeout before Write: "+ctx.Err().Error())
-	}
-
 	report.TCPClientTransportSendSize.Set(float64(len(reqData)))
-	span := rpcz.SpanFromContext(ctx)
-	_, end := span.NewChild("SendMessage")
+	if rpczenable.Enabled {
+		_, ender = span.NewChild("SendMessage")
+	}
+	// Write data to connection.
 	err = c.tcpWriteFrame(ctx, conn, reqData)
-	end.End()
+	if rpczenable.Enabled {
+		ender.End()
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	_, end = span.NewChild("ReceiveMessage")
+	if rpczenable.Enabled {
+		_, ender = span.NewChild("ReceiveMessage")
+	}
+	// Read data from connection.
 	rspData, err := c.tcpReadFrame(conn, opts)
-	end.End()
+	if rpczenable.Enabled {
+		ender.End()
+	}
 	return rspData, err
-}
-
-// dialTCP establishes a TCP connection.
-func (c *clientTransport) dialTCP(ctx context.Context, opts *RoundTripOptions) (net.Conn, error) {
-	// If ctx has canceled or timeout, just return.
-	if ctx.Err() == context.Canceled {
-		return nil, errs.NewFrameError(errs.RetClientCanceled,
-			"client canceled before tcp dial: "+ctx.Err().Error())
-	}
-	if ctx.Err() == context.DeadlineExceeded {
-		return nil, errs.NewFrameError(errs.RetClientTimeout,
-			"client timeout before tcp dial: "+ctx.Err().Error())
-	}
-	var timeout time.Duration
-	d, ok := ctx.Deadline()
-	if ok {
-		timeout = time.Until(d)
-	}
-
-	var conn net.Conn
-	var err error
-	// Short connection mode, directly dial a connection.
-	if opts.DisableConnectionPool {
-		// The connection is established using the minimum of ctx timeout and connecting timeout.
-		if opts.DialTimeout > 0 && opts.DialTimeout < timeout {
-			timeout = opts.DialTimeout
-		}
-		conn, err = connpool.Dial(&connpool.DialOptions{
-			Network:       opts.Network,
-			Address:       opts.Address,
-			LocalAddr:     opts.LocalAddr,
-			Timeout:       timeout,
-			CACertFile:    opts.CACertFile,
-			TLSCertFile:   opts.TLSCertFile,
-			TLSKeyFile:    opts.TLSKeyFile,
-			TLSServerName: opts.TLSServerName,
-		})
-		if err != nil {
-			return nil, errs.NewFrameError(errs.RetClientConnectFail,
-				"tcp client transport dial: "+err.Error())
-		}
-		if ok {
-			conn.SetDeadline(d)
-		}
-		return conn, nil
-	}
-
-	// Connection pool mode, get connection from pool.
-	getOpts := connpool.NewGetOptions()
-	getOpts.WithContext(ctx)
-	getOpts.WithFramerBuilder(opts.FramerBuilder)
-	getOpts.WithDialTLS(opts.TLSCertFile, opts.TLSKeyFile, opts.CACertFile, opts.TLSServerName)
-	getOpts.WithLocalAddr(opts.LocalAddr)
-	getOpts.WithDialTimeout(opts.DialTimeout)
-	getOpts.WithProtocol(opts.Protocol)
-	conn, err = opts.Pool.Get(opts.Network, opts.Address, getOpts)
-	if err != nil {
-		return nil, errs.NewFrameError(errs.RetClientConnectFail,
-			"tcp client transport connection pool: "+err.Error())
-	}
-	if ok {
-		conn.SetDeadline(d)
-	}
-	return conn, nil
 }
 
 // tcpWriteReqData writes the tcp frame.
@@ -147,12 +112,7 @@ func (c *clientTransport) tcpWriteFrame(ctx context.Context, conn net.Conn, reqD
 	for sentNum < len(reqData) {
 		num, err = conn.Write(reqData[sentNum:])
 		if err != nil {
-			if e, ok := err.(net.Error); ok && e.Timeout() {
-				return errs.NewFrameError(errs.RetClientTimeout,
-					"tcp client transport Write: "+err.Error())
-			}
-			return errs.NewFrameError(errs.RetClientNetErr,
-				"tcp client transport Write: "+err.Error())
+			return ierrs.WrapAsClientTimeoutErrOr(err, errs.RetClientNetErr, "tcp client transport Write")
 		}
 		sentNum += num
 	}
@@ -161,7 +121,7 @@ func (c *clientTransport) tcpWriteFrame(ctx context.Context, conn net.Conn, reqD
 
 // tcpReadFrame reads the tcp frame.
 func (c *clientTransport) tcpReadFrame(conn net.Conn, opts *RoundTripOptions) ([]byte, error) {
-	// send only.
+	// Send only.
 	if opts.ReqType == SendOnly {
 		return nil, errs.ErrClientNoResponse
 	}
@@ -182,12 +142,7 @@ func (c *clientTransport) tcpReadFrame(conn net.Conn, opts *RoundTripOptions) ([
 
 	rspData, err := fr.ReadFrame()
 	if err != nil {
-		if e, ok := err.(net.Error); ok && e.Timeout() {
-			return nil, errs.NewFrameError(errs.RetClientTimeout,
-				"tcp client transport ReadFrame: "+err.Error())
-		}
-		return nil, errs.NewFrameError(errs.RetClientReadFrameErr,
-			"tcp client transport ReadFrame: "+err.Error())
+		return nil, ierrs.WrapAsClientTimeoutErrOr(err, errs.RetClientReadFrameErr, "tcp client transport ReadFrame")
 	}
 	report.TCPClientTransportReceiveSize.Set(float64(len(rspData)))
 	return rspData, nil
@@ -200,24 +155,30 @@ func (c *clientTransport) multiplexed(ctx context.Context, req []byte, opts *Rou
 			"tcp client transport: framer builder empty")
 	}
 	getOpts := multiplexed.NewGetOptions()
-	getOpts.WithVID(opts.Msg.RequestID())
-	fp, ok := opts.FramerBuilder.(multiplexed.FrameParser)
-	if !ok {
-		return nil, errs.NewFrameError(errs.RetClientConnectFail,
-			"frame builder does not implement multiplexed.FrameParser")
-	}
-	getOpts.WithFrameParser(fp)
+	getOpts.WithMsg(opts.Msg)
+	getOpts.WithFramerBuilder(opts.FramerBuilder)
 	getOpts.WithDialTLS(opts.TLSCertFile, opts.TLSKeyFile, opts.CACertFile, opts.TLSServerName)
 	getOpts.WithLocalAddr(opts.LocalAddr)
-	conn, err := opts.Multiplexed.GetMuxConn(ctx, opts.Network, opts.Address, getOpts)
+	conn, err := opts.Multiplexed.GetVirtualConn(ctx, opts.Network, opts.Address, getOpts)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 	msg := codec.Message(ctx)
 	msg.WithRemoteAddr(conn.RemoteAddr())
+	msg.WithLocalAddr(conn.LocalAddr())
 
-	if err := conn.Write(req); err != nil {
+	err = conn.Write(req)
+	info, ok := keeporder.ClientInfoFromContext(ctx)
+	if ok && info != nil {
+		select {
+		// Notify the keep-order client who is waiting for the
+		// request sending procedure to be finished.
+		case info.SendError <- err:
+		default:
+		}
+	}
+	if err != nil {
 		return nil, errs.NewFrameError(errs.RetClientNetErr,
 			"tcp client multiplexed transport Write: "+err.Error())
 	}

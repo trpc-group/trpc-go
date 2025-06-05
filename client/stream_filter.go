@@ -16,6 +16,10 @@ package client
 import (
 	"context"
 	"sync"
+
+	irpcz "trpc.group/trpc-go/trpc-go/internal/rpcz"
+	"trpc.group/trpc-go/trpc-go/internal/rpczenable"
+	"trpc.group/trpc-go/trpc-go/rpcz"
 )
 
 var (
@@ -73,13 +77,31 @@ func GetStreamFilter(name string) StreamFilter {
 type StreamFilterChain []StreamFilter
 
 // Filter implements StreamFilter for multi stream filters.
-func (c StreamFilterChain) Filter(ctx context.Context,
-	desc *ClientStreamDesc, streamer Streamer) (ClientStream, error) {
+func (c StreamFilterChain) Filter(
+	ctx context.Context,
+	desc *ClientStreamDesc,
+	next Streamer,
+) (ClientStream, error) {
+	if rpczenable.Enabled {
+		names, ok := irpcz.FilterNames(ctx)
+		for i := len(c) - 1; i >= 0; i-- {
+			curHandleFunc, curFilter, curI := next, c[i], i
+			next = func(ctx context.Context, desc *ClientStreamDesc) (ClientStream, error) {
+				if ok {
+					var ender rpcz.Ender
+					_, ender, ctx = rpcz.NewSpanContext(ctx, irpcz.FilterName(names, curI))
+					defer ender.End()
+				}
+				return curFilter(ctx, desc, curHandleFunc)
+			}
+		}
+		return next(ctx, desc)
+	}
 	for i := len(c) - 1; i >= 0; i-- {
-		next, curFilter := streamer, c[i]
-		streamer = func(ctx context.Context, desc *ClientStreamDesc) (ClientStream, error) {
-			return curFilter(ctx, desc, next)
+		curHandleFunc, curFilter := next, c[i]
+		next = func(ctx context.Context, desc *ClientStreamDesc) (ClientStream, error) {
+			return curFilter(ctx, desc, curHandleFunc)
 		}
 	}
-	return streamer(ctx, desc)
+	return next(ctx, desc)
 }

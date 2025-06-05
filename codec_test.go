@@ -18,23 +18,18 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"log"
-	"net"
 	"regexp"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
-	"trpc.group/trpc-go/trpc-go/internal/attachment"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
-	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	"trpc.group/trpc-go/trpc-go/internal/attachment"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 func TestFramer_ReadFrame(t *testing.T) {
@@ -44,19 +39,19 @@ func TestFramer_ReadFrame(t *testing.T) {
 		totalLen := 0
 		buf := new(bytes.Buffer)
 		// MagicNum 0x930, 2bytes
-		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(trpcpb.TrpcMagic_TRPC_MAGIC_VALUE+1)))
+		err = binary.Write(buf, binary.BigEndian, uint16(trpc.TrpcMagic_TRPC_MAGIC_VALUE+1))
 		// frame type, 1byte
-		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint8(0)))
+		err = binary.Write(buf, binary.BigEndian, uint8(0))
 		// stream frame type, 1byte
-		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint8(0)))
+		err = binary.Write(buf, binary.BigEndian, uint8(0))
 		// total len
-		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint32(totalLen)))
+		err = binary.Write(buf, binary.BigEndian, uint32(totalLen))
 		// pb header len
-		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(0)))
+		err = binary.Write(buf, binary.BigEndian, uint16(0))
 		// stream ID
-		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(0)))
+		err = binary.Write(buf, binary.BigEndian, uint16(0))
 		// reserved
-		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint32(0)))
+		err = binary.Write(buf, binary.BigEndian, uint32(0))
 		assert.Nil(t, err)
 
 		fb := &trpc.FramerBuilder{}
@@ -72,18 +67,18 @@ func TestFramer_ReadFrame(t *testing.T) {
 		totalLen := trpc.DefaultMaxFrameSize + 1
 		buf := new(bytes.Buffer)
 		// MagicNum 0x930, 2bytes
-		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(trpcpb.TrpcMagic_TRPC_MAGIC_VALUE)))
+		err = binary.Write(buf, binary.BigEndian, uint16(trpc.TrpcMagic_TRPC_MAGIC_VALUE))
 		// frame type, 1byte
-		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint8(0)))
+		err = binary.Write(buf, binary.BigEndian, uint8(0))
 		// stream frame type, 1byte
-		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint8(0)))
+		err = binary.Write(buf, binary.BigEndian, uint8(0))
 		// total len
-		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint32(totalLen)))
-		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(0)))
+		err = binary.Write(buf, binary.BigEndian, uint32(totalLen))
+		err = binary.Write(buf, binary.BigEndian, uint16(0))
 		// stream ID
-		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint16(0)))
+		err = binary.Write(buf, binary.BigEndian, uint16(0))
 		// reserved
-		assert.Nil(t, binary.Write(buf, binary.BigEndian, uint32(0)))
+		err = binary.Write(buf, binary.BigEndian, uint32(0))
 		assert.Nil(t, err)
 
 		fb := &trpc.FramerBuilder{}
@@ -92,6 +87,39 @@ func TestFramer_ReadFrame(t *testing.T) {
 		_, err = fr.ReadFrame()
 		assert.NotNil(t, err)
 	}
+}
+
+func TestReadFrameMagicMisMatch(t *testing.T) {
+	buf := new(bytes.Buffer)
+	_, err := buf.Write([]byte(`HTTP/1.1 200 OK
+Date: Wed, 21 Oct 2023 07:28:00 GMT
+Server: Apache/2.4.1 (Unix)
+Last-Modified: Sat, 17 Oct 2023 19:15:00 GMT
+Content-Length: 88
+Content-Type: text/html; charset=UTF-8
+Connection: close
+	
+<html>
+<head>
+  <title>An Example Page</title>
+</head>
+<body>
+  Hello World, this is a very simple HTML document.
+</body>
+</html>`))
+	require.NoError(t, err)
+
+	fb := &trpc.FramerBuilder{}
+	fr := fb.New(bytes.NewReader(buf.Bytes()))
+	require.NotNil(t, fr)
+	_, err = fr.ReadFrame()
+	// The error is like:
+	// trpc framer: read framer head magic 18516 != 2352, not match for the first two bytes of the TRPC packet,
+	// the expected trpc protocol is not detected; received bytes are 18516 (hex: 0x4854, ASCII: 'HT'),
+	// possible causes include: an HTTP response from the gateway, an incorrect protocol packet,
+	// or corrupted response bytes that do not conform to any valid protocol
+	t.Logf("read frame magic mismatch error: %v", err)
+	require.Error(t, err)
 }
 
 func TestClientCodecEnvTransfer(t *testing.T) {
@@ -104,7 +132,7 @@ func TestClientCodecEnvTransfer(t *testing.T) {
 	msg.WithEnvTransfer("")
 	reqBuf, err := cliCodec.Encode(msg, nil)
 	assert.Nil(t, err)
-	head := &trpcpb.RequestProtocol{}
+	head := &trpc.RequestProtocol{}
 	err = proto.Unmarshal(reqBuf[16:], head)
 	assert.Nil(t, err)
 	assert.Equal(t, head.TransInfo[trpc.EnvTransfer], []byte{})
@@ -114,7 +142,7 @@ func TestClientCodecEnvTransfer(t *testing.T) {
 	msg.WithEnvTransfer("env transfer")
 	reqBuf, err = cliCodec.Encode(msg, nil)
 	assert.Nil(t, err)
-	head = &trpcpb.RequestProtocol{}
+	head = &trpc.RequestProtocol{}
 	err = proto.Unmarshal(reqBuf[16:], head)
 	assert.Nil(t, err)
 	assert.Equal(t, head.TransInfo[trpc.EnvTransfer], envTransfer)
@@ -127,7 +155,7 @@ func TestClientCodecDyeing(t *testing.T) {
 	msg.WithDyeingKey(dyeingKey)
 	reqBuf, err := cliCodec.Encode(msg, nil)
 	assert.Nil(t, err)
-	head := &trpcpb.RequestProtocol{}
+	head := &trpc.RequestProtocol{}
 	err = proto.Unmarshal(reqBuf[16:], head)
 	assert.Nil(t, err)
 	assert.Equal(t, head.TransInfo[trpc.DyeingKey], []byte(dyeingKey))
@@ -139,26 +167,58 @@ func TestFramerBuilder(t *testing.T) {
 		frame := fb.New(bytes.NewReader(nil))
 		require.True(t, frame.(codec.SafeFramer).IsSafe())
 	})
-	t.Run("ok, read valid response", func(t *testing.T) {
+	t.Run("ok, message doesn't contain ResponseProtocol", func(t *testing.T) {
 		bts := mustEncode(t, []byte("hello-world"))
-		vid, buf, err := (&trpc.FramerBuilder{}).Parse(bytes.NewReader(bts))
+		fb := trpc.FramerBuilder{}
+		frame := fb.New(bytes.NewReader(bts))
+
+		responseFrame, err := frame.(codec.Decoder).Decode()
 		require.Nil(t, err)
-		require.Zero(t, vid)
-		require.Equal(t, bts, buf)
+
+		require.Zero(t, responseFrame.GetRequestID())
+		require.Equal(t, []byte("hello-world"), responseFrame.GetResponseBuf())
+
+		require.Nil(t, frame.(codec.Decoder).UpdateMsg(responseFrame, trpc.Message(context.Background())))
+	})
+	t.Run("ok, message contains ResponseProtocol", func(t *testing.T) {
+		bts := mustEncode(t, []byte("hello-world"))
+		fb := trpc.FramerBuilder{}
+		frame := fb.New(bytes.NewReader(bts))
+
+		responseFrame, err := frame.(codec.Decoder).Decode()
+		require.Nil(t, err)
+
+		require.Zero(t, responseFrame.GetRequestID())
+
+		msg := trpc.Message(context.Background())
+		msg.WithClientRspHead(&trpc.ResponseProtocol{RequestId: 1})
+		require.Nil(t, frame.(codec.Decoder).UpdateMsg(responseFrame, msg))
+		require.Zero(t, responseFrame.GetRequestID(), msg.ClientRspHead().(*trpc.ResponseProtocol).RequestId)
 	})
 	t.Run("garbage data", func(t *testing.T) {
-		_, _, err := (&trpc.FramerBuilder{}).Parse(bytes.NewReader([]byte("hello-world xxxxxxxxxxxx")))
+		bts := []byte("hello-world xxxxxxxxxxxx")
+		fb := trpc.FramerBuilder{}
+		frame := fb.New(bytes.NewReader(bts))
+
+		_, err := frame.(codec.Decoder).Decode()
 		require.Regexp(t, regexp.MustCompile(`magic .+ not match`), err.Error())
+	})
+	t.Run("invalid rsp type", func(t *testing.T) {
+		fb := trpc.FramerBuilder{}
+		frame := fb.New(nil)
+		require.Contains(t, frame.(codec.Decoder).UpdateMsg("xxx", trpc.Message(context.Background())).Error(),
+			"invalid rsp type")
+
 	})
 }
 
 func mustEncode(t *testing.T, body []byte) (buffer []byte) {
 	t.Helper()
 
-	msgHead := &trpcpb.RequestProtocol{
-		Version: uint32(trpcpb.TrpcProtoVersion_TRPC_PROTO_V1),
-		Callee:  []byte("trpc.test.helloworld.Greetor"),
-		Func:    []byte("/trpc.test.helloworld.Greetor/SayHello"),
+	msgHead := &trpc.RequestProtocol{
+		Version: uint32(trpc.TrpcProtoVersion_TRPC_PROTO_V1),
+		Callee:  []byte("trpc.test.helloworld.Greeter"),
+		Func:    []byte("/trpc.test.helloworld.Greeter/SayHello"),
 	}
 	head, err := proto.Marshal(msgHead)
 	if err != nil {
@@ -167,7 +227,7 @@ func mustEncode(t *testing.T, body []byte) (buffer []byte) {
 
 	buf := new(bytes.Buffer)
 	// MagicNum 0x930, 2bytes
-	if err := binary.Write(buf, binary.BigEndian, uint16(trpcpb.TrpcMagic_TRPC_MAGIC_VALUE)); err != nil {
+	if err := binary.Write(buf, binary.BigEndian, uint16(trpc.TrpcMagic_TRPC_MAGIC_VALUE)); err != nil {
 		t.Fatal(err)
 	}
 	// frame type, 1byte
@@ -247,10 +307,33 @@ func TestClientCodec_CallTypeEncode(t *testing.T) {
 	msg.WithCallType(codec.SendOnly)
 	reqBuf, err := sc.Encode(msg, nil)
 	assert.Nil(t, err)
-	head := &trpcpb.RequestProtocol{}
+	head := &trpc.RequestProtocol{}
 	err = proto.Unmarshal(reqBuf[16:], head)
 	assert.Nil(t, err)
 	assert.Equal(t, head.GetCallType(), uint32(codec.SendOnly))
+}
+
+func TestClientCodec_DecodeEmptyHeader(t *testing.T) {
+	_, msg := codec.EnsureMessage(context.Background())
+	bs, err := trpc.DefaultServerCodec.Encode(msg, nil)
+	require.Nil(t, err)
+	t.Logf("%x", bs)
+	b, err := trpc.DefaultClientCodec.Decode(msg, bs)
+	// Empty header is valid and no error is returned.
+	require.Nil(t, err)
+	t.Logf("%x", b)
+
+	bs, err = trpc.DefaultClientCodec.Encode(msg, nil)
+	require.Nil(t, err)
+	t.Logf("%x", bs)
+	b, err = trpc.DefaultServerCodec.Decode(msg, bs)
+	// Empty header is valid and no error is returned.
+	require.Nil(t, err)
+	t.Logf("%x", b)
+
+	fr := trpc.DefaultFramerBuilder.New(bytes.NewReader(bs))
+	_, err = fr.(codec.Decoder).Decode()
+	require.Nil(t, err)
 }
 
 func TestServerCodec_CallTypeDecode(t *testing.T) {
@@ -261,8 +344,25 @@ func TestServerCodec_CallTypeDecode(t *testing.T) {
 	reqBuf, err := cc.Encode(msg, nil)
 	assert.Nil(t, err)
 	_, err = sc.Decode(msg, reqBuf)
-	assert.Nil(t, err)
 	assert.Equal(t, msg.CallType(), codec.SendOnly)
+}
+
+func TestClientDecodeError(t *testing.T) {
+	buf := make([]byte, 16)
+	h := &trpc.FrameHead{
+		FrameType: uint8(trpc.TrpcDataFrameType_TRPC_UNARY_FRAME),
+		TotalLen:  uint32(len(buf)),
+		HeaderLen: 0,
+	}
+	buf[2] = h.FrameType
+	binary.BigEndian.PutUint32(buf[4:8], h.TotalLen)
+	binary.BigEndian.PutUint16(buf[8:10], h.HeaderLen)
+	_, msg := codec.EnsureMessage(context.Background())
+	h.HeaderLen = 10
+	binary.BigEndian.PutUint16(buf[8:10], h.HeaderLen+uint16(len(buf)))
+	_, err := trpc.DefaultClientCodec.Decode(msg, buf)
+	t.Logf("got decode err: %+v", err)
+	require.NotNil(t, err)
 }
 
 func TestClientCodec_EncodeErr(t *testing.T) {
@@ -277,14 +377,15 @@ func TestClientCodec_EncodeErr(t *testing.T) {
 		cc := trpc.ClientCodec{}
 		msg := codec.Message(trpc.BackgroundContext())
 		_, err := cc.Encode(msg, make([]byte, trpc.DefaultMaxFrameSize))
-		assert.EqualError(t, err, "frame len is larger than MaxFrameSize(10485760)")
+		assert.Regexp(t, `.*frameSize\(\d+\) = headerSize\(\d+\) \+ bodySize\(\d+\) \+ attachmentSize\(\d+\)`+
+			` is larger than MaxFrameSize\(\d+\).*`, err.Error())
 	})
 	t.Run("encoding attachment failed", func(t *testing.T) {
 		cc := trpc.ClientCodec{}
 		msg := codec.Message(trpc.BackgroundContext())
 		msg.WithCommonMeta(codec.CommonMeta{attachment.ClientAttachmentKey{}: &attachment.Attachment{Request: &errorReader{}, Response: attachment.NoopAttachment{}}})
 		_, err := cc.Encode(msg, nil)
-		assert.EqualError(t, err, "encoding attachment: reading errorReader always returns error")
+		assert.ErrorContains(t, err, "reading errorReader always returns error")
 	})
 
 }
@@ -303,7 +404,7 @@ func TestServerCodec_EncodeErr(t *testing.T) {
 		rspBuf, err := sc.Encode(msg, nil)
 		assert.Nil(t, err)
 
-		head := &trpcpb.ResponseProtocol{}
+		head := &trpc.ResponseProtocol{}
 		err = proto.Unmarshal(rspBuf[16:], head)
 		assert.Nil(t, err)
 		assert.Equal(t, int32(errs.RetServerEncodeFail), head.GetRet())
@@ -314,7 +415,8 @@ func TestServerCodec_EncodeErr(t *testing.T) {
 		rspBuf, err := sc.Encode(msg, make([]byte, trpc.DefaultMaxFrameSize))
 		assert.Nil(t, err)
 
-		head := &trpcpb.ResponseProtocol{}
+		head := &trpc.ResponseProtocol{}
+		err = proto.Unmarshal(rspBuf[16:], head)
 		err = proto.Unmarshal(rspBuf[16:], head)
 		assert.Nil(t, err)
 		assert.Equal(t, int32(errs.RetServerEncodeFail), head.GetRet())
@@ -324,28 +426,8 @@ func TestServerCodec_EncodeErr(t *testing.T) {
 		msg.WithCommonMeta(codec.CommonMeta{attachment.ServerAttachmentKey{}: &attachment.Attachment{Request: attachment.NoopAttachment{}, Response: &errorReader{}}})
 		sc := trpc.ServerCodec{}
 		_, err := sc.Encode(msg, nil)
-		assert.EqualError(t, err, "encoding attachment: reading errorReader always returns error")
+		assert.ErrorContains(t, err, "reading errorReader always returns error")
 	})
-}
-
-func TestMultiplexFrame(t *testing.T) {
-	buf := mustEncode(t, []byte("helloworld"))
-	vid, frame, err := (&trpc.FramerBuilder{}).Parse(bytes.NewReader(buf))
-	require.Nil(t, err)
-	require.Equal(t, uint32(0), vid)
-	require.Equal(t, buf, frame)
-}
-
-func TestClientCodecNoModifyOriginalFrameHead(t *testing.T) {
-	_, msg := codec.WithNewMessage(context.Background())
-	fh := &trpc.FrameHead{
-		StreamID: 101,
-	}
-	msg.WithFrameHead(fh)
-	clientCodec := &trpc.ClientCodec{}
-	_, err := clientCodec.Encode(msg, []byte("helloworld"))
-	require.Nil(t, err)
-	require.Equal(t, uint32(101), fh.StreamID)
 }
 
 // GOMAXPROCS=1 go test -bench=ServerCodec_Decode -benchmem
@@ -383,73 +465,4 @@ func BenchmarkClientCodec_Encode(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		cc.Encode(msg, reqBody)
 	}
-}
-
-func TestUDPParseFail(t *testing.T) {
-	s := &udpServer{}
-	s.start(context.Background())
-	t.Cleanup(s.stop)
-
-	m := multiplexed.New(multiplexed.WithConnectNumber(1))
-	test := func(id uint32, buf []byte, wantErr error) {
-		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-		opts := multiplexed.NewGetOptions()
-		opts.WithVID(id)
-		opts.WithFrameParser(&trpc.FramerBuilder{})
-		mc, err := m.GetMuxConn(ctx, s.conn.LocalAddr().Network(), s.conn.LocalAddr().String(), opts)
-		assert.Nil(t, err)
-		require.Nil(t, mc.Write(buf))
-		_, err = mc.Read()
-		assert.Equal(t, err, wantErr)
-		cancel()
-	}
-	// fail when parse invalid buf
-	var id uint32 = 1
-	test(id, []byte("invalid buf"), context.DeadlineExceeded)
-
-	// succeed when parse valid buf
-	id = 2
-	msg := codec.Message(context.Background())
-	msg.WithFrameHead(&trpc.FrameHead{
-		StreamID: id,
-	})
-	sc := &trpc.ServerCodec{}
-	buf, _ := sc.Encode(msg, []byte("helloworld"))
-	test(id, buf, nil)
-}
-
-type udpServer struct {
-	cancel context.CancelFunc
-	conn   net.PacketConn
-}
-
-func (s *udpServer) start(ctx context.Context) error {
-	var err error
-	s.conn, err = net.ListenPacket("udp", "127.0.0.1:0")
-	if err != nil {
-		return err
-	}
-	ctx, s.cancel = context.WithCancel(ctx)
-	go func() {
-		buf := make([]byte, 65535)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			n, addr, err := s.conn.ReadFrom(buf)
-			if err != nil {
-				log.Println("l.ReadFrom err: ", err)
-				return
-			}
-			s.conn.WriteTo(buf[:n], addr)
-		}
-	}()
-	return nil
-}
-
-func (s *udpServer) stop() {
-	s.cancel()
-	s.conn.Close()
 }

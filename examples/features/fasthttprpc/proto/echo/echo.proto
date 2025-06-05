@@ -1,0 +1,40 @@
+//
+//
+// Tencent is pleased to support the open source community by making tRPC available.
+//
+// Copyright (C) 2023 THL A29 Limited, a Tencent company.
+// All rights reserved.
+//
+// If you have downloaded a copy of the tRPC source code from Tencent,
+// please note that tRPC source code is licensed under the  Apache 2.0 License,
+// A copy of the Apache 2.0 License is included in this file.
+//
+//
+
+syntax = "proto3";
+
+package  trpc.examples.echo;
+
+option  go_package ="trpc.group/trpc-go/trpc-go/examples/httprpc/proto/echo";
+
+// Due to historical reasons, the rick platform needs to import "trpc/common/trpc.proto";
+import "trpc.proto";
+
+// EchoRequest is the request for echo.
+message EchoRequest {
+  string message = 1 [json_name="json_message"];
+}
+
+// EchoResponse is the response for echo.
+message EchoResponse {
+  int32 code = 1;
+  string message = 2;
+}
+
+// Echo is the echo service.
+service Echo {
+  // UnaryEcho is unary echo.
+  rpc UnaryEcho(EchoRequest) returns (EchoResponse) {
+    option (trpc.alias) = "/unaryecho";
+  }
+}

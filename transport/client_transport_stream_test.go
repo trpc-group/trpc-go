@@ -17,14 +17,17 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"trpc.group/trpc-go/trpc-go/codec"
+	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -191,14 +194,6 @@ func (fb *multiplexedFramerBuilder) New(r io.Reader) codec.Framer {
 	return &multiplexedFramer{r: r, fb: fb}
 }
 
-func (fb *multiplexedFramerBuilder) Parse(rc io.Reader) (vid uint32, buf []byte, err error) {
-	buf, err = fb.New(rc).ReadFrame()
-	if err != nil {
-		return 0, nil, err
-	}
-	return binary.BigEndian.Uint32(buf[:4]), buf, nil
-}
-
 type multiplexedFramer struct {
 	fb *multiplexedFramerBuilder
 	r  io.Reader
@@ -229,4 +224,93 @@ func (f *multiplexedFramer) ReadFrame() ([]byte, error) {
 
 func (f *multiplexedFramer) IsSafe() bool {
 	return f.fb.safe
+}
+
+func (f *multiplexedFramer) Decode() (codec.TransportResponseFrame, error) {
+	frame, err := f.ReadFrame()
+	if err != nil {
+		return nil, err
+	}
+	streamID := binary.BigEndian.Uint32(frame[:4])
+	return &rspFrame{streamID: streamID, frame: frame}, nil
+}
+
+func (f *multiplexedFramer) UpdateMsg(interface{}, codec.Msg) error {
+	return nil
+}
+
+type rspFrame struct {
+	streamID uint32
+	frame    []byte
+}
+
+func (rf *rspFrame) GetRequestID() uint32 {
+	return rf.streamID
+}
+
+func (rf *rspFrame) GetResponseBuf() []byte {
+	return rf.frame
+}
+
+type mockMultiplexedPool struct {
+	getVirtualConn func(
+		context.Context,
+		string, string,
+		multiplexed.GetOptions) (multiplexed.VirtualConn, error)
+}
+
+func (p *mockMultiplexedPool) GetVirtualConn(
+	ctx context.Context,
+	network string,
+	address string,
+	opts multiplexed.GetOptions) (multiplexed.VirtualConn, error) {
+	if p.getVirtualConn == nil {
+		return nil, nil
+	}
+	return p.getVirtualConn(ctx, network, address, opts)
+}
+
+type mockVirtualConn struct{}
+
+func (c *mockVirtualConn) Write([]byte) error { return nil }
+
+func (c *mockVirtualConn) Read() ([]byte, error) { return nil, nil }
+
+func (c *mockVirtualConn) LocalAddr() net.Addr { return nil }
+
+func (c *mockVirtualConn) RemoteAddr() net.Addr { return nil }
+
+func (c *mockVirtualConn) Close() {}
+
+func TestCustomStreamMultiplexedPool(t *testing.T) {
+	t.Run("ok, good multiplexed pool", func(t *testing.T) {
+		st := transport.NewClientStreamTransport(
+			transport.WithStreamMultiplexedPool(
+				&mockMultiplexedPool{
+					getVirtualConn: func(context.Context, string, string, multiplexed.GetOptions) (multiplexed.VirtualConn, error) {
+						return &mockVirtualConn{}, nil
+					}}))
+		ctx := context.Background()
+		require.Nil(t, st.Init(ctx,
+			transport.WithClientFramerBuilder(&multiplexedFramerBuilder{}),
+			transport.WithMsg(codec.Message(ctx)),
+		))
+	})
+	t.Run("not ok, bad stream multiplexed pool", func(t *testing.T) {
+		getErr := errors.New("get mux conn error")
+		st := transport.NewClientStreamTransport(
+			transport.WithStreamMultiplexedPool(
+				&mockMultiplexedPool{
+					getVirtualConn: func(context.Context, string, string, multiplexed.GetOptions) (multiplexed.VirtualConn, error) {
+						return nil, getErr
+					}}))
+		ctx := context.Background()
+		require.Contains(t,
+			st.Init(ctx,
+				transport.WithClientFramerBuilder(&multiplexedFramerBuilder{}),
+				transport.WithMsg(codec.Message(ctx)),
+			).Error(),
+			getErr.Error(),
+		)
+	})
 }

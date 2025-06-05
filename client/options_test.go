@@ -29,7 +29,9 @@ import (
 	"trpc.group/trpc-go/trpc-go/filter"
 	"trpc.group/trpc-go/trpc-go/http"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"trpc.group/trpc-go/trpc-go/pool/connpool"
+	"trpc.group/trpc-go/trpc-go/pool/httppool"
 	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
 	"trpc.group/trpc-go/trpc-go/transport"
 )
@@ -177,9 +179,9 @@ func TestOptions(t *testing.T) {
 	require.Equal(t, "trpc.test.helloworld", opts.ServiceName)
 
 	// WithTarget sets target address
-	o = client.WithTarget("ip://0.0.0.0:8080")
+	o = client.WithTarget("cl5://111:222")
 	o(opts)
-	require.Equal(t, "ip://0.0.0.0:8080", opts.Target)
+	require.Equal(t, "cl5://111:222", opts.Target)
 
 	// WithNetwork sets network of backend service: tcp or udp, tcp by default
 	o = client.WithNetwork("tcp")
@@ -206,6 +208,10 @@ func TestOptions(t *testing.T) {
 	o = client.WithStreamTransport(transport.DefaultClientStreamTransport)
 	o(opts)
 	require.Equal(t, transport.DefaultClientStreamTransport, opts.StreamTransport)
+
+	o = client.WithOverloadCtrl(overloadctrl.NoopOC{})
+	o(opts)
+	require.NotNil(t, opts.OverloadCtrl)
 
 	// WithProtocol sets protocol of backend service like trpc
 	o = client.WithProtocol("trpc")
@@ -265,6 +271,22 @@ func TestOptions(t *testing.T) {
 		o(transportOpts)
 	}
 	require.Equal(t, pool, transportOpts.Pool)
+
+	// WithHTTPRoundTripOptions sets custom http round trip options.
+	httpOpts := transport.HTTPRoundTripOptions{
+		Pool: httppool.Options{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			MaxConnsPerHost:     20,
+			IdleConnTimeout:     time.Second,
+		},
+	}
+	o = client.WithHTTPRoundTripOptions(httpOpts)
+	o(opts)
+	for _, o := range opts.CallOptions {
+		o(transportOpts)
+	}
+	require.Equal(t, httpOpts, transportOpts.HTTPOpts)
 }
 
 func TestDataOptions(t *testing.T) {
@@ -345,6 +367,73 @@ func TestWithDialTimeoutOption(t *testing.T) {
 	require.Equal(t, roundTripOptions.DialTimeout, timeout)
 }
 
+func TestSetNamingOptions(t *testing.T) {
+	opts := &client.Options{}
+	err := opts.SetNamingOptions(&client.BackendConfig{
+		Namespace:            "my_namespace",
+		EnvName:              "env",
+		SetName:              "set",
+		DisableServiceRouter: true,
+		Target:               "ip://1.1.1.1:1111",
+	})
+	require.Nil(t, err)
+	require.Len(t, opts.SelectOptions, 4)
+	require.True(t, opts.DisableServiceRouter)
+
+	opts = &client.Options{}
+	err = opts.SetNamingOptions(&client.BackendConfig{
+		ServiceName:          "service name",
+		Namespace:            "my_namespace",
+		EnvName:              "env",
+		SetName:              "set",
+		DisableServiceRouter: true,
+		Discovery:            "discovery",
+	})
+	require.NotNil(t, err)
+	opts = &client.Options{}
+	err = opts.SetNamingOptions(&client.BackendConfig{
+		ServiceName:          "service name",
+		Namespace:            "my_namespace",
+		EnvName:              "env",
+		SetName:              "set",
+		DisableServiceRouter: true,
+		ServiceRouter:        "servicerouter",
+	})
+	require.NotNil(t, err)
+	opts = &client.Options{}
+	err = opts.SetNamingOptions(&client.BackendConfig{
+		ServiceName:          "service name",
+		Namespace:            "my_namespace",
+		EnvName:              "env",
+		SetName:              "set",
+		DisableServiceRouter: true,
+		Loadbalance:          "load",
+	})
+	require.NotNil(t, err)
+	opts = &client.Options{}
+	err = opts.SetNamingOptions(&client.BackendConfig{
+		ServiceName:          "service name",
+		Namespace:            "my_namespace",
+		EnvName:              "env",
+		SetName:              "set",
+		DisableServiceRouter: true,
+		Circuitbreaker:       "breaker",
+	})
+	require.NotNil(t, err)
+}
+
+func TestWithShouldErrReportToSelector(t *testing.T) {
+	opts := client.NewOptions()
+	err := opts.SetNamingOptions(&client.BackendConfig{
+		ReportAnyErrToSelector: true,
+	})
+	require.Nil(t, err)
+
+	opts = client.NewOptions()
+	o := client.WithShouldErrReportToSelector(func(err error) bool { return true })
+	o(opts)
+}
+
 func TestWithNamedFilter(t *testing.T) {
 	var (
 		filterNames []string
@@ -362,7 +451,7 @@ func TestWithNamedFilter(t *testing.T) {
 		filters = append(filters, cf)
 	}
 
-	var os []client.Option
+	os := make([]client.Option, 0, len(filters))
 	for i := range filters {
 		os = append(os, client.WithNamedFilter(filterNames[i], filters[i]))
 	}

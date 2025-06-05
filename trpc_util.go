@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
+	"trpc.group/trpc-go/trpc-go/internal/expandenv"
 	"github.com/panjf2000/ants/v2"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
@@ -85,42 +85,68 @@ func SetMetaData(ctx context.Context, key string, val []byte) {
 
 // Request returns RequestProtocol from ctx.
 // If the RequestProtocol not found, a new RequestProtocol will be created and returned.
-func Request(ctx context.Context) *trpcpb.RequestProtocol {
+func Request(ctx context.Context) *RequestProtocol {
 	msg := codec.Message(ctx)
-	request, ok := msg.ServerReqHead().(*trpcpb.RequestProtocol)
+	request, ok := msg.ServerReqHead().(*RequestProtocol)
 	if !ok {
-		return &trpcpb.RequestProtocol{}
+		return &RequestProtocol{}
 	}
 	return request
 }
 
 // Response returns ResponseProtocol from ctx.
 // If the ResponseProtocol not found, a new ResponseProtocol will be created and returned.
-func Response(ctx context.Context) *trpcpb.ResponseProtocol {
+func Response(ctx context.Context) *ResponseProtocol {
 	msg := codec.Message(ctx)
-	response, ok := msg.ServerRspHead().(*trpcpb.ResponseProtocol)
+	response, ok := msg.ServerRspHead().(*ResponseProtocol)
 	if !ok {
-		return &trpcpb.ResponseProtocol{}
+		return &ResponseProtocol{}
 	}
 	return response
 }
 
-// CloneContext copies the context to get a context that retains the value and doesn't cancel.
-// This is used when the handler is processed asynchronously to detach the original timeout control
-// and retains the original context information.
+// CloneContext creates a copy of the provided context, preserving its values
+// but detaching from the original's cancellation and deadline controls. This
+// function is particularly useful for asynchronous handler execution where
+// the context's values, such as logging or tracing metadata, need to be retained
+// beyond the lifespan of the original request's context.
 //
-// After the trpc handler function returns, ctx will be canceled, and put the ctx's Msg back into pool,
-// and the associated Metrics and logger will be released.
+// It is important to note that once the trpc handler function returns, the original
+// context (ctx) will be cancelled. This cancellation will trigger the release of
+// resources such as message buffers back to the pool, and the associated metrics
+// and logger will be considered complete.
 //
-// Before starting a goroutine to run the handler function asynchronously,
-// this method must be called to copy context, detach the original timeout control,
-// and retain the information in Msg for Metrics.
+// To ensure proper context value retention and disassociation from the original
+// timeout control, CloneContext must be invoked before spawning a new goroutine
+// for asynchronous handler execution. This cloned context maintains all values,
+// including logging fields and tracing identifiers, but without the original
+// context's cancellation and deadline constraints.
 //
-// Retain the logger context for printing the associated log,
-// keep other value in context, such as tracing context, etc.
+// For scenarios where the original context's timeout behavior is desired to be
+// preserved, refer to CloneContextWithTimeout.
 func CloneContext(ctx context.Context) context.Context {
 	oldMsg := codec.Message(ctx)
 	newCtx, newMsg := codec.WithNewMessage(detach(ctx))
+	codec.CopyMsg(newMsg, oldMsg)
+	return newCtx
+}
+
+// CloneContextWithTimeout duplicates the provided context, retaining
+// both its values and its timeout control. This function should be used when
+// the intention is to execute a handler asynchronously while still respecting
+// the original context's deadline.
+//
+// The key distinction between CloneContext and CloneContextWithTimeout
+// lies in the handling of the original context's timeout: CloneContext creates
+// a context free from the original's timeout, whereas CloneContextWithTimeout
+// maintains this aspect of the context.
+//
+// This function is suitable when the asynchronous operation must be bound by the
+// same time constraints as the original request, ensuring consistency in timeout
+// behavior across synchronous and asynchronous executions.
+func CloneContextWithTimeout(ctx context.Context) context.Context {
+	oldMsg := codec.Message(ctx)
+	newCtx, newMsg := codec.WithNewMessage(ctx)
 	codec.CopyMsg(newMsg, oldMsg)
 	return newCtx
 }
@@ -196,6 +222,9 @@ type goerParam struct {
 }
 
 // NewAsyncGoer creates a goer that executes handler asynchronously with a goroutine when Go() is called.
+// If workerPoolSize is not zero, the returned Goer will never be GCed, because the details of ants pool is lost on
+// encapsulation.
+// You MUST NEVER call this function during an RPC.
 func NewAsyncGoer(workerPoolSize int, panicBufLen int, shouldRecover bool) Goer {
 	g := &asyncGoer{
 		panicBufLen:   panicBufLen,
@@ -244,7 +273,11 @@ func (g *asyncGoer) Go(ctx context.Context, timeout time.Duration, handler func(
 		}
 		return g.pool.Invoke(p)
 	}
-	go g.handle(newCtx, handler, cancel)
+	go func() {
+		g.handle(newCtx, handler, cancel)
+		// Put message back to pool.
+		codec.PutBackMessage(newMsg)
+	}()
 	return nil
 }
 
@@ -272,6 +305,16 @@ var DefaultGoer = NewAsyncGoer(0, PanicBufLen, true)
 // you should set a suitable timeout to control the lifetime of the new goroutine to prevent goroutine leaks.
 func Go(ctx context.Context, timeout time.Duration, handler func(context.Context)) error {
 	return DefaultGoer.Go(ctx, timeout, handler)
+}
+
+// ExpandEnv looks for ${var} in s and replaces them with value of the
+// corresponding environment variables.
+// $var is considered invalid.
+// It's not like os.ExpandEnv which will handle both ${var} and $var.
+// Since configurations like password for redis/mysql may contain $, this
+// method is needed.
+func ExpandEnv(s string) string {
+	return string(expandenv.ExpandEnv([]byte(s)))
 }
 
 // --------------- the following code is IP Config related -----------------//
@@ -366,15 +409,15 @@ func (p *netInterfaceIP) getIPByNic(nic string) string {
 // localIP records the local nic name->nicIP mapping.
 var localIP = &netInterfaceIP{}
 
-// getIP returns ip addr by nic name.
-func getIP(nic string) string {
+// GetIP returns ip addr by nic name.
+func GetIP(nic string) string {
 	ip := localIP.getIPByNic(nic)
 	return ip
 }
 
-// deduplicate merges two slices.
+// Deduplicate merges two slices.
 // Order will be kept and duplication will be removed.
-func deduplicate(a, b []string) []string {
+func Deduplicate(a, b []string) []string {
 	r := make([]string, 0, len(a)+len(b))
 	m := make(map[string]bool)
 	for _, s := range append(a, b...) {

@@ -5,7 +5,8 @@ The tRPC framework uses PB to define services, but providing REST-style APIs bas
 ## Usage
 
 - Define a PB file that contains the service definition and RESTful annotations.
-```protobuf
+
+```proto
 // file : examples/features/restful/server/pb/helloworld.proto
 // Greeter service
 service Greeter {
@@ -22,11 +23,13 @@ service Greeter {
 ```
 
 - Generate the stub code.
+
 ```shell
 trpc create -p helloworld.proto --rpconly --gotag --alias -f -o=.
 ```
 
 - Implement the service.
+
 ```go
 // file : examples/features/restful/server/main.go
 type greeterService struct{
@@ -44,6 +47,7 @@ func (g greeterService) SayHello(ctx context.Context, req *pb.HelloRequest) (*pb
 ```
 
 - Register the service.
+
 ```go
 // file : examples/features/restful/server/main.go
 // Register Greeter service
@@ -51,6 +55,7 @@ pb.RegisterGreeterService(server, new(greeterService))
 ```
 
 - config
+
 ```yaml
 # file : examples/features/restful/server/trpc_go.yaml
 server:                                            # server configuration.
@@ -67,21 +72,21 @@ server:                                            # server configuration.
       protocol: restful                            # application layer protocol. NOTE restful service this is restful.
 ```
 
-* Start server.
+- Start server.
 
 ```shell
-$ go run server/main.go -conf server/trpc_go.yaml
+go run server/main.go -conf server/trpc_go.yaml
 ```
 
-* Start client.
+- Start client.
 
 ```shell
-$ go run client/main.go -conf client/trpc_go.yaml
+go run client/main.go -conf client/trpc_go.yaml
 ```
 
-* Server output
+- Server output
 
-```
+```log
 2023-05-10 20:31:11.628 DEBUG   maxprocs/maxprocs.go:47 maxprocs: Leaving GOMAXPROCS=16: CPU quota undefined
 2023-05-10 20:31:11.629 INFO    server/service.go:164   process:2140, restful service:trpc.test.helloworld.Greeter launch success, tcp:127.0.0.1:9092, serving ...
 2023-05-10 20:31:23.336 INFO    server/main.go:28       [restful] Received SayHello request with req: name:"trpc-restful"
@@ -90,9 +95,9 @@ $ go run client/main.go -conf client/trpc_go.yaml
 2023-05-10 20:31:23.357 INFO    server/main.go:52       [restful] Received UpdateMessageV2 request with req: message_id:"123" message:"trpc-restful-patch-v2"
 ```
 
-* Client output
+- Client output
 
-```
+```log
 2023-05-11 11:09:20.911 INFO    client/main.go:55       helloRsp : [restful] SayHello Hello trpc-restful
 2023-05-11 11:09:20.912 INFO    client/main.go:66       messageWildcardRsp : [restful] Message name:messages/trpc-restful-wildcard,subfield:wildcard
 2023-05-11 11:09:20.912 INFO    client/main.go:84       updateMessageRsp : [restful] UpdateMessage message_id:123,message:trpc-restful-patch

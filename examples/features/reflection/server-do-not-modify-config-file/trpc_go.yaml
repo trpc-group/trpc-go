@@ -1,0 +1,20 @@
+global:
+  namespace: Development
+  env_name: test
+
+server:
+  app: examples
+  server: echo
+  service:
+    - name: trpc.test.helloworld.GreeterXXX
+      ip: 127.0.0.1
+      nic: eth0
+      port: 8003
+      network: tcp
+      protocol: trpc
+    - name: trpc.examples.echo.EchoYYY
+      ip: 127.0.0.1
+      nic: eth0
+      port: 8004
+      network: tcp
+      protocol: trpc

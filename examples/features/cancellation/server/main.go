@@ -15,10 +15,10 @@
 package main
 
 import (
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/examples/features/common"
 	"trpc.group/trpc-go/trpc-go/log"
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 func main() {
@@ -26,7 +26,7 @@ func main() {
 	s := trpc.NewServer()
 
 	// Register service.
-	pb.RegisterGreeterService(s, &common.GreeterServerImpl{})
+	pb.RegisterGreeterService(s.Service("trpc.examples.cancellation.TestCancellation"), &common.GreeterServerImpl{})
 
 	// Serve and listen.
 	if err := s.Serve(); err != nil {

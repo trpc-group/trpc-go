@@ -24,7 +24,7 @@ import (
 	"io"
 	"strconv"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	pb "trpc.group/trpc-go/trpc-go/examples/features/stream/proto"
 	"trpc.group/trpc-go/trpc-go/log"
@@ -46,6 +46,13 @@ func main() {
 		client.WithMaxWindowSize(1 * 1024 * 1024),
 	}
 	proxy := pb.NewTestStreamClientProxy(opts...)
+
+	rsp, err := proxy.UnaryCall(trpc.BackgroundContext(), &pb.HelloReq{Msg: "hello"})
+	if err != nil {
+		log.Errorf("UnaryCall: %v", err)
+	} else {
+		log.Infof("UnaryCall reply message is: %s", rsp.GetMsg())
+	}
 
 	ctx := trpc.BackgroundContext()
 	switch *streamType {
@@ -86,7 +93,7 @@ func clientStream(ctx context.Context, proxy pb.TestStreamClientProxy) error {
 		// Call Send to continuously send data.
 		if err = streamClient.Send(&pb.HelloReq{Msg: fmt.Sprintf("ping : %v", i)}); err != nil {
 			log.ErrorContextf(ctx, "ClientStream send error: %v", err)
-			return err
+			break
 		}
 	}
 
@@ -134,7 +141,7 @@ func bidirectionalStream(ctx context.Context, proxy pb.TestStreamClientProxy) er
 		// The client send request data to the server 5 times using a for loop.
 		if err = streamClient.Send(&pb.HelloReq{Msg: "ping: " + strconv.Itoa(i)}); err != nil {
 			log.ErrorContextf(ctx, "BidirectionalStream Send message error: %v", err)
-			return err
+			break
 		}
 	}
 

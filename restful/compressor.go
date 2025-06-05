@@ -47,28 +47,37 @@ func RegisterCompressor(c Compressor) {
 	compressors[c.Name()] = c
 }
 
+// MustRegisterCompressor registers a Compressor.
+// This function is not thread-safe, it should only be called in init() function.
+// It will panic if the compressor has been registered.
+//
+// In most cases, the framework uses the init + RegisterCompressor method for registration. However, due to
+// the unpredictable execution order of init functions, some unknown situations may arise. For example:
+//
+// If your code uses init + MustRegisterCompressor to forcibly register a component 'xxx', while the framework
+// uses init + RegisterCompressor to register another component 'yyy', conflicts may occur. If the init function
+// for MustRegisterCompressor is executed before the conflicting init function, MustRegisterCompressor might not raise
+// an error or panic as expected.
+//
+// Therefore, it's important to be cautious when using MustRegisterCompressor and to carefully consider any
+// potential conflicts or unintended consequences that may arise from its use.
+func MustRegisterCompressor(c Compressor) {
+	if GetCompressor(c.Name()) != nil {
+		panic("compressor already registered: " + c.Name())
+	}
+	RegisterCompressor(c)
+}
+
 // GetCompressor returns a Compressor by name.
 func GetCompressor(name string) Compressor {
 	return compressors[name]
 }
 
-// compressorForTranscoding returns inbound/outbound Compressors for transcoding.
-func compressorForTranscoding(contentEncodings []string, acceptEncodings []string) (Compressor, Compressor) {
-	var reqCompressor, respCompressor Compressor // both could be nil
-
-	for _, contentEncoding := range contentEncodings {
-		if c, ok := compressors[contentEncoding]; ok {
-			reqCompressor = c
-			break
+func compressor(contentOrAcceptEncodings []string) Compressor {
+	for _, contentOrAcceptEncoding := range contentOrAcceptEncodings {
+		if c, ok := compressors[contentOrAcceptEncoding]; ok {
+			return c
 		}
 	}
-
-	for _, acceptEncoding := range acceptEncodings {
-		if c, ok := compressors[acceptEncoding]; ok {
-			respCompressor = c
-			break
-		}
-	}
-
-	return reqCompressor, respCompressor
+	return nil
 }

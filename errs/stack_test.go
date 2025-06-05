@@ -60,7 +60,7 @@ func TestFrameFormat(t *testing.T) {
 	}, {
 		initpc,
 		"%d",
-		"24",
+		"11",
 	}, {
 		0,
 		"%d",
@@ -90,7 +90,7 @@ func TestFrameFormat(t *testing.T) {
 	}, {
 		initpc,
 		"%v",
-		"stack_test.go:24",
+		"stack_test.go:11",
 	}, {
 		initpc,
 		"%+v",
@@ -185,19 +185,19 @@ func TestStackTraceFormat(t *testing.T) {
 	}, {
 		getStackTrace()[:2],
 		"%v",
-		`\[stack_test.go:134 stack_test.go:186\]`,
+		`\[stack_test.go:121 stack_test.go:173\]`,
 	}, {
 		getStackTrace()[:2],
 		"%+v",
 		"\n" +
 			"trpc.group/trpc-go/trpc-go/errs.getStackTrace\n" +
-			"\t.+errs/stack_test.go:134\n" +
+			"\t.+errs/stack_test.go:121\n" +
 			"trpc.group/trpc-go/trpc-go/errs.TestStackTraceFormat\n" +
-			"\t.+errs/stack_test.go:190",
+			"\t.+errs/stack_test.go:177",
 	}, {
 		getStackTrace()[:2],
 		"%#v",
-		`\[\]errs\.frame{stack_test.go:134, stack_test.go:198}`,
+		`\[\]errs\.frame{stack_test.go:121, stack_test.go:185}`,
 	}}
 
 	for i, tt := range tests {

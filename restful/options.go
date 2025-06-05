@@ -18,9 +18,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/valyala/fasthttp"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/filter"
+	"github.com/valyala/fasthttp"
 )
 
 // Options are restful router options.
@@ -29,18 +29,28 @@ type Options struct {
 	environment string // global environment
 	container   string // global container name
 	set         string // global set name
+	// disableRequestTimeout disables request timeout passed from the caller.
+	disableRequestTimeout bool
 
-	ServiceName           string                // tRPC service name
-	ServiceImpl           interface{}           // tRPC service impl
-	FilterFunc            ExtractFilterFunc     // extract tRPC service filter chain
-	ErrorHandler          ErrorHandler          // error handler
-	HeaderMatcher         HeaderMatcher         // header matcher
-	ResponseHandler       CustomResponseHandler // custom response handler
-	FastHTTPErrHandler    FastHTTPErrorHandler  // fasthttp error handler
-	FastHTTPHeaderMatcher FastHTTPHeaderMatcher // fasthttp header matcher
-	FastHTTPRespHandler   FastHTTPRespHandler   // fasthttp custom response handler
-	DiscardUnknownParams  bool                  // ignore unknown query params
-	Timeout               time.Duration         // timeout
+	ServiceName                  string                       // tRPC service name
+	ServiceImpl                  interface{}                  // tRPC service impl
+	FilterFunc                   ExtractFilterFunc            // extract tRPC service filter chain
+	ErrorHandler                 ErrorHandler                 // error handler
+	HeaderMatcher                HeaderMatcher                // header matcher
+	RespSerializerGetter         RespSerializerGetter         // response serializer getter
+	ResponseHandler              CustomResponseHandler        // custom response handler
+	FastHTTPErrHandler           FastHTTPErrorHandler         // fasthttp error handler
+	FastHTTPHeaderMatcher        FastHTTPHeaderMatcher        // fasthttp header matcher
+	FastHTTPRespSerializerGetter FastHTTPRespSerializerGetter // fasthttp response serializer getter
+	FastHTTPRespHandler          FastHTTPRespHandler          // fasthttp custom response handler
+	DiscardUnknownParams         bool                         // ignore unknown query params
+	Timeout                      time.Duration                // timeout
+
+	methods map[string]*methodOptions
+}
+
+type methodOptions struct {
+	timeout *time.Duration
 }
 
 // Option sets restful router options.
@@ -110,6 +120,15 @@ func WithServiceName(name string) Option {
 	}
 }
 
+// WithServiceImpl returns an Option that sets tRPC service impl for the restful router.
+// Deprecated: should use (*Router).AddImplBinding to pass a specified service implementation
+// for each set of bindings.
+func WithServiceImpl(impl interface{}) Option {
+	return func(o *Options) {
+		o.ServiceImpl = impl
+	}
+}
+
 // WithFilterFunc returns an Option that sets tRPC service filter chain extracting function
 // for the restful router.
 func WithFilterFunc(f ExtractFilterFunc) Option {
@@ -138,6 +157,13 @@ func WithHeaderMatcher(m HeaderMatcher) Option {
 	}
 }
 
+// WithRespSerializerGetter returns an Option that sets serializer getter for the restful router.
+func WithRespSerializerGetter(s RespSerializerGetter) Option {
+	return func(o *Options) {
+		o.RespSerializerGetter = s
+	}
+}
+
 // WithResponseHandler returns an Option that sets custom response handler for
 // the restful router.
 func WithResponseHandler(h CustomResponseHandler) Option {
@@ -162,6 +188,14 @@ func WithFastHTTPHeaderMatcher(m FastHTTPHeaderMatcher) Option {
 	}
 }
 
+// WithFastHTTPRespSerializerGetter returns an Option that sets fasthttp serializer getter
+// for the restful router.
+func WithFastHTTPRespSerializerGetter(s FastHTTPRespSerializerGetter) Option {
+	return func(o *Options) {
+		o.FastHTTPRespSerializerGetter = s
+	}
+}
+
 // WithFastHTTPRespHandler returns an Option that sets fasthttp custom response
 // handler for the restful router.
 func WithFastHTTPRespHandler(h FastHTTPRespHandler) Option {
@@ -182,6 +216,24 @@ func WithDiscardUnknownParams(i bool) Option {
 func WithTimeout(t time.Duration) Option {
 	return func(o *Options) {
 		o.Timeout = t
+	}
+}
+
+// WithMethodTimeout returns an Options that set timeout for the method of restful router.
+func WithMethodTimeout(method string, timeout time.Duration) Option {
+	return func(o *Options) {
+		if mo, ok := o.methods[method]; !ok {
+			o.methods[method] = &methodOptions{timeout: &timeout}
+		} else {
+			mo.timeout = &timeout
+		}
+	}
+}
+
+// WithDisableRequestTimeout returns an Option that disables timeout for handling requests.
+func WithDisableRequestTimeout(disable bool) Option {
+	return func(o *Options) {
+		o.disableRequestTimeout = disable
 	}
 }
 

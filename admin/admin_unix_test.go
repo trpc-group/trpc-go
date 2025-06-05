@@ -59,7 +59,7 @@ func TestReuseListener(t *testing.T) {
 	err = os.Setenv(transport.EnvGraceRestartFdNum, "1")
 	assert.Nil(t, err)
 
-	s := NewServer()
+	s := NewTrpcAdminServer()
 	ln1, err := s.listen("tcp", tln.Addr().String())
 	assert.Nil(t, err)
 	assert.Equal(t, tln.Addr(), ln1.Addr())

@@ -16,48 +16,69 @@ package discovery
 import (
 	"testing"
 
-	"trpc.group/trpc-go/trpc-go/naming/registry"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"trpc.group/trpc-go/trpc-go/naming/registry"
 )
 
-var testNode *registry.Node = &registry.Node{
-	ServiceName: "testservice",
-	Address:     "testservice.ip.1:16721",
-	Network:     "tcp",
+var testNodes = []*registry.Node{
+	{
+		ServiceName: "testservice",
+		Address:     "testservice.ip.1:16721",
+		Network:     "tcp",
+	},
 }
 
 type testDiscovery struct{}
 
 // List 获取节点列表
 func (d *testDiscovery) List(serviceName string, opt ...Option) ([]*registry.Node, error) {
-	return []*registry.Node{testNode}, nil
+	return testNodes, nil
 }
 
 func TestDiscoveryRegister(t *testing.T) {
-	Register("test-discovery", &testDiscovery{})
-	assert.NotNil(t, Get("test-discovery"))
-	unregisterForTesting("test-discovery")
+	want := &testDiscovery{}
+	Register("test-discovery", want)
+	t.Cleanup(func() {
+		unregister(t, "test-discovery")
+	})
+	require.Equal(t, want, Get("test-discovery"))
 }
 
 func TestDiscoveryGet(t *testing.T) {
-	Register("test-discovery", &testDiscovery{})
-	assert.NotNil(t, Get("test-discovery"))
-	unregisterForTesting("test-discovery")
-	assert.Nil(t, Get("not_exist"))
+	want := &testDiscovery{}
+	Register("test-discovery", want)
+	t.Cleanup(func() {
+		unregister(t, "test-discovery")
+	})
+	require.Equal(t, want, Get("test-discovery"))
+	require.Nil(t, Get("not_exist"))
 }
 
 func TestDiscoveryList(t *testing.T) {
-	Register("test-discovery", &testDiscovery{})
+	want := &testDiscovery{}
+	Register("test-discovery", want)
+	t.Cleanup(func() {
+		unregister(t, "test-discovery")
+	})
 	d := Get("test-discovery")
-	list, err := d.List("test-service", nil)
+	nodes, err := d.List("test-service", nil)
 	assert.Nil(t, err)
-	assert.Equal(t, list[0], testNode)
-	unregisterForTesting("test-discovery")
+	assert.Equal(t, testNodes, nodes)
+
 }
 
 func TestSetDefaultDiscovery(t *testing.T) {
 	noop := &testDiscovery{}
 	SetDefaultDiscovery(noop)
 	assert.Equal(t, DefaultDiscovery, noop)
+}
+
+func unregister(t *testing.T, name string) {
+	t.Helper()
+
+	lock.Lock()
+	delete(discoveries, name)
+	lock.Unlock()
 }

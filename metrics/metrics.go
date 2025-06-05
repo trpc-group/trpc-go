@@ -46,6 +46,10 @@ import (
 	"time"
 )
 
+// Do not assume that these mutexes are always available for the following global maps.
+// Avoid any concurrent modifications to these maps after initialization/setup.
+// Even during setup, refrain from directly or indirectly modifying them through a newly created goroutine.
+// For more information, please refer to https://git.woa.com/trpc-go/trpc-go/issues/822.
 var (
 	// metricsSinks emits same metrics information to multi external system at the same time.
 	metricsSinksMutex = sync.RWMutex{}
@@ -168,7 +172,7 @@ func Histogram(name string, buckets BucketBounds) IHistogram {
 		return h
 	}
 
-	// histogramsMutex 的锁范围不应该包括 metricsSinksMutex 的锁。
+	// histogramsMutex's lock range should not include metricsSinksMutex's lock.
 	histogramsMutex.Lock()
 	h, ok = histograms[name]
 	if ok && h != nil {

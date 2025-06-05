@@ -2,7 +2,6 @@ English | [中文](README.zh_CN.md)
 
 # tRPC-Go Client Package
 
-
 ## Background
 
 User invoke RPC requests through stub code, and then the request enters client package, where the client package is responsible for the service discovery, interceptor execution, serialization, and compression, and finally, it's sent to the network via the transport package. Upon receiving a network response, the client package executes decompression, deserialization, interceptor execution, and ultimately returns the response to the user. Each step in the client package can be customized, allowing users to define their own service discovery methods, interceptors, serialization, compression, etc.

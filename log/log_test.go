@@ -14,23 +14,17 @@
 package log_test
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"path/filepath"
-	"runtime"
-	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+	"gopkg.in/yaml.v3"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/log"
+	"trpc.group/trpc-go/trpc-go/plugin"
 )
 
 func TestSetLevel(t *testing.T) {
@@ -52,7 +46,8 @@ func TestLogXXX(t *testing.T) {
 func TestLoggerNil(t *testing.T) {
 	ctx := context.Background()
 	ctx, msg := codec.WithNewMessage(ctx)
-	msg.WithLogger((log.Logger)(nil))
+	msg.WithLogger((*log.ZapLogWrapper)(nil))
+
 	log.EnableTrace()
 	log.TraceContext(ctx, "test")
 	log.TraceContextf(ctx, "test %s", "log")
@@ -105,161 +100,189 @@ func TestWithContextFields(t *testing.T) {
 	require.NotNil(t, codec.Message(newCtx).Logger())
 }
 
-func TestOptionLogger1(t *testing.T) {
-	log.Debug("test1")
-	log.Debug("test2")
-	log.Debug("test3")
+func TestLogFactory(t *testing.T) {
+
+	log.EnableTrace()
+
+	f := &log.Factory{}
+
+	assert.Equal(t, "log", f.Type())
+
+	// empty decoder
+	err := f.Setup("default", nil)
+	assert.NotNil(t, err)
+
+	log.Register("default", log.DefaultLogger)
+	assert.Equal(t, log.DefaultLogger, log.Get("default"))
+	assert.Nil(t, log.Get("empty"))
+	log.Sync()
+
+	logger := log.WithFields("uid", "1111")
+	assert.NotNil(t, logger)
+	logger.Debugf("test")
+
+	log.Trace("test")
+	log.Tracef("test %s", "s")
+	log.Debug("test")
+	log.Debugf("test %s", "s")
+	log.Error("test")
+	log.Errorf("test %s", "s")
+	log.Info("test")
+	log.Infof("test %s", "s")
+	log.Warn("test")
+	log.Warnf("test %s", "s")
+	log.Fatal("test %s", "s")
+	log.Fatalf("test %s", "s")
+
 	ctx := context.Background()
+	log.TraceContext(ctx, "test")
+	log.TraceContextf(ctx, "test")
+	log.DebugContext(ctx, "test")
+	log.DebugContextf(ctx, "test")
+	log.InfoContext(ctx, "test")
+	log.InfoContextf(ctx, "test %s", "s")
+	log.ErrorContext(ctx, "test")
+	log.ErrorContextf(ctx, "test")
+	log.FatalContext(ctx, "test")
+	log.FatalContextf(ctx, "test")
+	log.WarnContext(ctx, "test")
+	log.WarnContextf(ctx, "test")
+	log.WithFieldsContext(ctx, "field", "testfield").Debugf("testdebug")
+	log.WithFieldsContext(ctx, "field", "testfield").
+		WithFields("field2", "testfield2").Debugf("testdebug")
+	log.WithContext(ctx, log.Field{Key: "abc", Value: 123}).Debug("testdebug")
+
 	ctx, msg := codec.WithNewMessage(ctx)
 	msg.WithCallerServiceName("trpc.test.helloworld.Greeter")
 	log.WithContextFields(ctx, "a", "a")
 	log.TraceContext(ctx, "test")
+	log.TraceContextf(ctx, "test")
+	log.DebugContext(ctx, "test")
+	log.DebugContextf(ctx, "test")
 	log.InfoContext(ctx, "test")
-	log.WithContextFields(ctx, "b", "b")
-	log.InfoContext(ctx, "test")
-
-	trpc.Message(ctx).WithLogger(log.Get("default"))
-	log.DebugContext(ctx, "custom log msg")
-}
-
-func TestCustomLogger(t *testing.T) {
-	log.Register("custom", log.NewZapLogWithCallerSkip(log.Config{log.OutputConfig{Writer: "console"}}, 1))
-	log.Get("custom").Debug("test")
-}
-
-const (
-	noOptionBufLogger = "noOptionBuf"
-	customBufLogger   = "customBuf"
-)
-
-func getCtxFuncs() []func() context.Context {
-	return []func() context.Context{
-		func() context.Context {
-			return context.Background()
-		},
-		func() context.Context {
-			ctx, msg := codec.WithNewMessage(context.Background())
-			msg.WithCallerServiceName("trpc.test.helloworld.Greeter")
-			return ctx
-		}, func() context.Context {
-			ctx, msg := codec.WithNewMessage(context.Background())
-			msg.WithLogger(log.GetDefaultLogger())
-			msg.WithCallerServiceName("trpc.test.helloworld.Greeter")
-			return ctx
-		}, func() context.Context {
-			ctx, msg := codec.WithNewMessage(context.Background())
-			msg.WithLogger(log.Get(noOptionBufLogger))
-			msg.WithCallerServiceName("trpc.test.helloworld.Greeter")
-			return ctx
-		},
-	}
-}
-
-func TestWithContext(t *testing.T) {
-	old := log.GetDefaultLogger()
-	defer log.SetLogger(old)
-	for _, ctxFunc := range getCtxFuncs() {
-		ctx := ctxFunc()
-		checkTrace(t, func() {
-			log.WithContext(ctx, log.Field{Key: "123", Value: 123}).Debugf("test")
-			log.WithContext(ctx, log.Field{Key: "123", Value: 123}).With(log.Field{Key: "k2", Value: "v2"}).Debugf("test")
-			log.WithContext(ctx, log.Field{Key: "123", Value: 123}).With(log.Field{Key: "k2", Value: "v2"}).With(log.Field{Key: "k2", Value: "v2"}).Debugf("test")
-		}, nil)
-	}
-}
-
-func TestStacktrace(t *testing.T) {
-	checkTrace(t, func() {
-		log.Debug("test")
-		log.Error("test")
-	}, nil)
-}
-
-func check(t *testing.T, out *bytes.Buffer, fn func()) {
-	fn()
-
-	_, file, start, ok := runtime.Caller(2)
-	assert.True(t, ok)
-
-	pathPre := filepath.Join(filepath.Base(filepath.Dir(file)), filepath.Base(file)) + ":"
-	trace := out.String()
-	count := strings.Count(trace, pathPre)
-	fmt.Println(" line count:", count, "start:", start+1, "end:", start+count)
-	fmt.Println(trace)
-	for line := start + 1; line <= start+count; line++ {
-		path := pathPre + strconv.Itoa(line)
-		require.Contains(t, out.String(), path, "log trace error")
-	}
-
-	verifyNoZap(t, trace)
-}
-
-var (
-	buf = &bytes.Buffer{}
-)
-
-func init() {
-	log.Register(customBufLogger, log.NewZapBufLogger(buf, 1))
-	log.Register(noOptionBufLogger, newNoOptionBufLogger(buf, 1))
-}
-
-// checkTrace set buf log to check trace.
-func checkTrace(t *testing.T, fn func(), setLog func()) {
-	*buf = bytes.Buffer{}
-	log.SetLogger(log.NewZapBufLogger(buf, 2))
-	if setLog != nil {
-		setLog()
-	}
-	check(t, buf, fn)
-}
-
-func verifyNoZap(t *testing.T, logs string) {
-	for _, fnPrefix := range zapPackages {
-		require.NotContains(t, logs, fnPrefix, "should not contain zap package")
-	}
-}
-
-// zapPackages are packages that we search for in the logging output to match a
-// zap stack frame.
-var zapPackages = []string{
-	"go.uber.org/zap",
-	"go.uber.org/zap/zapcore",
-}
-
-func TestLogFatal(t *testing.T) {
-	old := log.GetDefaultLogger()
-	defer log.SetLogger(old)
-
-	var h customWriteHook
-	log.SetLogger(log.NewZapFatalLogger(&h))
-	log.Fatal("test")
-	assert.True(t, h.called)
-	h.called = false
-	log.Fatalf("test")
-	assert.True(t, h.called)
-	h.called = false
-	ctx := context.Background()
+	log.InfoContextf(ctx, "test %s", "s")
+	log.ErrorContext(ctx, "test")
+	log.ErrorContextf(ctx, "test")
 	log.FatalContext(ctx, "test")
-	assert.True(t, h.called)
-	h.called = false
 	log.FatalContextf(ctx, "test")
-	assert.True(t, h.called)
+	log.WarnContext(ctx, "test")
+	log.WarnContextf(ctx, "test")
+	log.WithFieldsContext(ctx, "test")
+	log.WithFieldsContext(ctx, "field", "testfield").Debugf("testdebug")
+	log.WithFieldsContext(ctx, "field", "testfield").
+		WithFields("field2", "testfield2").Debugf("testdebug")
 
-	ctx, msg := codec.WithNewMessage(context.Background())
-	msg.WithLogger(log.GetDefaultLogger())
-	msg.WithCallerServiceName("trpc.test.helloworld.Greeter")
-	h.called = false
-	log.FatalContext(ctx, "test")
-	assert.True(t, h.called)
-	h.called = false
-	log.FatalContextf(ctx, "test")
-	assert.True(t, h.called)
 }
 
-type customWriteHook struct {
-	called bool
+func TestWriterFactory(t *testing.T) {
+	t.Run("console", func(t *testing.T) {
+		f := &log.ConsoleWriterFactory{}
+		require.Equal(t, "log", f.Type())
+
+		err := f.Setup("default", nil)
+		require.Contains(t, err.Error(), "decoder empty")
+	})
+	t.Run("file", func(t *testing.T) {
+		f := &log.FileWriterFactory{}
+		require.Equal(t, "log", f.Type())
+
+		err := f.Setup("default", nil)
+		require.Contains(t, err.Error(), "decoder empty")
+	})
+
 }
 
-func (h *customWriteHook) OnWrite(_ *zapcore.CheckedEntry, _ []zap.Field) {
-	h.called = true
+const configInfo = `
+plugins:
+  log:
+    default:
+     - writer: console # default as console std output
+       level: debug # std log level
+     - writer: file # local log file
+       level: debug # std log level
+       writer_config: # config of local file output
+         filename: trpc_time.log # the path of local rolling log files
+         roll_type: time    # file rolling type
+         max_age: 7         # max expire days
+         time_unit: day     # rolling time interval
+     - writer: file # local file log
+       level: debug # std output log level
+       writer_config: # config of local file output
+         filename: trpc_size.log # the path of local rolling log files
+         roll_type: size    # file rolling type
+         max_age: 7         # max expire days
+         max_size: 100      # size of local rolling file, unit MB
+         max_backups: 10    # max number of log files
+         compress:  false   # should compress log file
+     - writer: file # local file log
+       level: debug # std output log level
+       writer_config: # config of local file output
+         filename: "trpc_size_{time_format}.log" # the path of local rolling log files
+         roll_type: time    # file rolling type
+         max_age: 7         # max expire days
+         max_size: 100      # size of local rolling file, unit MB
+         max_backups: 10    # max number of log files
+         compress:  false   # should compress log file
+`
+
+func TestLogFactorySetup(t *testing.T) {
+	oldDefaultLogger := log.GetDefaultLogger()
+	defer func() {
+		log.Register("default", oldDefaultLogger)
+	}()
+
+	var cfg trpc.Config
+	mustYamlUnmarshal(t, []byte(configInfo), &cfg)
+	conf := cfg.Plugins["log"]["default"]
+	err := plugin.Get("log", "default").Setup("default", &plugin.YamlNodeDecoder{Node: &conf})
+	assert.Nil(t, err)
+
+	log.Trace("test")
+	log.Debug("test")
+	log.Error("test")
+	log.Info("test")
+	log.Warn("test")
+}
+
+func TestIllegalLogFactory(t *testing.T) {
+	var cfg trpc.Config
+	mustYamlUnmarshal(t, []byte(configInfo), &cfg)
+	err := plugin.Get("log", "default").Setup("default", &fakeDecoder{})
+	require.Contains(t, err.Error(), "log config output empty")
+}
+
+const illConfigInfo = `
+plugins:
+  log:
+    default:
+     - writer: file # local file log
+       level: debug # std output log level
+       writer_config: # config of local file output
+         filename:  # path of local file rolling log files
+         roll_type: time    # rolling file type
+         max_age: 7         # max expire days
+         time_unit: day     # rolling time interval
+`
+
+func TestIllLogConfigPanic(t *testing.T) {
+	var cfg trpc.Config
+	mustYamlUnmarshal(t, []byte(illConfigInfo), &cfg)
+	conf := cfg.Plugins["log"]["default"]
+	require.Panicsf(t, func() {
+		plugin.Get("log", "default").Setup("default", &plugin.YamlNodeDecoder{Node: &conf})
+	}, "NewRollWriter would return an error if file name is not configured")
+}
+
+type fakeDecoder struct{}
+
+func (c *fakeDecoder) Decode(conf interface{}) error {
+	return nil
+}
+
+func mustYamlUnmarshal(t *testing.T, in []byte, out interface{}) {
+	t.Helper()
+
+	if err := yaml.Unmarshal(in, out); err != nil {
+		t.Fatal(err)
+	}
 }

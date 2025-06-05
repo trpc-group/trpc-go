@@ -15,12 +15,11 @@ package test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"time"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/errs"
 	testpb "trpc.group/trpc-go/trpc-go/test/protocols"
 )
@@ -63,9 +62,9 @@ func (s *TRPCService) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (
 		trpc.SetMetaData(ctx, "repeat-value", append(value, value...))
 	}
 
-	rsp := &testpb.SimpleResponse{Payload: payload}
+	rsp := &testpb.SimpleResponse{Payload: payload, ProxyPath: in.ProxyPath}
 	if in.FillUsername {
-		// Validate the user name in request.
+		// Validate the username in request.
 		if in.Username != validUserNameForAuth {
 			return nil, errs.NewFrameError(errs.RetServerAuthFail, "need valid user name!")
 		}
@@ -170,10 +169,24 @@ type testHTTPService struct {
 	TRPCService
 }
 
+type testFastHTTPService struct {
+	TRPCService
+}
+
 type testRESTfulService struct {
 	ts TRPCService
 	// Customizable implementations of server handlers.
 	UnaryCallF func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
+}
+
+func (s *testRESTfulService) GetKnowledgeBase(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	println("entering testRESTfulService.GetKnowledgeBase")
+	return &testpb.SimpleResponse{}, nil
+}
+
+func (s *testRESTfulService) SearchDocument(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	println("entering testRESTfulService.SearchDocument")
+	return &testpb.SimpleResponse{}, nil
 }
 
 func (s *testRESTfulService) UnaryCall(
@@ -191,13 +204,13 @@ func newPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error) {
 	}
 
 	switch t {
-	case testpb.PayloadType_COMPRESSIBLE:
+	case testpb.PayloadType_COMPRESSABLE:
 		return &testpb.Payload{
 			Type: t,
 			Body: make([]byte, size),
 		}, nil
 	case testpb.PayloadType_UNCOMPRESSABLE:
-		return nil, errors.New("PayloadType UNCOMPRESSABLE is not supported")
+		return nil, fmt.Errorf("PayloadType UNCOMPRESSABLE is not supported")
 	default:
 		return nil, errs.New(retUnsupportedPayload, fmt.Sprintf("unsupported payload type: %d", t))
 	}

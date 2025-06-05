@@ -19,6 +19,8 @@ package rpcz
 import (
 	"crypto/rand"
 	"encoding/binary"
+
+	"trpc.group/trpc-go/trpc-go/internal/rpczenable"
 )
 
 // GlobalRPCZ to collect span, config by admin module.
@@ -42,13 +44,19 @@ var _ recorder = (*RPCZ)(nil)
 func NewRPCZ(cfg *Config) *RPCZ {
 	var rngSeed int64
 	_ = binary.Read(rand.Reader, binary.LittleEndian, &rngSeed)
+	enabled := cfg.Fraction > 0.0
+	// Modifying a global variable within a constructor may not be considered
+	// the most elegant approach, but I haven't found any alternative solutions.
+	// Additionally, please refer to the comment associated with the global
+	// variable for further information.
+	rpczenable.Enabled = enabled
 	return &RPCZ{
 		shouldRecord: cfg.shouldRecord(),
-		idGenerator:  newRandomIDGenerator(rngSeed),
+		idGenerator:  newRandomIDGenerator(),
 		sampler:      newSpanIDRatioSampler(cfg.Fraction),
 		store:        newSpanStore(cfg.Capacity),
 		exporter:     cfg.Exporter,
-		enabled:      cfg.Fraction > 0.0,
+		enabled:      enabled,
 	}
 }
 

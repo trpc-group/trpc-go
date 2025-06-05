@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-multierror"
+
 	"trpc.group/trpc-go/trpc-go/log"
 )
 
@@ -59,7 +60,7 @@ func (s *Server) Serve() error {
 	case <-s.signalCh:
 	}
 
-	s.tryClose()
+	s.tryClose(nil)
 	if svrErr != nil {
 		log.Errorf("service serve errors: %+v", svrErr)
 	}

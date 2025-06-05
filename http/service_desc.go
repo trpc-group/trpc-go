@@ -29,12 +29,10 @@ var ServiceDesc = server.ServiceDesc{
 
 // Handle registers http handler with custom route.
 func Handle(pattern string, h stdhttp.Handler) {
-	handler := func(w stdhttp.ResponseWriter, r *stdhttp.Request) error {
+	HandleFunc(pattern, func(w stdhttp.ResponseWriter, r *stdhttp.Request) error {
 		h.ServeHTTP(w, r)
 		return nil
-	}
-
-	ServiceDesc.Methods = append(ServiceDesc.Methods, generateMethod(pattern, handler))
+	})
 }
 
 // HandleFunc registers http handler with custom route.

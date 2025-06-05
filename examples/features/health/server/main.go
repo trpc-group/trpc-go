@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"time"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/healthcheck"
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 func main() {
@@ -90,11 +90,12 @@ func main() {
 		// Since there's no health check, the status of service will be set to Serving
 		time.Sleep(30 * time.Second)
 		unregisterHealthCheckFoo()
-		fmt.Println("the health check for service foo is unregistered, " +
-			"there's no health check for the server, the status is Serving by default")
+		fmt.Println("the health check for service foo is unregistered, there's no health check for the server, " +
+			"the status is Serving by default")
 	}()
 
-	pb.RegisterGreeterService(s, &greeterServerImpl{})
+	pb.RegisterGreeterService(s.Service("foo"), &greeterServerImpl{})
+	pb.RegisterGreeterService(s.Service("bar"), &greeterServerImpl{})
 	s.Serve()
 }
 

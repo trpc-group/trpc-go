@@ -24,7 +24,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	"trpc.group/trpc-go/trpc-go/errs"
 )
@@ -40,7 +39,7 @@ func TestErrs(t *testing.T) {
 	e := errs.New(111, "inner fail")
 	assert.NotNil(t, e)
 
-	assert.EqualValues(t, 111, errs.Code(e))
+	assert.Equal(t, 111, errs.Code(e))
 	assert.Equal(t, "inner fail", errs.Msg(e))
 
 	err, ok := e.(*errs.Error)
@@ -54,7 +53,7 @@ func TestErrs(t *testing.T) {
 	e = errs.NewFrameError(111, "inner fail")
 	assert.NotNil(t, e)
 
-	assert.EqualValues(t, 111, errs.Code(e))
+	assert.Equal(t, 111, errs.Code(e))
 	assert.Equal(t, "inner fail", errs.Msg(e))
 
 	err, ok = e.(*errs.Error)
@@ -65,10 +64,10 @@ func TestErrs(t *testing.T) {
 	str = err.Error()
 	assert.Contains(t, str, "framework")
 
-	assert.EqualValues(t, 0, errs.Code(nil))
+	assert.Equal(t, 0, errs.Code(nil))
 	assert.Equal(t, "success", errs.Msg(nil))
 
-	assert.EqualValues(t, 0, errs.Code((*errs.Error)(nil)))
+	assert.Equal(t, 0, errs.Code((*errs.Error)(nil)))
 	assert.Equal(t, "success", errs.Msg((*errs.Error)(nil)))
 
 	e = errors.New("unknown error")
@@ -105,6 +104,8 @@ func TestNewFrameError(t *testing.T) {
 	ok := true
 	errs.SetTraceable(ok)
 	e := errs.NewFrameError(111, "inner fail")
+	assert.NotNil(t, e)
+	e = errs.NewCalleeFrameError(111, "callee frame error")
 	assert.NotNil(t, e)
 }
 
@@ -214,10 +215,10 @@ func TestSetTraceableWithContent(t *testing.T) {
 }
 
 func TestErrorChain(t *testing.T) {
-	var e error = errs.Wrap(os.ErrDeadlineExceeded, int(trpc.TrpcRetCode_TRPC_CLIENT_INVOKE_TIMEOUT_ERR), "just wrap")
+	var e error = errs.Wrap(os.ErrDeadlineExceeded, errs.RetClientTimeout, "just wrap")
 	require.Contains(t, errs.Msg(e), os.ErrDeadlineExceeded.Error())
 	e = fmt.Errorf("%w", e)
-	require.Equal(t, trpc.TrpcRetCode_TRPC_CLIENT_INVOKE_TIMEOUT_ERR, errs.Code(e))
+	require.Equal(t, errs.RetClientTimeout, errs.Code(e))
 	require.True(t, errors.Is(e, os.ErrDeadlineExceeded))
 	require.Contains(t, e.Error(), os.ErrDeadlineExceeded.Error())
 }
@@ -299,27 +300,27 @@ func TestWrapSetTraceable(t *testing.T) {
 func TestIsTimeout(t *testing.T) {
 	require.True(t, (&errs.Error{
 		Type: errs.ErrorTypeFramework,
-		Code: trpc.TrpcRetCode_TRPC_CLIENT_INVOKE_TIMEOUT_ERR,
+		Code: errs.RetClientTimeout,
 	}).IsTimeout(errs.ErrorTypeFramework))
 	require.True(t, (&errs.Error{
 		Type: errs.ErrorTypeCalleeFramework,
-		Code: trpc.TrpcRetCode_TRPC_CLIENT_INVOKE_TIMEOUT_ERR,
+		Code: errs.RetClientTimeout,
 	}).IsTimeout(errs.ErrorTypeCalleeFramework))
 	require.False(t, (&errs.Error{
 		Type: errs.ErrorTypeBusiness,
-		Code: trpc.TrpcRetCode_TRPC_CLIENT_INVOKE_TIMEOUT_ERR,
+		Code: errs.RetClientTimeout,
 	}).IsTimeout(errs.ErrorTypeFramework))
 	require.True(t, (&errs.Error{
 		Type: errs.ErrorTypeFramework,
-		Code: trpc.TrpcRetCode_TRPC_CLIENT_FULL_LINK_TIMEOUT_ERR,
+		Code: errs.RetClientFullLinkTimeout,
 	}).IsTimeout(errs.ErrorTypeFramework))
 	require.True(t, (&errs.Error{
 		Type: errs.ErrorTypeFramework,
-		Code: trpc.TrpcRetCode_TRPC_SERVER_TIMEOUT_ERR,
+		Code: errs.RetServerTimeout,
 	}).IsTimeout(errs.ErrorTypeFramework))
 	require.True(t, (&errs.Error{
 		Type: errs.ErrorTypeFramework,
-		Code: trpc.TrpcRetCode_TRPC_SERVER_FULL_LINK_TIMEOUT_ERR,
+		Code: errs.RetServerFullLinkTimeout,
 	}).IsTimeout(errs.ErrorTypeFramework))
 	require.False(t, (&errs.Error{
 		Type: errs.ErrorTypeFramework,
@@ -340,11 +341,17 @@ func TestNestErrors(t *testing.T) {
 	errs.SetTraceable(false)
 	defer errs.SetTraceable(true)
 	const (
-		code trpc.TrpcRetCode = 101
-		msg                   = "test error"
+		code = 101
+		msg  = "test error"
 	)
 	require.Equal(t, code, errs.Code(&testError{Err: errs.New(code, msg)}))
 	require.Equal(t, msg, errs.Msg(&testError{Err: errs.New(code, msg)}))
+}
+
+func TestNilErrorUnwrap(t *testing.T) {
+	var err *errs.Error
+	// Check nil error should not result in panic.
+	require.False(t, errors.Is(err, errors.New("some error")))
 }
 
 type testError struct {

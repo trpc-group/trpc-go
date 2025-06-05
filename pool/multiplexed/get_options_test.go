@@ -14,30 +14,33 @@
 package multiplexed
 
 import (
+	"context"
 	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"trpc.group/trpc-go/trpc-go/codec"
 )
 
 func TestGetOptions(t *testing.T) {
 
 	opts := NewGetOptions()
-	fp := &emptyFrameParser{}
+	fb := &emptyFramerBuilder{}
+	msg := codec.Message(context.Background())
 	caFile := "caFile"
 	keyFile := "keyFile"
 	serverName := "serverName"
 	certFile := "certFile"
 	localAddr := "127.0.0.1:8080"
-	var id uint32 = 2
 
-	opts.WithFrameParser(fp)
-	opts.WithVID(id)
+	opts.WithFramerBuilder(fb)
+	opts.WithMsg(msg)
 	opts.WithDialTLS(certFile, keyFile, caFile, serverName)
 	opts.WithLocalAddr(localAddr)
 
-	assert.Equal(t, opts.FP, fp)
-	assert.Equal(t, opts.VID, id)
+	assert.Equal(t, opts.FramerBuilder, fb)
+	assert.Equal(t, opts.Msg, msg)
 	assert.Equal(t, opts.CACertFile, caFile)
 	assert.Equal(t, opts.TLSKeyFile, keyFile)
 	assert.Equal(t, opts.TLSServerName, serverName)
@@ -45,8 +48,14 @@ func TestGetOptions(t *testing.T) {
 	assert.Equal(t, opts.LocalAddr, localAddr)
 }
 
-type emptyFrameParser struct{}
+type emptyFramerBuilder struct{}
 
-func (efp *emptyFrameParser) Parse(rc io.Reader) (vid uint32, buf []byte, err error) {
-	return 0, nil, nil
+func (*emptyFramerBuilder) New(io.Reader) codec.Framer {
+	return &emptyFramer{}
+}
+
+type emptyFramer struct{}
+
+func (*emptyFramer) ReadFrame() ([]byte, error) {
+	return nil, nil
 }

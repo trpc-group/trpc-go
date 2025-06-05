@@ -18,10 +18,10 @@ import (
 	"fmt"
 	"net/http"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/admin"
 	"trpc.group/trpc-go/trpc-go/examples/features/common"
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 // testCmds defines a custom admin command
@@ -40,7 +40,7 @@ func main() {
 	s := trpc.NewServer()
 
 	// Register service.
-	pb.RegisterGreeterService(s, &common.GreeterServerImpl{})
+	pb.RegisterGreeterService(s.Service("trpc.examples.admin.Admin"), &common.GreeterServerImpl{})
 
 	// Serve and listen.
 	if err := s.Serve(); err != nil {

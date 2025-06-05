@@ -1,0 +1,31 @@
+global:  # global config.
+  namespace: Development  # environment type, two types: production and development.
+  env_name: test  # environment name, names of multiple environments in informal settings.
+
+server:  # server configuration.
+  app: test  # business application name.
+  server: helloworld  # service process name.
+  filter:
+    - global_filter
+  service:  # business service configuration，can have multiple.
+    - name: trpc.test.helloworld.Greeter
+      filter:
+        - local_filter
+      ip: 127.0.0.1  # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
+      nic: eth0  # the service listening network card address, if configures ip, you don't need to configure it.
+      port: 8000  # the service listening port, can use the placeholder ${port}.
+      network: tcp  # the service listening network type,  tcp or udp.
+      protocol: trpc  # application layer protocol, trpc or http.
+    - name: trpc.test.helloworld.Greeter2
+      ip: 127.0.0.1  # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
+      nic: eth0  # the service listening network card address, if configures ip, you don't need to configure it.
+      port: 8001  # the service listening port, can use the placeholder ${port}.
+      network: tcp  # the service listening network type,  tcp or udp.
+      protocol: trpc  # application layer protocol, trpc or http.
+client:  # configuration for client calls.
+  scope: "local"  # change to "remote" to compare the performance between "local" and "remote" (you can also choose "all" to first use "local" then fallback to "remote").
+  # scope: "remote"
+  service:  # configuration for a single backend.
+    - name: trpc.test.helloworld.Greeter
+      target: ip://127.0.0.1:8000
+      # scope: "local"  # per-client service config.

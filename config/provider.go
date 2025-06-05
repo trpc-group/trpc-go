@@ -34,14 +34,11 @@ func newFileProvider() *FileProvider {
 		cache:           make(map[string]string),
 		modTime:         make(map[string]int64),
 	}
-	watcher, err := fsnotify.NewWatcher()
-	if err == nil {
+	if watcher, err := fsnotify.NewWatcher(); err == nil {
 		fp.disabledWatcher = false
 		fp.watcher = watcher
 		go fp.run()
-		return fp
 	}
-	log.Debugf("fsnotify.NewWatcher err: %+v", err)
 	return fp
 }
 
@@ -102,7 +99,7 @@ func (fp *FileProvider) run() {
 }
 
 func (fp *FileProvider) isModified(e fsnotify.Event) (int64, bool) {
-	if e.Op&fsnotify.Write != fsnotify.Write {
+	if !e.Has(fsnotify.Write) {
 		return 0, false
 	}
 	fp.mu.RLock()

@@ -19,7 +19,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/naming/discovery"
@@ -70,7 +70,7 @@ func (s *TestSuite) TestIPSelector() {
 	_, err = c.EmptyCall(
 		trpc.BackgroundContext(),
 		&testpb.Empty{},
-		client.WithTarget(fmt.Sprintf("test-ip-selector://%s", "127.0.0.1:-1")),
+		client.WithTarget(fmt.Sprintf("test-ip-selector://%s", "8.8.8.8:-1")),
 	)
 	require.NotNil(s.T(), err)
 }
@@ -98,7 +98,7 @@ func (s *TestSuite) TestTRPCSelector() {
 		client.WithTarget(fmt.Sprintf("test-trpc-selector://%s", "wrong-service-know")),
 		client.WithDiscoveryName("test"),
 	)
-	require.Equal(s.T(), errs.RetClientRouteErr, errs.Code(err))
+	require.Equal(s.T(), errs.RetClientRouteErr, errs.Code(err), "full err: %+v", err)
 	require.Contains(s.T(), err.Error(), "can't discover wrong-service-know")
 }
 
@@ -111,7 +111,7 @@ func (s *TestSuite) TestCustomSelector() {
 		&testpb.Empty{},
 		client.WithTarget(fmt.Sprintf("test://%s", trpcServiceName)),
 	)
-	require.Equal(s.T(), errs.RetClientRouteErr, errs.Code(err))
+	require.Equal(s.T(), errs.RetClientRouteErr, errs.Code(err), "full err: %+v", err)
 	require.Contains(s.T(), err.Error(), "no available node")
 
 	naming.AddSelectorNode(trpcServiceName, s.listener.Addr().String())
@@ -135,7 +135,7 @@ func (s *TestSuite) TestCustomDiscovery() {
 		client.WithServiceName(trpcServiceName),
 		client.WithDiscoveryName("test"),
 	)
-	require.Equal(s.T(), errs.RetClientRouteErr, errs.Code(err))
+	require.Equal(s.T(), errs.RetClientRouteErr, errs.Code(err), "full err: %+v", err)
 
 	naming.AddDiscoveryNode(trpcServiceName, s.listener.Addr().String())
 	defer naming.RemoveDiscoveryNode(trpcServiceName)
@@ -164,7 +164,7 @@ func (s *TestSuite) TestNoServiceOnAddress() {
 
 	c1 := testpb.NewTestTRPCClientProxy(client.WithTarget(s.serverAddress()))
 	_, err = c1.EmptyCall(trpc.BackgroundContext(), &testpb.Empty{})
-	require.Equal(s.T(), errs.RetServerNoFunc, errs.Code(err))
+	require.Equal(s.T(), errs.RetServerNoFunc, errs.Code(err), "full err: %+v", err)
 }
 
 func (s *TestSuite) TestServiceOnAddress() {
@@ -176,7 +176,7 @@ func (s *TestSuite) TestServiceOnAddress() {
 		&testpb.Empty{},
 		client.WithServiceName(trpcServiceName),
 	)
-	require.Equal(s.T(), errs.RetClientConnectFail, errs.Code(err))
+	require.Equal(s.T(), errs.RetClientConnectFail, errs.Code(err), "full err: %+v", err)
 	require.Contains(s.T(), err.Error(), "missing port in address")
 
 	_, err = c.EmptyCall(

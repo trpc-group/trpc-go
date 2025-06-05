@@ -8,7 +8,7 @@ server:                                            # server configuration.
   bin_path: /usr/local/trpc/bin/                   # paths to binary executables and framework configuration files.
   conf_path: /usr/local/trpc/conf/                 # paths to business configuration files.
   data_path: /usr/local/trpc/data/                 # paths to business data files.
-  service:                                         # business service configuration，can have multiple.
+  service:                                         # business service configuration, can have multiple.
     - name: trpc.test.helloworld.Greeter           # the route name of the service.
       ip: 127.0.0.1                                # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
       port: 9091                                   # the service listening port, can use the placeholder ${port}.

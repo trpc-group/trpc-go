@@ -17,11 +17,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/stretchr/testify/require"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
@@ -46,7 +46,7 @@ func (s *TestSuite) TestClientWithMetaDataOption() {
 			s.Run(e.String(), func() {
 				s.startServer(&TRPCService{}, server.WithFilter(
 					func(ctx context.Context, req interface{}, next filter.ServerHandleFunc) (interface{}, error) {
-						return nil, fmt.Errorf("unknow error")
+						return nil, fmt.Errorf("unknown error")
 					}))
 				defer s.closeServer(nil)
 				require.NotNil(s.T(), s.testClientWithMetaDataOption())
@@ -63,20 +63,20 @@ func (s *TestSuite) TestClientWithMetaDataOption() {
 
 func (s *TestSuite) testClientWithVeryLargeMetaData() {
 	c := s.newTRPCClient()
-	head := &trpcpb.ResponseProtocol{}
+	head := &trpc.ResponseProtocol{}
 	_, err := c.UnaryCall(
 		trpc.BackgroundContext(),
 		s.defaultSimpleRequest,
 		client.WithMetaData("invalid-key", make([]byte, 65536)),
 		client.WithRspHead(head),
 	)
-	require.Equal(s.T(), errs.RetClientEncodeFail, errs.Code(err))
+	require.Equal(s.T(), errs.RetClientEncodeFail, errs.Code(err), "full err: %+v", err)
 	require.Contains(s.T(), err.Error(), "head len overflows uint16")
 }
 
 func (s *TestSuite) testClientWithMetaDataOption() error {
 	c := s.newTRPCClient()
-	head := &trpcpb.ResponseProtocol{}
+	head := &trpc.ResponseProtocol{}
 	_, err := c.UnaryCall(
 		trpc.BackgroundContext(),
 		s.defaultSimpleRequest,
@@ -138,7 +138,7 @@ func (s *TestSuite) TestServerSetMetaData() {
 							if value := trpc.GetMetaData(ctx, "repeat-value"); len(value) != 0 {
 								trpc.SetMetaData(ctx, "repeat-value", append(value, value...))
 							}
-							return nil, fmt.Errorf("unknow error")
+							return nil, fmt.Errorf("unknown error")
 						}),
 				)
 				defer s.closeServer(nil)
@@ -161,16 +161,16 @@ func (s *TestSuite) testServerSetVeryLargeMetaData() {
 	defer s.closeServer(nil)
 
 	c := s.newTRPCClient()
-	head := &trpcpb.ResponseProtocol{}
-	_, err := c.UnaryCall(trpc.BackgroundContext(), s.defaultSimpleRequest, client.WithRspHead(head))
-	require.Equal(s.T(), errs.RetServerEncodeFail, errs.Code(err))
+	head := &trpc.ResponseProtocol{}
+	_, err := c.UnaryCall(trpc.BackgroundContext(), s.defaultSimpleRequest, client.WithRspHead(head), client.WithTimeout(5*time.Second))
+	require.Equal(s.T(), errs.RetServerEncodeFail, errs.Code(err), "full err: %+v", err)
 	require.Contains(s.T(), err.Error(), "head len overflows uint16")
 	require.Nil(s.T(), head.TransInfo)
 }
 
 func (s *TestSuite) testMultipleSetMetaData() error {
 	c := s.newTRPCClient()
-	head := &trpcpb.ResponseProtocol{}
+	head := &trpc.ResponseProtocol{}
 	_, err := c.UnaryCall(
 		trpc.BackgroundContext(),
 		s.defaultSimpleRequest,
@@ -195,7 +195,7 @@ func (s *TestSuite) TestMessageWithServerMetaDataOption() {
 			s.Run(e.String(), func() {
 				s.startServer(&TRPCService{}, server.WithFilter(
 					func(ctx context.Context, req interface{}, next filter.ServerHandleFunc) (interface{}, error) {
-						return nil, fmt.Errorf("unknow error")
+						return nil, fmt.Errorf("unknown error")
 					}))
 				defer s.closeServer(nil)
 				require.NotNil(s.T(), s.testMessageWithServerMetaDataOption())
@@ -223,10 +223,10 @@ func (s *TestSuite) testMessageWithServerVeryLargeMetaData() {
 		"key3-bin": make([]byte, 65536),
 	}
 	msg.WithServerMetaData(testMetadata)
-	head := &trpcpb.ResponseProtocol{}
+	head := &trpc.ResponseProtocol{}
 	c := s.newTRPCClient()
 	_, err := c.UnaryCall(ctx, s.defaultSimpleRequest, client.WithRspHead(head))
-	require.Equal(s.T(), errs.RetClientEncodeFail, errs.Code(err))
+	require.Equal(s.T(), errs.RetClientEncodeFail, errs.Code(err), "full err: %+v", err)
 	require.Contains(s.T(), err.Error(), "head len overflows uint16")
 }
 
@@ -239,7 +239,7 @@ func (s *TestSuite) testMessageWithServerMetaDataOption() error {
 		"key3-bin": []byte{1, 2, 3},
 	}
 	msg.WithServerMetaData(testMetadata)
-	head := &trpcpb.ResponseProtocol{}
+	head := &trpc.ResponseProtocol{}
 	c := s.newTRPCClient()
 	_, err := c.UnaryCall(ctx, s.defaultSimpleRequest, client.WithRspHead(head))
 	require.Equal(s.T(), testMetadata, codec.MetaData(head.TransInfo))
@@ -266,7 +266,7 @@ func (s *TestSuite) testMessageWithClientVeryLargeMetaData() {
 	testMetadata := codec.MetaData{
 		"repeat-value": make([]byte, 65536),
 	}
-	head := &trpcpb.ResponseProtocol{}
+	head := &trpc.ResponseProtocol{}
 	c := s.newTRPCClient()
 	_, err := c.UnaryCall(
 		ctx,
@@ -281,7 +281,7 @@ func (s *TestSuite) testMessageWithClientVeryLargeMetaData() {
 			return next(ctx, req, rsp)
 		}),
 	)
-	require.Equal(s.T(), errs.RetClientEncodeFail, errs.Code(err))
+	require.Equal(s.T(), errs.RetClientEncodeFail, errs.Code(err), "full err: %+v", err)
 	require.Contains(s.T(), err.Error(), "head len overflows uint16")
 }
 
@@ -294,7 +294,7 @@ func (s *TestSuite) testMessageWithClientMetaDataOption() {
 		"key2":         []byte("value2"),
 		"key3-bin":     []byte{1, 2, 3},
 	}
-	head := &trpcpb.ResponseProtocol{}
+	head := &trpc.ResponseProtocol{}
 	c := s.newTRPCClient()
 	_, err := c.UnaryCall(
 		ctx,
@@ -326,7 +326,7 @@ func (s *TestSuite) testServerGetMetaDataOk() {
 	defer s.closeServer(nil)
 
 	c := s.newTRPCClient()
-	head := &trpcpb.ResponseProtocol{}
+	head := &trpc.ResponseProtocol{}
 	_, err := c.UnaryCall(
 		trpc.BackgroundContext(),
 		s.defaultSimpleRequest,

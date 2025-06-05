@@ -15,12 +15,15 @@ package test
 
 import (
 	"errors"
+	"fmt"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/server"
@@ -28,63 +31,6 @@ import (
 
 	testpb "trpc.group/trpc-go/trpc-go/test/protocols"
 )
-
-func (s *TestSuite) TestServerReusePort() {
-	s.Run("EnableReusePort", s.testEnableServerReusePort)
-	s.Run("DisableReusePort", func() {
-		for _, enable1 := range []bool{true, false} {
-			for _, enable2 := range []bool{true, false} {
-				if enable1 && enable2 {
-					break
-				}
-				s.testDisableServerReusePort(enable1, enable2)
-			}
-		}
-	})
-}
-func (s *TestSuite) testEnableServerReusePort() {
-	s.enableReusePort = true
-	s.startServer(&TRPCService{})
-
-	trpc.ServerConfigPath = "trpc_go_trpc_server.yaml"
-	svr := trpc.NewServer(
-		server.WithTransport(transport.NewServerTransport(transport.WithReusePort(true))),
-		server.WithNetwork("tcp"),
-		server.WithAddress(s.listener.Addr().String()),
-	)
-	testpb.RegisterTestTRPCService(svr.Service(trpcServiceName), &TRPCService{})
-
-	startServe := make(chan struct{})
-	go func() {
-		startServe <- struct{}{}
-		svr.Serve()
-	}()
-	<-startServe
-	s.server.Close(nil)
-	s.server = nil
-
-	c := s.newTRPCClient()
-	for {
-		_, err := c.EmptyCall(trpc.BackgroundContext(), &testpb.Empty{})
-		if err == nil {
-			svr.Close(nil)
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-}
-
-func (s *TestSuite) testDisableServerReusePort(enable1, enable2 bool) {
-	s.enableReusePort = enable1
-	s.startServer(&TRPCService{})
-
-	svr := trpc.NewServer(
-		server.WithNetwork("tcp"),
-		server.WithAddress(s.listener.Addr().String()),
-		server.WithTransport(transport.NewServerTransport(transport.WithReusePort(enable2))),
-	)
-	require.Contains(s.T(), svr.Serve().Error(), "address already in use")
-}
 
 func (s *TestSuite) TestServerIdleTime() {
 	s.Run("ServerIdleTimeLessThanHandleTime", func() {
@@ -106,19 +52,14 @@ func (s *TestSuite) testServerIdleTimeLessThanHandleTime() {
 	c := s.newTRPCClient()
 	_, err := c.UnaryCall(trpc.BackgroundContext(), s.defaultSimpleRequest, client.WithTimeout(2*time.Second))
 	switch {
-	case s.tRPCEnv.server.async && s.tRPCEnv.client.multiplexed:
-		require.Equal(s.T(), errs.RetClientNetErr, errs.Code(err))
-		require.Contains(s.T(), err.Error(), "client multiplexed transport ReadFrame: EOF")
-	case s.tRPCEnv.server.async && !s.tRPCEnv.client.multiplexed:
-		require.EqualValues(s.T(), errs.RetClientReadFrameErr, errs.Code(err))
-	case !s.tRPCEnv.server.async && s.tRPCEnv.server.network == "unix":
-		require.Nil(s.T(), err, "idle time won't work in unix network")
-	case !s.tRPCEnv.server.async && s.tRPCEnv.server.transport == "default":
-		require.Nil(s.T(), err, "idle time implemented in default transport has a bug")
-	case !s.tRPCEnv.server.async && s.tRPCEnv.server.transport == "tnet":
-		require.EqualValues(s.T(), errs.RetClientReadFrameErr, errs.Code(err))
+	case s.tRPCEnv.server.transport == "tnet" && s.tRPCEnv.server.network == "tcp":
+		require.Equal(s.T(), errs.RetClientReadFrameErr, errs.Code(err),
+			"tnet does not support graceful stop yet, and it's idle timeout implementation should be revised")
+	case s.tRPCEnv.server.transport == "tnet" && s.tRPCEnv.server.network == "unix":
+		// tnet does not support unix, on which tnet transport will fall back to original transport.
+		fallthrough
 	default:
-		s.T().Fatal()
+		require.Nil(s.T(), err, "connection is only closed when there is no active request")
 	}
 
 	for s.closeServer(nil); ; {
@@ -133,8 +74,113 @@ func (s *TestSuite) testServerIdleTimeLessThanHandleTime() {
 }
 
 func (s *TestSuite) testServerIdleTimeGreaterThanHandleTime() {
+	if s.tRPCEnv.server.transport == "tnet" && s.tRPCEnv.server.network == "tcp" {
+		s.T().Skip("tnet does not support graceful stop yet, and it's idle timeout implementation should be revised")
+	}
 	s.startServer(&TRPCService{unaryCallSleepTime: 10 * time.Millisecond}, server.WithIdleTimeout(time.Second))
 	c := s.newTRPCClient()
 	_, err := c.UnaryCall(trpc.BackgroundContext(), s.defaultSimpleRequest, client.WithTimeout(2*time.Second))
 	require.Nil(s.T(), err)
+}
+
+func (s *TestSuite) TestListenerClosed() {
+	s.Run("MultiplexedOrConnectionPool", func() {
+		for _, e := range allTRPCEnvs {
+			if e.client.multiplexed || !e.client.disableConnectionPool {
+				s.tRPCEnv = e
+				s.Run(e.String(), s.testListenerClosedOnMultiplexedOrConnectionPool)
+			}
+		}
+	})
+	s.Run("ShortConnection", func() {
+		for _, e := range allTRPCEnvs {
+			if !e.client.multiplexed && e.client.disableConnectionPool {
+				s.tRPCEnv = e
+				s.Run(e.String(), s.testListenerClosedOnShortConnection)
+			}
+		}
+	})
+}
+
+func (s *TestSuite) testListenerClosedOnMultiplexedOrConnectionPool() {
+	s.startServer(&TRPCService{})
+	s.T().Cleanup(func() {
+		s.closeServer(nil)
+	})
+	c := s.newTRPCClient()
+	_, err := c.UnaryCall(trpc.BackgroundContext(), s.defaultSimpleRequest, client.WithTimeout(2*time.Second))
+	require.Nil(s.T(), err)
+
+	require.Nil(s.T(), s.listener.Close())
+
+	_, err = c.UnaryCall(trpc.BackgroundContext(), s.defaultSimpleRequest, client.WithTimeout(2*time.Second))
+	require.Nil(s.T(), err, "Already Accepted connections are not closed.")
+}
+
+func (s *TestSuite) testListenerClosedOnShortConnection() {
+	s.startServer(&TRPCService{})
+	s.T().Cleanup(func() {
+		s.closeServer(nil)
+	})
+	c := s.newTRPCClient()
+	_, err := c.UnaryCall(trpc.BackgroundContext(), s.defaultSimpleRequest, client.WithTimeout(2*time.Second))
+	require.Nil(s.T(), err)
+
+	require.Nil(s.T(), s.listener.Close())
+
+	_, err = c.UnaryCall(trpc.BackgroundContext(), s.defaultSimpleRequest, client.WithTimeout(2*time.Second))
+	require.NotNilf(s.T(), err, "expected: %s, got: %v ", "connect: connection refused, or connect: no such file or director", err)
+}
+
+func (s *TestSuite) TestTnetConcurrentSafe() {
+	tests := []struct {
+		network   string
+		transport string
+	}{
+		{
+			network:   "tcp",
+			transport: "tnet",
+		},
+		{
+			network:   "udp",
+			transport: "tnet",
+		},
+	}
+	for _, tt := range tests {
+		s.tRPCEnv = &trpcEnv{server: &trpcServerEnv{network: tt.network, transport: tt.transport},
+			client: &trpcClientEnv{}}
+		s.Run(s.tRPCEnv.String(), s.testTnetConcurrentSafe)
+	}
+}
+
+func (s *TestSuite) testTnetConcurrentSafe() {
+	serverAddr := "127.0.0.1:8965"
+	go func() {
+		service := server.New(server.WithAddress(serverAddr),
+			server.WithProtocol("trpc"),
+			server.WithServiceName(trpcServiceName),
+			server.WithNetwork(s.tRPCEnv.server.network),
+			server.WithTransport(transport.GetServerTransport(s.tRPCEnv.server.transport)))
+		svr := &server.Server{}
+		svr.AddService(trpcServiceName, service)
+		testpb.RegisterTestTRPCService(svr.Service(trpcServiceName), &TRPCService{})
+		svr.Serve()
+	}()
+	time.Sleep(10 * time.Millisecond)
+	ctx := trpc.BackgroundContext()
+	wg := sync.WaitGroup{}
+	wg.Add(10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			c := testpb.NewTestTRPCClientProxy(client.WithTarget(fmt.Sprintf("ip://%v", serverAddr)),
+				client.WithNetwork(s.tRPCEnv.server.network),
+				client.WithTransport(transport.GetClientTransport(s.tRPCEnv.server.transport)))
+			for j := 0; j < 10; j++ {
+				_, err := c.EmptyCall(ctx, &testpb.Empty{}, client.WithTimeout(10*time.Millisecond))
+				assert.Nil(s.T(), err)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }

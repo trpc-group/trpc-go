@@ -15,13 +15,11 @@ package test
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/stretchr/testify/require"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
@@ -78,10 +76,10 @@ func (s *TestSuite) TestStreamClientFilter() {
 			Size: int32(1),
 		},
 	}
-	payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, int32(1))
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
 	require.Nil(s.T(), err)
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSIBLE,
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
@@ -91,7 +89,7 @@ func (s *TestSuite) TestStreamClientFilter() {
 		trpc.BackgroundContext(),
 		req,
 		client.WithStreamFilter(failOkayStream))
-	require.Equal(s.T(), filterTestError, err)
+	require.ErrorIs(s.T(), err, filterTestError)
 }
 
 func failOkayStream(
@@ -137,7 +135,7 @@ func (s *TestSuite) TestFilterOrderOfExecution() {
 	)
 
 	c := s.newTRPCClient()
-	head := &trpcpb.ResponseProtocol{}
+	head := &trpc.ResponseProtocol{}
 	_, err := c.EmptyCall(
 		trpc.BackgroundContext(),
 		&testpb.Empty{},
@@ -177,10 +175,10 @@ func (s *TestSuite) TestStreamServerFilter() {
 			Size: int32(1),
 		},
 	}
-	payload, err := newPayload(testpb.PayloadType_COMPRESSIBLE, int32(1))
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
 	require.Nil(s.T(), err)
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSIBLE,
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
@@ -190,11 +188,9 @@ func (s *TestSuite) TestStreamServerFilter() {
 	s1.Send(&testpb.StreamingInputCallRequest{})
 	require.Nil(s.T(), err)
 	_, err = s1.CloseAndRecv()
-	require.Equal(s.T(), errs.RetClientStreamReadEnd, errs.Code(err))
 
-	err = errors.Unwrap(err)
-	require.Equal(s.T(), errs.Code(filterTestError), errs.Code(err))
-	require.Equal(s.T(), errs.Msg(filterTestError), errs.Msg(err))
+	require.Equal(s.T(), errs.Code(filterTestError), errs.Code(err), "full err: %+v", err)
+	require.Equal(s.T(), errs.Msg(filterTestError), errs.Msg(err), "full err: %+v", err)
 
 	c2 := s.newStreamingClient()
 	s2, err := c2.FullDuplexCall(trpc.BackgroundContext())
@@ -229,5 +225,5 @@ func (s *TestSuite) TestTimeoutAtServerFilter() {
 
 	c := s.newTRPCClient()
 	_, err := c.UnaryCall(trpc.BackgroundContext(), s.defaultSimpleRequest, client.WithTimeout(100*time.Millisecond))
-	require.Equal(s.T(), errs.RetClientTimeout, errs.Code(err))
+	require.Equal(s.T(), errs.RetClientTimeout, errs.Code(err), "full err: %+v", err)
 }

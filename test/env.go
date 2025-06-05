@@ -110,11 +110,7 @@ func (e *httpServerEnv) String() string {
 }
 
 func generateHTTPServerEnv() []*httpServerEnv {
-	var e []*httpServerEnv
-	for _, async := range []bool{true, false} {
-		e = append(e, &httpServerEnv{async: async})
-	}
-	return e
+	return []*httpServerEnv{{async: true}, {async: false}}
 }
 
 var allHTTPRPCEnvs = generateHTTPRPCEnvs(generateHTTPServerEnv(), generateTRPCClientEnvs())
@@ -162,4 +158,37 @@ func generateRESTfulServerEnv() []*restfulServerEnv {
 		}
 	}
 	return e
+}
+
+type streamServerEnv struct {
+	transport string
+}
+
+type streamClientEnv struct {
+	transport string
+}
+
+var allStreamEnvs = generateStreamEnvs()
+
+type streamEnv struct {
+	server streamServerEnv
+	client streamClientEnv
+}
+
+// String return the description of streamEnv.
+func (e *streamEnv) String() string {
+	return fmt.Sprintf("ServerTransport-%s_ClientTransport-%s", e.server.transport, e.client.transport)
+}
+
+func generateStreamEnvs() []streamEnv {
+	var envs []streamEnv
+	for _, s := range []streamServerEnv{{"default"}, {"tnet"}} {
+		for _, c := range []streamClientEnv{{"default"}, {"tnet"}} {
+			envs = append(envs, streamEnv{
+				server: s,
+				client: c,
+			})
+		}
+	}
+	return envs
 }

@@ -26,7 +26,7 @@ import (
 // can't avoid memory allocated on heap if them are not inlineable. https://github.com/golang/go/issues/28727
 type Ender interface {
 	// End does not wait for the work to stop.
-	// End  can only be called once.
+	// End can only be called once.
 	// After the first call, subsequent calls to End is undefined behavior.
 	End()
 }
@@ -35,7 +35,7 @@ type Ender interface {
 // It tracks specific operations that a request makes,
 // painting a picture of what happened during the time in which that operation was executed.
 type Span interface {
-	// AddEvent adds a event.
+	// AddEvent adds an event.
 	AddEvent(name string)
 
 	// Event returns the time when event happened.

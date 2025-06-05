@@ -26,7 +26,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/plugin"
 )
@@ -152,7 +152,6 @@ func TestBasicLogLevel(t *testing.T) {
 {"level":"ERROR","msg":"hello world","tRPC-Go":"log","caller function":"TestBasicLogLevel"}
 {"level":"ERROR","msg":"hello world","tRPC-Go":"log","caller function":"TestBasicLogLevel"}
 `, w.buf.message())
-
 }
 
 func TestTraceLogLevel(t *testing.T) {
@@ -246,18 +245,14 @@ func TestLogWriter(t *testing.T) {
 		},
 	})
 
-	const defaultLoggerName = "default"
-	oldDefaultLogger := log.GetDefaultLogger()
-	log.Register(defaultLoggerName, l)
-	defer func() {
-		log.Register(defaultLoggerName, oldDefaultLogger)
-	}()
+	loggerName := t.Name()
+	log.Register(loggerName, l)
 
-	log.Debug("hello world")
-	log.Info("hello world")
-	log.Warn("hello world")
-	log.Error("hello world")
-	log.Trace("hello world")
+	log.Get(loggerName).Debug("hello world")
+	log.Get(loggerName).Info("hello world")
+	log.Get(loggerName).Warn("hello world")
+	log.Get(loggerName).Error("hello world")
+	log.Get(loggerName).Trace("hello world")
 	require.Equal(t, w.buf.message(), mustReadFile(t, path.Join(logDir, syncFileName)))
 
 	log.Sync()

@@ -17,8 +17,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"trpc.group/trpc-go/trpc-go/internal/httprule"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMatch(t *testing.T) {

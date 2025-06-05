@@ -23,17 +23,20 @@ import (
 
 func TestTrpcSelectorSelect(t *testing.T) {
 	selector := &TrpcSelector{}
-	n, err := selector.Select("127.0.0.1:12345")
+	n, err := selector.Select("10.100.72.229.12367")
 	assert.Nil(t, err)
-	assert.Equal(t, n.Address, "127.0.0.1:12345")
+	assert.Equal(t, n.Address, "10.100.72.229.12367")
+	n, err = selector.Select("10.100.72.229.12367", WithBroadcast(true))
+	assert.Nil(t, err)
+	assert.Equal(t, n.Address, "10.100.72.229.12367")
 }
 
 func TestTrpcSelectorReport(t *testing.T) {
 	selector := &TrpcSelector{}
-	n, err := selector.Select("127.0.0.1:12345")
+	n, err := selector.Select("10.100.72.229.12367")
 
 	assert.Nil(t, err)
-	assert.Equal(t, n.Address, "127.0.0.1:12345")
+	assert.Equal(t, n.Address, "10.100.72.229.12367")
 
 	assert.Nil(t, selector.Report(n, 0, nil))
 }

@@ -172,16 +172,16 @@ func (b *Buffer) writeDirectly() error {
 	if b.queue.IsEmpty() {
 		return nil
 	}
-	vals := make([][]byte, 0, maxWritevBuffers)
-	size, _ := b.queue.Gets(&vals)
+	values := make([][]byte, 0, maxWritevBuffers)
+	size, _ := b.queue.Gets(&values)
 	if size == 0 {
 		return nil
 	}
-	bufs := make(net.Buffers, 0, maxWritevBuffers)
-	for _, v := range vals {
-		bufs = append(bufs, v)
+	buffers := make(net.Buffers, 0, maxWritevBuffers)
+	for _, v := range values {
+		buffers = append(buffers, v)
 	}
-	if _, err := bufs.WriteTo(b.w); err != nil {
+	if _, err := buffers.WriteTo(b.w); err != nil {
 		// Notify the sending goroutine setting error and exit.
 		select {
 		case b.errCh <- err:
@@ -232,27 +232,27 @@ func (b *Buffer) getOrWait(values *[][]byte) error {
 }
 
 func (b *Buffer) start() {
-	initBufs := make(net.Buffers, 0, maxWritevBuffers)
-	vals := make([][]byte, 0, maxWritevBuffers)
-	bufs := initBufs
+	initBuffers := make(net.Buffers, 0, maxWritevBuffers)
+	values := make([][]byte, 0, maxWritevBuffers)
+	buffers := initBuffers
 
 	defer b.opts.handler(b)
 	for {
-		if err := b.getOrWait(&vals); err != nil {
+		if err := b.getOrWait(&values); err != nil {
 			b.err = err
 			break
 		}
 
-		for _, v := range vals {
-			bufs = append(bufs, v)
+		for _, v := range values {
+			buffers = append(buffers, v)
 		}
-		vals = vals[:0]
+		values = values[:0]
 
-		if _, err := bufs.WriteTo(b.w); err != nil {
+		if _, err := buffers.WriteTo(b.w); err != nil {
 			b.err = err
 			break
 		}
-		// Reset bufs to the initial position to prevent `append` from generating new memory allocations.
-		bufs = initBufs
+		// Reset buffers to the initial position to prevent `append` from generating new memory allocations.
+		buffers = initBuffers
 	}
 }

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	_ "trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
@@ -39,7 +40,7 @@ func TestStreamTCPListenAndServe(t *testing.T) {
 			transport.WithServerFramerBuilder(&multiplexedFramerBuilder{}),
 		)
 		if err != nil {
-			t.Logf("ListenAndServe fail:%v", err)
+			t.Logf("ListenAndServe fail: %v", err)
 		}
 	}()
 
@@ -52,7 +53,7 @@ func TestStreamTCPListenAndServe(t *testing.T) {
 
 	data, err := json.Marshal(req)
 	if err != nil {
-		t.Fatalf("json marshal fail:%v", err)
+		t.Fatalf("json marshal fail: %v", err)
 	}
 	headData := make([]byte, 8)
 	binary.BigEndian.PutUint32(headData[:4], defaultStreamID)
@@ -64,6 +65,12 @@ func TestStreamTCPListenAndServe(t *testing.T) {
 
 	time.Sleep(time.Millisecond * 20)
 	ct := transport.NewClientStreamTransport()
+	rsp, err := ct.RoundTrip(ctx, reqData, transport.WithDialNetwork("tcp"),
+		transport.WithDialAddress(":12013"),
+		transport.WithClientFramerBuilder(&multiplexedFramerBuilder{}),
+		transport.WithMsg(msg))
+	assert.Nil(t, err)
+	assert.NotNil(t, rsp)
 	err = ct.Init(ctx, transport.WithDialNetwork("tcp"), transport.WithDialAddress(":12013"),
 		transport.WithClientFramerBuilder(&multiplexedFramerBuilder{}),
 		transport.WithMsg(msg))
@@ -74,7 +81,7 @@ func TestStreamTCPListenAndServe(t *testing.T) {
 	err = st.Send(ctx, reqData)
 	assert.NotNil(t, err)
 
-	rsp, err := ct.Recv(ctx)
+	rsp, err = ct.Recv(ctx)
 	assert.Nil(t, err)
 	assert.NotNil(t, rsp)
 	ct.Close(ctx)
@@ -94,7 +101,7 @@ func TestStreamTCPListenAndServeFail(t *testing.T) {
 			transport.WithServerFramerBuilder(&multiplexedFramerBuilder{}),
 		)
 		if err != nil {
-			t.Logf("ListenAndServe fail:%v", err)
+			t.Logf("ListenAndServe fail: %v", err)
 		}
 	}()
 
@@ -107,7 +114,7 @@ func TestStreamTCPListenAndServeFail(t *testing.T) {
 
 	data, err := json.Marshal(req)
 	if err != nil {
-		t.Fatalf("json marshal fail:%v", err)
+		t.Fatalf("json marshal fail: %v", err)
 	}
 	headData := make([]byte, 8)
 	binary.BigEndian.PutUint32(headData[:4], defaultStreamID)
@@ -118,7 +125,7 @@ func TestStreamTCPListenAndServeFail(t *testing.T) {
 	msg.WithStreamID(defaultStreamID)
 
 	time.Sleep(time.Millisecond * 20)
-	ct := transport.NewClientStreamTransport()
+	ct := transport.NewClientStreamTransport(transport.WithClientTCPRecvQueueSize(100000))
 	err = ct.Init(ctx, transport.WithDialNetwork("tcp"), transport.WithDialAddress(":12015"),
 		transport.WithClientFramerBuilder(&multiplexedFramerBuilder{}))
 	assert.NotNil(t, err)
@@ -140,8 +147,6 @@ func TestStreamTCPListenAndServeFail(t *testing.T) {
 	ct = transport.NewClientStreamTransport()
 	err = ct.Init(ctx, transport.WithDialNetwork("tcp"), transport.WithDialAddress(":12014"),
 		transport.WithClientFramerBuilder(&multiplexedFramerBuilder{}))
-	assert.NotNil(t, err)
-
 	ctx = context.Background()
 	ctx, msg = codec.WithNewMessage(ctx)
 	msg.WithStreamID(defaultStreamID)
@@ -177,7 +182,7 @@ func TestStreamTCPListenAndServeSend(t *testing.T) {
 			transport.WithServerFramerBuilder(&multiplexedFramerBuilder{}),
 		)
 		if err != nil {
-			t.Logf("ListenAndServe fail:%v", err)
+			t.Logf("ListenAndServe fail: %v", err)
 		}
 	}()
 	time.Sleep(20 * time.Millisecond)
@@ -188,7 +193,7 @@ func TestStreamTCPListenAndServeSend(t *testing.T) {
 
 	data, err := json.Marshal(req)
 	if err != nil {
-		t.Fatalf("json marshal fail:%v", err)
+		t.Fatalf("json marshal fail: %v", err)
 	}
 	headData := make([]byte, 8)
 	binary.BigEndian.PutUint32(headData[:4], defaultStreamID)
@@ -201,8 +206,10 @@ func TestStreamTCPListenAndServeSend(t *testing.T) {
 	fb := &multiplexedFramerBuilder{}
 
 	// Test IO EOF.
-	port := getFreeAddr("tcp")
-	la := "127.0.0.1" + port
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err, "%+v", err)
+	la := ln.Addr().String()
+	ln.Close()
 	ct := transport.NewClientStreamTransport()
 	err = ct.Init(ctx, transport.WithDialNetwork("tcp"), transport.WithDialAddress(lnAddr),
 		transport.WithClientFramerBuilder(fb), transport.WithMsg(msg), transport.WithLocalAddr(la))

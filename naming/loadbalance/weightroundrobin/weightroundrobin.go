@@ -39,7 +39,7 @@ func NewWeightRoundRobin(interval time.Duration) *WeightRoundRobin {
 	}
 }
 
-// WeightRoundRobin is a smooth weighted roundrobin algorithm.
+// WeightRoundRobin is a smooth weighted round-robin algorithm.
 type WeightRoundRobin struct {
 	pickers  *sync.Map
 	interval time.Duration
@@ -112,6 +112,8 @@ func (p *wrrPicker) selectServer() *Server {
 	return selected
 }
 
+// For efficiency considerations, comparisons are approximated by length,
+// and updates may not be immediate.
 func (p *wrrPicker) updateState(list []*registry.Node) {
 	if len(p.list) == 0 ||
 		len(p.list) != len(list) ||

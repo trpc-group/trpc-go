@@ -1,3 +1,16 @@
+//
+//
+// Tencent is pleased to support the open source community by making tRPC available.
+//
+// Copyright (C) 2023 THL A29 Limited, a Tencent company.
+// All rights reserved.
+//
+// If you have downloaded a copy of the tRPC source code from Tencent,
+// please note that tRPC source code is licensed under the  Apache 2.0 License,
+// A copy of the Apache 2.0 License is included in this file.
+//
+//
+
 // Package main is the main package.
 package main
 
@@ -5,7 +18,7 @@ import (
 	"context"
 	"net/http"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	thttp "trpc.group/trpc-go/trpc-go/http"
 	"trpc.group/trpc-go/trpc-go/log"
@@ -49,7 +62,7 @@ func callGreeterHello(ctx context.Context) {
 	var rsp greeterRsp
 	err := greeterHttpProxy.Get(ctx, "/v1/greeter/hello/trpc-restful", &rsp)
 	if err != nil {
-		log.Fatalf("get /v1/greeter/hello/trpc-restful http.err:%s", err.Error())
+		log.Fatalf("get /v1/greeter/hello/trpc-restful http.err: %s", err.Error())
 	}
 	// want: [restful] SayHello Hello trpc-restful
 	log.Infof("helloRsp : %v", rsp.Message)
@@ -60,7 +73,7 @@ func callGreeterMessageSubfield(ctx context.Context) {
 	var rsp greeterRsp
 	err := greeterHttpProxy.Get(ctx, "/v1/greeter/message/messages/trpc-restful-wildcard?sub.subfield=wildcard", &rsp)
 	if err != nil {
-		log.Fatalf("get /v1/greeter/message/messages/trpc-restful-wildcard http.err:%s", err.Error())
+		log.Fatalf("get /v1/greeter/message/messages/trpc-restful-wildcard http.err: %s", err.Error())
 	}
 	// want: [restful] Message name:messages/trpc-restful-wildcard,subfield:wildcard
 	log.Infof("messageWildcardRsp : %v", rsp.Message)
@@ -78,7 +91,7 @@ func callGreeterUpdateMessageV1(ctx context.Context) {
 	header.AddHeader("ContentType", "application/json")
 	err := greeterHttpProxy.Patch(ctx, "/v1/greeter/message/123", reqBody, &rsp, client.WithReqHead(header))
 	if err != nil {
-		log.Fatalf("patch /v1/greeter/message/123 http.err:%s", err.Error())
+		log.Fatalf("patch /v1/greeter/message/123 http.err: %s", err.Error())
 	}
 	// want: [restful] UpdateMessage message_id:123,message:trpc-restful-patch
 	log.Infof("updateMessageRsp : %v", rsp.Message)
@@ -96,7 +109,7 @@ func callGreeterUpdateMessageV2(ctx context.Context) {
 	header.AddHeader("ContentType", "application/json")
 	err := greeterHttpProxy.Patch(ctx, "/v2/greeter/message/123", reqBody, &rsp, client.WithReqHead(header))
 	if err != nil {
-		log.Fatalf("patch /v2/greeter/message/123 http.err:%s", err.Error())
+		log.Fatalf("patch /v2/greeter/message/123 http.err: %s", err.Error())
 	}
 	// want: [restful] UpdateMessage message_id:123,message:trpc-restful-patch
 	log.Infof("updateMessageV2Rsp : %v", rsp.Message)

@@ -19,7 +19,7 @@ import (
 	"os"
 	"strconv"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/test"
 	testpb "trpc.group/trpc-go/trpc-go/test/protocols"
 )
@@ -31,6 +31,9 @@ func main() {
 		&test.TRPCService{EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			trpc.SetMetaData(ctx, "server-pid", []byte(strconv.Itoa(os.Getpid())))
 			return &testpb.Empty{}, nil
+		}, UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			userName := in.GetUsername()
+			return &testpb.SimpleResponse{Username: userName}, nil
 		}},
 	)
 	if err := svr.Serve(); err != nil {

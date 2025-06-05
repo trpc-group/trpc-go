@@ -112,6 +112,10 @@ type Logger interface {
 
 	// With adds user defined fields to Logger. Fields support multiple values.
 	With(fields ...Field) Logger
+	// WithFields sets some user defined data to logs, such as uid, imei, etc.
+	// Fields must be paired.
+	// Deprecated: use With instead.
+	WithFields(fields ...string) Logger
 }
 
 // OptionLogger defines logger with additional options.

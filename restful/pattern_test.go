@@ -16,8 +16,8 @@ package restful_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"trpc.group/trpc-go/trpc-go/restful"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPattern(t *testing.T) {

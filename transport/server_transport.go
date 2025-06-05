@@ -15,7 +15,6 @@ package transport
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -27,18 +26,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/panjf2000/ants/v2"
-	"trpc.group/trpc-go/trpc-go/internal/reuseport"
-
+	reuseport "github.com/kavu/go_reuseport"
+	igr "trpc.group/trpc-go/trpc-go/internal/graceful"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	itls "trpc.group/trpc-go/trpc-go/internal/tls"
 	"trpc.group/trpc-go/trpc-go/log"
+	ierrs "trpc.group/trpc-go/trpc-go/transport/internal/errs"
 )
-
-const transportName = "go-net"
-
-func init() {
-	RegisterServerTransport(transportName, DefaultServerStreamTransport)
-}
 
 const (
 	// EnvGraceRestart is the flag of graceful restart.
@@ -61,7 +55,7 @@ var (
 )
 
 // DefaultServerTransport is the default implementation of ServerStreamTransport.
-var DefaultServerTransport = NewServerTransport(WithReusePort(true))
+var DefaultServerTransport = NewServerStreamTransport(WithReusePort(true))
 
 // NewServerTransport creates a new ServerTransport.
 func NewServerTransport(opt ...ServerTransportOption) ServerTransport {
@@ -93,6 +87,7 @@ func (s *serverTransport) ListenAndServe(ctx context.Context, opts ...ListenServ
 	for _, opt := range opts {
 		opt(lsopts)
 	}
+	lsopts.fixKeepOrder()
 
 	if lsopts.Listener != nil {
 		return s.listenAndServeStream(ctx, lsopts)
@@ -102,11 +97,11 @@ func (s *serverTransport) ListenAndServe(ctx context.Context, opts ...ListenServ
 	for _, network := range networks {
 		lsopts.Network = network
 		switch lsopts.Network {
-		case "tcp", "tcp4", "tcp6", "unix":
+		case protocol.TCP, protocol.TCP4, protocol.TCP6, protocol.UNIX:
 			if err := s.listenAndServeStream(ctx, lsopts); err != nil {
 				return err
 			}
-		case "udp", "udp4", "udp6":
+		case protocol.UDP, protocol.UDP4, protocol.UDP6:
 			if err := s.listenAndServePacket(ctx, lsopts); err != nil {
 				return err
 			}
@@ -122,7 +117,7 @@ func (s *serverTransport) ListenAndServe(ctx context.Context, opts ...ListenServ
 var (
 	// listenersMap records the listeners in use in the current process.
 	listenersMap = &sync.Map{}
-	// inheritedListenersMap record the listeners inherited from the parent process.
+	// inheritedListenersMap records the listeners inherited from the parent process.
 	// A key(host:port) may have multiple listener fds.
 	inheritedListenersMap = &sync.Map{}
 	// once controls fds passed from parent process to construct listeners.
@@ -169,42 +164,15 @@ func SaveListener(listener interface{}) error {
 }
 
 // getTCPListener gets the TCP/Unix listener.
-func (s *serverTransport) getTCPListener(opts *ListenServeOptions) (listener net.Listener, err error) {
-	listener = opts.Listener
-
-	if listener != nil {
-		return listener, nil
+func (s *serverTransport) getTCPListener(opts *ListenServeOptions) (net.Listener, error) {
+	if opts.Listener != nil {
+		return opts.Listener, nil
 	}
-
-	v, _ := os.LookupEnv(EnvGraceRestart)
-	ok, _ := strconv.ParseBool(v)
-	if ok {
-		// find the passed listener
-		pln, err := getPassedListener(opts.Network, opts.Address)
-		if err != nil {
-			return nil, err
-		}
-
-		listener, ok := pln.(net.Listener)
-		if !ok {
-			return nil, errors.New("invalid net.Listener")
-		}
-		return listener, nil
+	listener, err := igr.Listen(opts.Network, opts.Address, s.opts.ReusePort)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to graceful restart listen %s: %s: %w", opts.Network, opts.Address, err)
 	}
-
-	// Reuse port. To speed up IO, the kernel dispatches IO ReadReady events to threads.
-	if s.opts.ReusePort && opts.Network != "unix" {
-		listener, err = reuseport.Listen(opts.Network, opts.Address)
-		if err != nil {
-			return nil, fmt.Errorf("%s reuseport error:%v", opts.Network, err)
-		}
-	} else {
-		listener, err = net.Listen(opts.Network, opts.Address)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return listener, nil
 }
 
@@ -217,27 +185,17 @@ func (s *serverTransport) listenAndServeStream(ctx context.Context, opts *Listen
 	if err != nil {
 		return fmt.Errorf("get tcp listener err: %w", err)
 	}
-	// We MUST save the raw TCP listener (instead of (*tls.listener) if TLS is enabled)
-	// to guarantee the underlying fd can be successfully retrieved for hot restart.
-	listenersMap.Store(ln, struct{}{})
-	ln, err = mayLiftToTLSListener(ln, opts)
+	ln, err = itls.MayLiftToTLSListener(ln, opts.CACertFile, opts.TLSCertFile, opts.TLSKeyFile)
 	if err != nil {
-		return fmt.Errorf("may lift to tls listener err: %w", err)
+		return fmt.Errorf("may lift to tls listener failed, CACertFile(%s), TLSCertFile(%s), TLSKeyFile(%s): %w",
+			opts.CACertFile, opts.TLSCertFile, opts.TLSKeyFile, err)
 	}
-	go s.serveStream(ctx, ln, opts)
+	go func() {
+		if err := s.serveStream(ctx, ln, opts); err != nil {
+			log.Infof("serve stream exited: %v", err)
+		}
+	}()
 	return nil
-}
-
-func mayLiftToTLSListener(ln net.Listener, opts *ListenServeOptions) (net.Listener, error) {
-	if !(len(opts.TLSCertFile) > 0 && len(opts.TLSKeyFile) > 0) {
-		return ln, nil
-	}
-	// Enable TLS.
-	tlsConf, err := itls.GetServerConfig(opts.CACertFile, opts.TLSCertFile, opts.TLSKeyFile)
-	if err != nil {
-		return nil, fmt.Errorf("tls get server config err: %w", err)
-	}
-	return tls.NewListener(ln, tlsConf), nil
 }
 
 func (s *serverTransport) serveStream(ctx context.Context, ln net.Listener, opts *ListenServeOptions) error {
@@ -266,71 +224,40 @@ func (s *serverTransport) serveStream(ctx context.Context, ln net.Listener, opts
 // listenAndServePacket starts listening, returns an error on failure.
 func (s *serverTransport) listenAndServePacket(ctx context.Context, opts *ListenServeOptions) error {
 	pool := createUDPRoutinePool(opts.Routines)
+	listenerNum := 1
 	// Reuse port. To speed up IO, the kernel dispatches IO ReadReady events to threads.
 	if s.opts.ReusePort {
 		reuseport.ListenerBacklogMaxSize = 4096
-		cores := runtime.NumCPU()
-		for i := 0; i < cores; i++ {
-			udpconn, err := s.getUDPListener(opts)
-			if err != nil {
-				return err
-			}
-			listenersMap.Store(udpconn, struct{}{})
-
-			go s.servePacket(ctx, udpconn, pool, opts)
-		}
-	} else {
+		// Use runtime.GOMAXPROCS(0) to get the actual number of available CPUs instead of runtime.NumCPU().
+		// This helps avoid creating too many listeners in containerized environments.
+		listenerNum = runtime.GOMAXPROCS(0)
+	}
+	for i := 0; i < listenerNum; i++ {
 		udpconn, err := s.getUDPListener(opts)
 		if err != nil {
 			return err
 		}
-		listenersMap.Store(udpconn, struct{}{})
-
-		go s.servePacket(ctx, udpconn, pool, opts)
+		go func() {
+			if err := s.serveUDP(ctx, udpconn, pool, opts); err != nil {
+				log.Infof("serve packet failed: %v", err)
+			}
+		}()
 	}
 	return nil
 }
 
 // getUDPListener gets UDP listener.
-func (s *serverTransport) getUDPListener(opts *ListenServeOptions) (udpConn net.PacketConn, err error) {
-	v, _ := os.LookupEnv(EnvGraceRestart)
-	ok, _ := strconv.ParseBool(v)
-	if ok {
-		// Find the passed listener.
-		ln, err := getPassedListener(opts.Network, opts.Address)
-		if err != nil {
-			return nil, err
-		}
-		listener, ok := ln.(net.PacketConn)
-		if !ok {
-			return nil, errors.New("invalid net.PacketConn")
-		}
-		return listener, nil
+func (s *serverTransport) getUDPListener(opts *ListenServeOptions) (net.PacketConn, error) {
+	udpConn := opts.UDPListener
+	if udpConn != nil {
+		return udpConn, nil
 	}
-
-	if s.opts.ReusePort {
-		udpConn, err = reuseport.ListenPacket(opts.Network, opts.Address)
-		if err != nil {
-			return nil, fmt.Errorf("udp reuseport error:%v", err)
-		}
-	} else {
-		udpConn, err = net.ListenPacket(opts.Network, opts.Address)
-		if err != nil {
-			return nil, fmt.Errorf("udp listen error:%v", err)
-		}
+	udpConn, err := igr.ListenPacket(opts.Network, opts.Address, s.opts.ReusePort)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to graceful restart listen packet %s:%s: %w", opts.Network, opts.Address, err)
 	}
-
 	return udpConn, nil
-}
-
-func (s *serverTransport) servePacket(ctx context.Context, rwc net.PacketConn, pool *ants.PoolWithFunc,
-	opts *ListenServeOptions) error {
-	switch rwc := rwc.(type) {
-	case *net.UDPConn:
-		return s.serveUDP(ctx, rwc, pool, opts)
-	default:
-		return errors.New("transport not support PacketConn impl")
-	}
 }
 
 // ------------------------ tcp/udp connection structures ----------------------------//
@@ -344,6 +271,7 @@ func (s *serverTransport) newConn(ctx context.Context, opts *ListenServeOptions)
 		ctx:         ctx,
 		handler:     opts.Handler,
 		idleTimeout: idleTimeout,
+		readTimeout: opts.ReadTimeout,
 	}
 }
 
@@ -351,9 +279,8 @@ func (s *serverTransport) newConn(ctx context.Context, opts *ListenServeOptions)
 // request.
 type conn struct {
 	ctx         context.Context
-	cancelCtx   context.CancelFunc
 	idleTimeout time.Duration
-	lastVisited time.Time
+	readTimeout time.Duration
 	handler     Handler
 }
 
@@ -368,8 +295,6 @@ func (c *conn) handleClose(ctx context.Context) error {
 	return nil
 }
 
-var errNotFound = errors.New("listener not found")
-
 // GetPassedListener gets the inherited listener from parent process by network and address.
 func GetPassedListener(network, address string) (interface{}, error) {
 	return getPassedListener(network, address)
@@ -381,12 +306,12 @@ func getPassedListener(network, address string) (interface{}, error) {
 	key := network + ":" + address
 	v, ok := inheritedListenersMap.Load(key)
 	if !ok {
-		return nil, errNotFound
+		return nil, ierrs.ErrListenerNotFound
 	}
 
 	listeners := v.([]interface{})
 	if len(listeners) == 0 {
-		return nil, errNotFound
+		return nil, ierrs.ErrListenerNotFound
 	}
 
 	ln := listeners[0]
@@ -402,6 +327,8 @@ func getPassedListener(network, address string) (interface{}, error) {
 
 // ListenFd is the listener fd.
 type ListenFd struct {
+	// Deprecated: File field is no longer usable.
+	File    *os.File
 	Fd      uintptr
 	Name    string
 	Network string

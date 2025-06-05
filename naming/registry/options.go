@@ -22,8 +22,8 @@ type Options struct {
 // Option modifies the Options.
 type Option func(*Options)
 
-// WithAddress returns an Option which sets the server address. The format of address is "IP:Port" or
-// just ":Port".
+// WithAddress returns an Option which sets the server address.
+// The format of address is "IP:Port" or just ":Port".
 func WithAddress(s string) Option {
 	return func(opts *Options) {
 		opts.Address = s

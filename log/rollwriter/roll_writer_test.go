@@ -32,6 +32,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"trpc.group/trpc-go/trpc-go/log/internal/timeunit"
 )
 
 // functional test
@@ -44,10 +46,30 @@ const (
 	testRoutines = 256
 )
 
-func TestRollWriter(t *testing.T) {
+func TestRollWriter_Close(t *testing.T) {
+	t.Run("close roll writer multiple times", func(t *testing.T) {
+		w, err := NewRollWriter(filepath.Join(t.TempDir(), "test.log"))
+		require.Nil(t, err)
 
-	// empty file name.
-	t.Run("empty_log_name", func(t *testing.T) {
+		logContent := []byte("log content")
+		n, err := w.Write(logContent)
+		require.Nil(t, err)
+		require.Equal(t, len(logContent), n)
+
+		err = w.Close()
+		require.Nil(t, err)
+
+		n, err = w.Write(logContent)
+		require.Contains(t, err.Error(), "roll writer has been closed")
+		require.Zero(t, n)
+
+		err = w.Close()
+		require.Contains(t, err.Error(), "closing closed roll writer")
+	})
+}
+
+func TestRollWriter(t *testing.T) {
+	t.Run("empty log file name", func(t *testing.T) {
 		logDir := t.TempDir()
 		_, err := NewRollWriter("")
 		assert.Error(t, err, "NewRollWriter: invalid log path")
@@ -55,9 +77,7 @@ func TestRollWriter(t *testing.T) {
 		// print log file list.
 		printLogFiles(logDir)
 	})
-
-	// no rolling.
-	t.Run("roll_by_default", func(t *testing.T) {
+	t.Run("roll by default(no rolling)", func(t *testing.T) {
 		logDir := t.TempDir()
 		logName := "test.log"
 		w, err := NewRollWriter(filepath.Join(logDir, logName))
@@ -78,9 +98,7 @@ func TestRollWriter(t *testing.T) {
 		// print log file list.
 		printLogFiles(logDir)
 	})
-
-	// roll by size.
-	t.Run("roll_by_size", func(t *testing.T) {
+	t.Run("roll by size", func(t *testing.T) {
 		logDir := t.TempDir()
 		logName := "test_size.log"
 		const (
@@ -130,9 +148,7 @@ func TestRollWriter(t *testing.T) {
 		// print log file list.
 		printLogFiles(logDir)
 	})
-
-	// rolling by time.
-	t.Run("roll_by_time", func(t *testing.T) {
+	t.Run("roll by time", func(t *testing.T) {
 		logDir := t.TempDir()
 		logName := "test_time.log"
 		const (
@@ -195,6 +211,76 @@ func TestRollWriter(t *testing.T) {
 		// print log file list.
 		printLogFiles(logDir)
 	})
+}
+
+func TestRollWriterCustomFileFormat(t *testing.T) {
+	logName := "test_time_{time_format}.log"
+	rotationTimeList := []string{timeunit.TimeFormatMinute, timeunit.TimeFormatHour, timeunit.TimeFormatDay,
+		timeunit.TimeFormatMonth, timeunit.TimeFormatYear}
+	for index, rotationTime := range rotationTimeList {
+		t.Run(fmt.Sprintf("roll by time, use custom filename format, index: [%d]", index), func(t *testing.T) {
+			logDir := t.TempDir()
+			const (
+				maxBackup = 3
+				maxSize   = 1
+				maxAge    = 1
+			)
+			w, err := NewRollWriter(filepath.Join(logDir, logName),
+				WithRotationTime("."+rotationTime),
+				WithMaxSize(maxSize),
+				WithMaxAge(maxAge),
+				WithMaxBackups(maxBackup),
+				WithCompress(true),
+			)
+			assert.NoError(t, err, "NewRollWriter: create logger ok")
+			log.SetOutput(w)
+			for i := 0; i < testTimes; i++ {
+				log.Printf("this is a test log: %d\n", i)
+			}
+
+			w.notify()
+			// check number of rolling log files.
+			var logFiles []os.FileInfo
+			require.Eventuallyf(t,
+				func() bool {
+					logFiles = getLogRegexps(logDir, logName, rotationTime)
+					return len(logFiles) == maxBackup+1
+				},
+				5*time.Second,
+				time.Second,
+				"Number of log files should be %d, current: %d, %+v",
+				maxBackup+1, len(logFiles), func() []string {
+					names := make([]string, 0, len(logFiles))
+					for _, f := range logFiles {
+						names = append(names, f.Name())
+					}
+					return names
+				}(),
+			)
+
+			// check rolling log file size(allow to exceed a little).
+			for _, file := range logFiles {
+				if file.Size() > 1*1024*1024+1024 {
+					t.Errorf("Log file size exceeds max_size")
+				}
+			}
+
+			// check number of compressed files.
+			compressFileNum := 0
+			for _, file := range logFiles {
+				if strings.HasSuffix(file.Name(), compressSuffix) {
+					compressFileNum++
+				}
+			}
+			if compressFileNum != 3 {
+				t.Errorf("Number of compress log files should be 3, current: %d", compressFileNum)
+			}
+			require.Nil(t, w.Close())
+
+			// print log file list.
+			printLogFiles(logDir)
+		})
+	}
 }
 
 func TestAsyncRollWriter(t *testing.T) {
@@ -299,11 +385,114 @@ func TestAsyncRollWriter(t *testing.T) {
 		require.Nil(t, asyncWriter.Close())
 	})
 
+	// rolling by time(asynchronous mod) use custom filename format
+	t.Run("roll_by_time_async, use custom filename format", func(t *testing.T) {
+		logName := "test_time_{time_format}.log"
+		w, err := NewRollWriter(filepath.Join(logDir, logName),
+			WithRotationTime(".%Y%m%d"),
+			WithMaxSize(1),
+			WithMaxAge(1),
+			WithCompress(true),
+		)
+		assert.NoError(t, err, "NewRollWriter: create logger ok")
+
+		asyncWriter := NewAsyncRollWriter(w, WithWriteLogSize(flushThreshold))
+		log.SetOutput(asyncWriter)
+		for i := 0; i < testTimes; i++ {
+			log.Printf("this is a test log: %d\n", i)
+		}
+		require.Nil(t, asyncWriter.Sync())
+
+		// check number of rolling log files.
+		time.Sleep(200 * time.Millisecond)
+		logFiles := getLogRegexps(logDir, logName, "%Y%m%d")
+		if len(logFiles) != 5 {
+			t.Errorf("Number of log files should be 5, current: %d", len(logFiles))
+		}
+
+		// check rolling log file size(asynchronous, may exceed 4K at most)
+		for _, file := range logFiles {
+			if file.Size() > 1*1024*1024+flushThreshold*2 {
+				t.Errorf("Log file size exceeds max_size")
+			}
+		}
+
+		// number of compressed files.
+		compressFileNum := 0
+		for _, file := range logFiles {
+			if strings.HasSuffix(file.Name(), compressSuffix) {
+				compressFileNum++
+			}
+		}
+		if compressFileNum != 4 {
+			t.Errorf("Number of compress log files should be 4")
+		}
+		require.Nil(t, asyncWriter.Close())
+	})
+
 	// wait 1 second.
 	time.Sleep(1 * time.Second)
 
 	// print log file list.
 	printLogFiles(logDir)
+}
+
+func TestAsyncRollWriterCustomFileFormat(t *testing.T) {
+	logDir := t.TempDir()
+	const flushThreshold = 4 * 1024
+	logName := "test_time_{time_format}.log"
+	rotationTimeList := []string{timeunit.TimeFormatMinute, timeunit.TimeFormatHour, timeunit.TimeFormatDay,
+		timeunit.TimeFormatMonth, timeunit.TimeFormatYear}
+	// rolling by time(asynchronous mod) use custom filename format
+	for index, rotationTime := range rotationTimeList {
+		t.Run(fmt.Sprintf("roll_by_time_async, use custom filename format, index[%d]", index), func(t *testing.T) {
+			w, err := NewRollWriter(filepath.Join(logDir, logName),
+				WithRotationTime("."+rotationTime),
+				WithMaxSize(1),
+				WithMaxAge(1),
+				WithCompress(true),
+			)
+			assert.NoError(t, err, "NewRollWriter: create logger ok")
+
+			asyncWriter := NewAsyncRollWriter(w, WithWriteLogSize(flushThreshold))
+			log.SetOutput(asyncWriter)
+			for i := 0; i < testTimes; i++ {
+				log.Printf("this is a test log: %d\n", i)
+			}
+			require.Nil(t, asyncWriter.Sync())
+
+			// check number of rolling log files.
+			time.Sleep(200 * time.Millisecond)
+			logFiles := getLogRegexps(logDir, logName, rotationTime)
+			if len(logFiles) != 5 {
+				t.Errorf("Number of log files should be 5, current: %d", len(logFiles))
+			}
+
+			// check rolling log file size(asynchronous, may exceed 4K at most)
+			for _, file := range logFiles {
+				if file.Size() > 1*1024*1024+flushThreshold*2 {
+					t.Errorf("Log file size exceeds max_size")
+				}
+			}
+
+			// number of compressed files.
+			compressFileNum := 0
+			for _, file := range logFiles {
+				if strings.HasSuffix(file.Name(), compressSuffix) {
+					compressFileNum++
+				}
+			}
+			if compressFileNum != 4 {
+				t.Errorf("Number of compress log files should be 4")
+			}
+			require.Nil(t, asyncWriter.Close())
+		})
+		// wait 1 second.
+		time.Sleep(1 * time.Second)
+
+		// print log file list.
+		printLogFiles(logDir)
+	}
 }
 
 func TestRollWriterRace(t *testing.T) {
@@ -379,7 +568,7 @@ func TestAsyncRollWriterSyncTwice(t *testing.T) {
 func TestAsyncRollWriterDirectWrite(t *testing.T) {
 	logSize := 1
 	w := NewAsyncRollWriter(&noopWriteCloser{}, WithWriteLogSize(logSize))
-	_, _ = w.Write([]byte("hello"))
+	w.Write([]byte("hello"))
 	time.Sleep(time.Millisecond)
 	require.Nil(t, w.Sync())
 	require.Nil(t, w.Sync())
@@ -409,7 +598,7 @@ func TestRollWriterError(t *testing.T) {
 		r, err := NewRollWriter(path.Join(logDir, "trpc.log"))
 		require.Nil(t, err)
 		r.os = errOS{statErr: errAlwaysFail}
-		_, err = r.matchLogFile("trpc.log.20230130", "trpc.log")
+		_, err = r.matchLogFile("trpc.log.20230130")
 		require.NotNil(t, err)
 		require.Nil(t, r.Close())
 	})
@@ -431,6 +620,21 @@ func TestRollWriterError(t *testing.T) {
 		require.Nil(t, err)
 		require.Nil(t, f.Close())
 		require.NotNil(t, r.compressFile(file, ""))
+		require.Nil(t, r.Close())
+	})
+}
+
+func TestRollWriterCustomFileFormatError(t *testing.T) {
+	logDir := t.TempDir()
+	t.Run("error when using custom file format without time format", func(t *testing.T) {
+		_, err := NewRollWriter(path.Join(logDir, "trpc_{time_format}.log"))
+		require.NotNil(t, err)
+	})
+	t.Run("success with custom file format and rotation time", func(t *testing.T) {
+		r, err := NewRollWriter(path.Join(logDir, "trpc_{time_format}.log"), WithRotationTime(".%Y%m"))
+		require.Nil(t, err)
+		r.os = errOS{openFileErr: errAlwaysFail}
+		r.reopenFile()
 		require.Nil(t, r.Close())
 	})
 }
@@ -697,6 +901,25 @@ func getLogBackups(logDir, prefix string) []os.FileInfo {
 	var logFiles []os.FileInfo
 	for _, file := range entries {
 		if !strings.HasPrefix(file.Name(), prefix) {
+			continue
+		}
+		if info, err := file.Info(); err == nil {
+			logFiles = append(logFiles, info)
+		}
+	}
+	return logFiles
+}
+
+func getLogRegexps(logDir, filename, timeFormat string) []os.FileInfo {
+	entries, err := os.ReadDir(logDir)
+	if err != nil {
+		return nil
+	}
+	matchFileRegx, _ := timeunit.GenerateTimeFormatRegex(filename, timeFormat)
+	var logFiles []os.FileInfo
+	for _, file := range entries {
+		matched := matchFileRegx.MatchString(file.Name())
+		if !matched {
 			continue
 		}
 		if info, err := file.Info(); err == nil {

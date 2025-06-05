@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	thttp "trpc.group/trpc-go/trpc-go/http"
 	"trpc.group/trpc-go/trpc-go/server"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRegisterDefaultService(t *testing.T) {
@@ -115,7 +115,7 @@ func TestMultipartTmpFileCleaning(t *testing.T) {
 	require.Nil(t, w.Close())
 
 	// Setup client.
-	req, err := http.NewRequest("POST", "http://"+ln.Addr().String()+"/test/multipart", &b)
+	req, err := http.NewRequest(http.MethodPost, "http://"+ln.Addr().String()+"/test/multipart", &b)
 	require.Nil(t, err)
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	client := http.DefaultClient

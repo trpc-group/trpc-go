@@ -31,8 +31,14 @@ func (a *Attachment) Request() io.Reader {
 }
 
 // SetResponse sets Response attachment.
-func (a *Attachment) SetResponse(attachment io.Reader) {
-	a.attachment.Response = attachment
+// If the response additionally implements the Sizer interface, it can significantly reduce memory copying for large
+// attachments and reduce transmission time. Typically, you can pass bytes.NewReader, which already implements Sizer.
+//
+//	type Sizer interface {
+//		Size() int64
+//	}
+func (a *Attachment) SetResponse(response io.Reader) {
+	a.attachment.Response = response
 }
 
 // GetAttachment returns Attachment from msg.
@@ -43,7 +49,7 @@ func GetAttachment(msg codec.Msg) *Attachment {
 		cm = make(codec.CommonMeta)
 		msg.WithCommonMeta(cm)
 	}
-	a, _ := cm[attachment.ServerAttachmentKey{}]
+	a := cm[attachment.ServerAttachmentKey{}]
 	if a == nil {
 		a = &attachment.Attachment{Request: attachment.NoopAttachment{}, Response: attachment.NoopAttachment{}}
 		cm[attachment.ServerAttachmentKey{}] = a

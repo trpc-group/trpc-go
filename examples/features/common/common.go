@@ -19,7 +19,7 @@ import (
 
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/log"
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 // GreeterServerImpl service implement
@@ -31,12 +31,12 @@ func (s *GreeterServerImpl) SayHello(ctx context.Context, req *pb.HelloRequest) 
 	// implement business logic here ...
 	// ...
 
-	log.Debugf("recv req:%s", req)
+	log.Debugf("recv req: %s", req)
 
 	proxy := pb.NewGreeterClientProxy()
 	hi, err := proxy.SayHi(ctx, req, client.WithTarget("ip://127.0.0.1:8000"))
 	if err != nil {
-		log.Errorf("say hi fail:%v", err)
+		log.Errorf("say hi fail: %v", err)
 		return nil, err
 	}
 	rsp.Msg = "Hello " + hi.Msg
@@ -49,7 +49,7 @@ func (s *GreeterServerImpl) SayHi(ctx context.Context, req *pb.HelloRequest) (*p
 	// implement business logic here ...
 	// ...
 
-	log.Debugf("SayHi recv req:%s", req)
+	log.Debugf("SayHi recv req: %s", req)
 	rsp.Msg = "Hi " + req.Msg
 
 	return rsp, nil

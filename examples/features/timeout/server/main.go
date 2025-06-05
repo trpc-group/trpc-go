@@ -18,16 +18,16 @@ import (
 	"context"
 	"time"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/examples/features/timeout/shared"
 	"trpc.group/trpc-go/trpc-go/log"
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 func main() {
 	s := trpc.NewServer()
-	pb.RegisterGreeterService(s, &timeoutServerImpl{})
+	pb.RegisterGreeterService(s.Service("trpc.test.helloworld.Greeter"), &timeoutServerImpl{})
 	s.Serve()
 }
 
@@ -37,11 +37,11 @@ type timeoutServerImpl struct{}
 // SayHello implements `SayHello` method.
 func (t *timeoutServerImpl) SayHello(ctx context.Context, req *pb.HelloRequest) (*pb.HelloReply, error) {
 	rsp := &pb.HelloReply{}
-	log.Debugf("timeoutServerImpl SayHello recv req:%s", req)
+	log.Debugf("timeoutServerImpl SayHello recv req: %s", req)
 	proxy := pb.NewGreeterClientProxy()
 	hi, err := proxy.SayHi(ctx, req, client.WithTarget(shared.Addr))
 	if err != nil {
-		log.Errorf("call SayHi fail:%v", err)
+		log.Errorf("call SayHi fail: %v", err)
 		return nil, err
 	}
 	rsp.Msg = "SayHello: " + hi.Msg
@@ -51,7 +51,7 @@ func (t *timeoutServerImpl) SayHello(ctx context.Context, req *pb.HelloRequest) 
 // SayHi implements `SayHello` method.
 func (t *timeoutServerImpl) SayHi(ctx context.Context, req *pb.HelloRequest) (*pb.HelloReply, error) {
 	rsp := &pb.HelloReply{}
-	log.Debugf("timeoutServerImpl SayHi recv req:%s", req)
+	log.Debugf("timeoutServerImpl SayHi recv req: %s", req)
 	time.Sleep(time.Millisecond * 1100)
 	rsp.Msg = "SayHi: " + req.Msg
 

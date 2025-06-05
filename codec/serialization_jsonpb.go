@@ -14,8 +14,10 @@
 package codec
 
 import (
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
+	"bytes"
+
+	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/proto"
 )
 
 func init() {
@@ -23,15 +25,13 @@ func init() {
 }
 
 // Marshaler is jsonpb marshal object, users can change its params.
-var Marshaler = protojson.MarshalOptions{EmitUnpopulated: true, UseProtoNames: true, UseEnumNumbers: true}
+var Marshaler = jsonpb.Marshaler{EmitDefaults: true, OrigName: true, EnumsAsInts: true}
 
 // Unmarshaler is jsonpb unmarshal object, users can chang its params.
-var Unmarshaler = protojson.UnmarshalOptions{DiscardUnknown: false}
+var Unmarshaler = jsonpb.Unmarshaler{AllowUnknownFields: true}
 
 // JSONPBSerialization provides jsonpb serialization mode. It is based on
-// protobuf/jsonpb. This serializer will firstly try jsonpb's serialization. If
-// object does not conform to protobuf proto.Message interface, json-iterator
-// will be used.
+// protobuf/jsonpb.
 type JSONPBSerialization struct{}
 
 // Unmarshal deserialize the in bytes into body.
@@ -40,7 +40,7 @@ func (s *JSONPBSerialization) Unmarshal(in []byte, body interface{}) error {
 	if !ok {
 		return JSONAPI.Unmarshal(in, body)
 	}
-	return Unmarshaler.Unmarshal(in, input)
+	return Unmarshaler.Unmarshal(bytes.NewReader(in), input)
 }
 
 // Marshal returns the serialized bytes in jsonpb protocol.
@@ -49,5 +49,10 @@ func (s *JSONPBSerialization) Marshal(body interface{}) ([]byte, error) {
 	if !ok {
 		return JSONAPI.Marshal(body)
 	}
-	return Marshaler.Marshal(input)
+	var buf []byte
+	w := bytes.NewBuffer(buf)
+	if err := Marshaler.Marshal(w, input); err != nil {
+		return nil, err
+	}
+	return w.Bytes(), nil
 }

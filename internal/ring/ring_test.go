@@ -19,8 +19,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"trpc.group/trpc-go/trpc-go/internal/ring"
+	"github.com/stretchr/testify/assert"
 )
 
 var (

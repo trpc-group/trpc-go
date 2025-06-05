@@ -15,6 +15,7 @@ package server_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -152,6 +153,64 @@ var GreeterServerServiceDescFail = server.ServiceDesc{
 	},
 }
 
+func TestGetServiceInfo(t *testing.T) {
+	t.Run("empty service", func(t *testing.T) {
+		var srv server.Server
+		require.Empty(t, srv.GetServiceInfo())
+
+		require.Nil(t, srv.Register(&GreeterServerServiceDesc, &GreeterServerImpl{}))
+		require.Empty(t, srv.GetServiceInfo())
+	})
+	t.Run("register to the service", func(t *testing.T) {
+		var srv server.Server
+		srv.AddService("a.b.c.d",
+			server.New(server.WithNetwork("tcp"),
+				server.WithAddress("127.0.0.1:8080"),
+				server.WithProtocol("trpc")))
+		require.Nil(t, srv.Service("a.b.c.d").Register(&GreeterServerServiceDesc, &GreeterServerImpl{}))
+		want := map[string]server.ServiceInfo{
+			"a.b.c.d": {
+				Name: "trpc.test.helloworld.Greeter",
+				Methods: []server.MethodInfo{
+					{Name: "/trpc.test.helloworld.Greeter/SayHello"},
+					{Name: "/trpc.test.helloworld.Greeter/SayHi", IsServerStream: true},
+				},
+			},
+		}
+		got := srv.GetServiceInfo()
+		require.EqualValues(t, want, got)
+	})
+	t.Run("register to all services(incorrect usage)", func(t *testing.T) {
+		var srv server.Server
+		srv.AddService("a.b.c.d",
+			server.New(server.WithNetwork("tcp"),
+				server.WithAddress("127.0.0.1:8080"),
+				server.WithProtocol("trpc")))
+		srv.AddService("w.x.y.z",
+			server.New(server.WithNetwork("tcp"),
+				server.WithAddress("127.0.0.1:8081"),
+				server.WithProtocol("trpc")))
+		require.Nil(t, srv.Register(&GreeterServerServiceDesc, &GreeterServerImpl{}))
+		want := map[string]server.ServiceInfo{
+			"a.b.c.d": {
+				Name: "trpc.test.helloworld.Greeter",
+				Methods: []server.MethodInfo{
+					{Name: "/trpc.test.helloworld.Greeter/SayHello"},
+					{Name: "/trpc.test.helloworld.Greeter/SayHi", IsServerStream: true},
+				},
+			},
+			"w.x.y.z": {
+				Name: "trpc.test.helloworld.Greeter",
+				Methods: []server.MethodInfo{
+					{Name: "/trpc.test.helloworld.Greeter/SayHello"},
+					{Name: "/trpc.test.helloworld.Greeter/SayHi", IsServerStream: true},
+				},
+			},
+		}
+		require.Equal(t, want, srv.GetServiceInfo())
+	})
+}
+
 func TestServeFail(t *testing.T) {
 	t.Run("test empty service", func(t *testing.T) {
 		s := &server.Server{}
@@ -254,6 +313,26 @@ func TestServerClose(t *testing.T) {
 	}
 }
 
+func TestServerCauseClose(t *testing.T) {
+	s := server.NewServer()
+
+	s.AddService("normal", struct {
+		*server.NoopService
+	}{&server.NoopService{Name: t.Name()}})
+
+	cc := causeCloser{cause: errors.New("any non nil error")}
+	s.AddService("causeCloser", struct {
+		*server.NoopService
+		*causeCloser
+	}{
+		&server.NoopService{Name: "causeCloser"},
+		&cc,
+	})
+
+	require.Nil(t, s.Close(nil))
+	require.Nil(t, cc.cause, "cc.cause should be rewrite with nil")
+}
+
 // TestServer_AtExit tests whether order of execution of shutdown hook functions matches
 // order of registration of shutdown hook functions.
 func TestServer_AtExit_ExecuteOrder(t *testing.T) {
@@ -274,4 +353,22 @@ func TestServer_AtExit_ExecuteOrder(t *testing.T) {
 	}
 	_, ok := <-ch
 	require.False(t, ok)
+}
+
+func TestNoopService(t *testing.T) {
+	s := &server.Server{}
+	ns := s.MustService("name")
+	require.NotNil(t, ns)
+	require.Nil(t, ns.Register(nil, nil))
+	require.Nil(t, ns.Serve())
+	require.Nil(t, ns.Close(make(chan struct{}, 1)))
+}
+
+type causeCloser struct {
+	cause error
+}
+
+func (c *causeCloser) CloseCause(e error) error {
+	c.cause = e
+	return nil
 }

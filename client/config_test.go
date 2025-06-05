@@ -16,20 +16,23 @@ package client_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v3"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/filter"
-	"trpc.group/trpc-go/trpc-go/internal/rand"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
+	"trpc.group/trpc-go/trpc-go/internal/random"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 	"trpc.group/trpc-go/trpc-go/naming/selector"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"trpc.group/trpc-go/trpc-go/transport"
 )
 
@@ -50,8 +53,27 @@ func TestConfigOptions(t *testing.T) {
 	assert.Equal(t, "udp", transportOpts.Network)
 	assert.Equal(t, trpc.DefaultClientCodec, clientOpts.Codec)
 
-	filter.Register("Monitoring", filter.NoopServerFilter, filter.NoopClientFilter)
-	filter.Register("Authentication", filter.NoopServerFilter, filter.NoopClientFilter)
+	filter.Register("tjg", filter.NoopServerFilter, filter.NoopClientFilter)
+	filter.Register("m007", filter.NoopServerFilter, filter.NoopClientFilter)
+	backconfig := &client.BackendConfig{
+		ServiceName: "trpc.test.helloworld3", // backend service name
+		Namespace:   "Development",
+		Target:      "cmlb://1111",
+		Network:     "tcp",
+		Timeout:     1000,
+		Protocol:    "trpc",
+		Filter:      []string{"tjg", "m007"},
+	}
+	err := client.RegisterClientConfig("trpc.test.helloworld3", backconfig)
+	assert.NotNil(t, err)
+	clientOpts = &client.Options{}
+	transportOpts = &transport.RoundTripOptions{}
+	require.Nil(t, clientOpts.LoadClientConfig("trpc.test.helloworld3"))
+	for _, o := range clientOpts.CallOptions {
+		o(transportOpts)
+	}
+	assert.Equal(t, "tcp", transportOpts.Network)
+	assert.Equal(t, trpc.DefaultClientCodec, clientOpts.Codec)
 }
 
 func TestConfigNoDiscovery(t *testing.T) {
@@ -62,10 +84,12 @@ func TestConfigNoDiscovery(t *testing.T) {
 		Network:     "tcp",
 		Timeout:     1000,
 		Protocol:    "trpc",
-		Filter:      []string{"Monitoring", "Authentication"},
+		Filter:      []string{"tjg", "m007"},
 	}
 	err := client.RegisterClientConfig("trpc.test.nodiscovery", backconfig)
 	assert.NotNil(t, err)
+	clientOpts := &client.Options{}
+	require.Nil(t, clientOpts.LoadClientConfig("trpc.test.nodiscovery"))
 }
 
 func TestConfigNoServiceRouter(t *testing.T) {
@@ -76,10 +100,12 @@ func TestConfigNoServiceRouter(t *testing.T) {
 		Network:       "tcp",
 		Timeout:       1000,
 		Protocol:      "trpc",
-		Filter:        []string{"Monitoring", "Authentication"},
+		Filter:        []string{"tjg", "m007"},
 	}
 	err := client.RegisterClientConfig("trpc.test.noservicerouter", backconfig)
 	assert.NotNil(t, err)
+	clientOpts := &client.Options{}
+	require.Nil(t, clientOpts.LoadClientConfig("trpc.test.noservicerouter"))
 }
 
 func TestConfigNoBalance(t *testing.T) {
@@ -90,7 +116,7 @@ func TestConfigNoBalance(t *testing.T) {
 		Network:     "tcp",
 		Timeout:     1000,
 		Protocol:    "trpc",
-		Filter:      []string{"Monitoring", "Authentication"},
+		Filter:      []string{"tjg", "m007"},
 	}
 	err := client.RegisterClientConfig("trpc.test.nobalance", backconfig)
 	assert.NotNil(t, err)
@@ -147,6 +173,78 @@ func TestConfigCalleeMetadata(t *testing.T) {
 	err = cli.Invoke(ctx, reqBody, rspBody,
 		client.WithTarget("test-options-selector://trpc.test.client.metadata"),
 	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), testOptionsSelectorError.Error())
+}
+
+func TestConfigCallerMetadata(t *testing.T) {
+	ctx := context.Background()
+	req := &codec.Body{}
+	rsp := &codec.Body{}
+	callerMetadata := map[string]string{
+		"key1": "val1",
+		"key2": "val2",
+	}
+	callee := "trpc." + t.Name()
+	backconfig := &client.BackendConfig{
+		Namespace:      "Development",
+		Network:        "tcp",
+		Timeout:        1000,
+		Protocol:       "trpc",
+		CallerMetadata: callerMetadata,
+	}
+	require.Nil(t, client.RegisterClientConfig(callee, backconfig))
+	s := &testOptionsSelector{
+		f: func(opts *selector.Options) {
+			assert.Equal(t, callerMetadata, opts.SourceMetadata)
+		},
+	}
+	selectorName := "test-options-selector"
+	selector.Register(selectorName, s)
+	cli := client.New()
+	assert.Equal(t, cli, client.DefaultClient)
+	ctx, msg := codec.WithNewMessage(ctx)
+	msg.WithCalleeServiceName(callee)
+	err := cli.Invoke(ctx, req, rsp,
+		client.WithTarget(fmt.Sprintf("%s://trpc.test.client.metadata", selectorName)),
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), testOptionsSelectorError.Error())
+}
+
+func TestConfigCallerNamespaceEnvSet(t *testing.T) {
+	ctx := context.Background()
+	req := &codec.Body{}
+	rsp := &codec.Body{}
+	callerNamespace, callerEnvName, callerSetName := "caller/Development", "caller_env", "caller_set"
+	callee := "trpc." + t.Name()
+	backconfig := &client.BackendConfig{
+		Namespace:       "Development",
+		Network:         "tcp",
+		Timeout:         1000,
+		Protocol:        "trpc",
+		CallerNamespace: callerNamespace,
+		CallerEnvName:   callerEnvName,
+		CallerSetName:   callerSetName,
+	}
+	require.Nil(t, client.RegisterClientConfig(callee, backconfig))
+	s := &testOptionsSelector{
+		f: func(opts *selector.Options) {
+			assert.Equal(t, callerNamespace, opts.SourceNamespace)
+			assert.Equal(t, callerEnvName, opts.SourceEnvName)
+			assert.Equal(t, callerSetName, opts.SourceSetName)
+		},
+	}
+	selectorName := "test-options-selector"
+	selector.Register(selectorName, s)
+	cli := client.New()
+	assert.Equal(t, cli, client.DefaultClient)
+	ctx, msg := codec.WithNewMessage(ctx)
+	msg.WithCalleeServiceName(callee)
+	err := cli.Invoke(ctx, req, rsp,
+		client.WithTarget(fmt.Sprintf("%s://trpc.test.client.caller", selectorName)),
+	)
+	require.Error(t, err)
 	require.Contains(t, err.Error(), testOptionsSelectorError.Error())
 }
 
@@ -158,7 +256,7 @@ func TestConfigNoBreaker(t *testing.T) {
 		Network:        "tcp",
 		Timeout:        1000,
 		Protocol:       "trpc",
-		Filter:         []string{"Monitoring", "Authentication"},
+		Filter:         []string{"tjg", "m007"},
 	}
 	err := client.RegisterClientConfig("trpc.test.nobreaker", backconfig)
 	assert.NotNil(t, err)
@@ -171,12 +269,18 @@ func TestConfigNoFilter(t *testing.T) {
 		Network:     "tcp",
 		Timeout:     1000,
 		Protocol:    "trpc",
-		Filter:      []string{"Monitoring", "no-exists"},
+		Filter:      []string{"tjg", "no-exists"},
 	}
 	err := client.RegisterClientConfig("trpc.test.nofilter", backconfig)
 	assert.NotNil(t, err)
+	clientOpts := &client.Options{}
+	require.Nil(t, clientOpts.LoadClientFilterConfig("trpc.test.nofilter"))
 }
-
+func TestConfigDisableFilter(t *testing.T) {
+	clientOpts := &client.Options{}
+	clientOpts.DisableFilter = true
+	require.Nil(t, clientOpts.LoadClientFilterConfig("trpc.test.disablefilter"))
+}
 func TestConfigFilter(t *testing.T) {
 	backconfig := &client.BackendConfig{
 		ServiceName: "trpc.test.helloworld3", // backend service name
@@ -184,11 +288,13 @@ func TestConfigFilter(t *testing.T) {
 		Network:     "tcp",
 		Timeout:     1000,
 		Protocol:    "trpc",
-		Filter:      []string{"Monitoring"},
+		Filter:      []string{"tjg"},
 	}
-	filter.Register("Monitoring", nil, filter.NoopClientFilter)
+	filter.Register("tjg", nil, filter.NoopFilter)
 	err := client.RegisterClientConfig("trpc.test.filter", backconfig)
 	assert.Nil(t, err)
+	clientOpts := &client.Options{}
+	require.Nil(t, clientOpts.LoadClientFilterConfig("trpc.test.filter"))
 }
 
 func TestLoadClientFilterConfigSelectorFilter(t *testing.T) {
@@ -196,16 +302,31 @@ func TestLoadClientFilterConfigSelectorFilter(t *testing.T) {
 	require.Nil(t, client.RegisterClientConfig(callee, &client.BackendConfig{
 		Filter: []string{client.DefaultSelectorFilterName},
 	}))
+	require.Nil(t, (&client.Options{}).LoadClientFilterConfig(callee))
+}
+
+func TestLoadClientFilterConfigSelectorFilterRepair(t *testing.T) {
+	const callee = "trpc.test.filter.selector"
+	backconfig := &client.BackendConfig{
+		ServiceName: callee,
+		Filter:      []string{client.DefaultSelectorFilterName},
+	}
+	require.Nil(t, client.RegisterClientConfig(callee, backconfig))
+
+	clientOpts := &client.Options{}
+	require.Nil(t, clientOpts.LoadClientFilterConfig(callee))
+	require.Equal(t, []string{client.DefaultSelectorFilterName}, clientOpts.FilterNames)
 }
 
 func TestRegisterConfigParallel(t *testing.T) {
-	safeRand := rand.NewSafeRand(time.Now().UnixNano())
+	safeRand := random.New()
 	for i := 0; i < safeRand.Intn(100); i++ {
 		t.Run("Parallel", func(t *testing.T) {
 			t.Parallel()
 			backconfig := &client.BackendConfig{
 				ServiceName: "trpc.test.helloworld1", // backend service name
 				Target:      "ip://1.1.1.1:2222",     // backend address
+				Tag:         "tag1",
 				Network:     "tcp",
 				Timeout:     1000,
 				Protocol:    "trpc",
@@ -218,6 +339,107 @@ func TestRegisterConfigParallel(t *testing.T) {
 			assert.Equal(t, client.DefaultClientConfig(), conf)
 		})
 	}
+}
+
+func TestLoadClientOverloadCtrlCfg(t *testing.T) {
+	testClientOC := &overloadctrl.NoopOC{}
+	overloadctrl.RegisterClient("test_client_oc",
+		func(*overloadctrl.ServiceMethodInfo) overloadctrl.OverloadController {
+			return testClientOC
+		})
+
+	t.Run("default oc", func(t *testing.T) {
+		var cfg client.BackendConfig
+		require.Nil(t, yaml.Unmarshal([]byte(`
+name: xxx
+`), &cfg))
+		token, err := cfg.OverloadCtrl.Acquire(context.Background(), "")
+		require.Nil(t, err)
+		require.Equal(t, overloadctrl.NoopToken{}, token)
+	})
+	t.Run("wrong format", func(t *testing.T) {
+		var cfg client.BackendConfig
+		require.NotNil(t, yaml.Unmarshal([]byte(`
+overload_ctrl: [1, 2, 3] # invalid format
+`), &cfg))
+	})
+	t.Run("oc not found", func(t *testing.T) {
+		var cfg client.BackendConfig
+		require.NotNil(t, yaml.Unmarshal([]byte(`
+overload_ctrl: not_exist
+`), &cfg))
+	})
+	t.Run("oc found", func(t *testing.T) {
+		var cfg client.BackendConfig
+		require.Nil(t, yaml.Unmarshal([]byte(`
+overload_ctrl: "test_client_oc"
+`), &cfg))
+		require.Equal(t, testClientOC, cfg.OverloadCtrl.OverloadController)
+	})
+	t.Run("marshal_unmarshal", func(t *testing.T) {
+		ocData := "overload_ctrl: test_client_oc"
+		var cfg client.BackendConfig
+		require.Nil(t, yaml.Unmarshal([]byte(ocData), &cfg))
+		data, err := yaml.Marshal(&cfg)
+		require.Nil(t, err)
+		require.Contains(t, string(data), ocData)
+	})
+}
+
+func TestConfig(t *testing.T) {
+	c := client.Config("empty")
+	assert.Equal(t, "", c.ServiceName)
+	assert.Equal(t, "tcp", c.Network)
+	assert.Equal(t, "trpc", c.Protocol)
+
+	backconfig := &client.BackendConfig{
+		ServiceName: "trpc.test.helloworld1", // backend service name
+		Target:      "ip://1.1.1.1:2222",     // backend address
+		Network:     "tcp",
+		Timeout:     1000,
+		Protocol:    "trpc",
+	}
+	conf := map[string]*client.BackendConfig{
+		"trpc.test.helloworld": backconfig,
+	}
+
+	err := client.RegisterConfig(conf)
+	assert.Nil(t, err)
+	assert.Equal(t, client.DefaultClientConfig(), conf)
+
+	require.Nil(t, client.RegisterClientConfig("trpc.test.helloworld2", backconfig))
+	assert.Equal(t, "trpc.test.helloworld1", client.Config("trpc.test.helloworld2").ServiceName)
+
+	c = client.Config("no-exist")
+	assert.Equal(t, "", c.ServiceName)
+	assert.Equal(t, "tcp", c.Network)
+	assert.Equal(t, "trpc", c.Protocol)
+
+	c = client.Config("trpc.test.helloworld")
+	assert.Equal(t, "trpc.test.helloworld1", c.ServiceName)
+	assert.Equal(t, "tcp", c.Network)
+	assert.Equal(t, "ip://1.1.1.1:2222", c.Target)
+	assert.Equal(t, 1000, c.Timeout)
+	assert.Equal(t, "trpc", c.Protocol)
+
+	backconfig = &client.BackendConfig{
+		ServiceName: "trpc.test.helloworld1", // backend service name
+		Network:     "tcp",
+		Timeout:     1000,
+		Protocol:    "trpc",
+		Compression: 1,
+		Password:    "xxx",
+		CACert:      "xxx",
+	}
+	require.Nil(t, client.RegisterClientConfig("trpc.test.helloworld3", backconfig))
+	clientOpts := &client.Options{}
+	transportOpts := &transport.RoundTripOptions{}
+	require.Nil(t, clientOpts.LoadClientConfig("trpc.test.helloworld3"))
+	for _, o := range clientOpts.CallOptions {
+		o(transportOpts)
+	}
+	assert.Equal(t, "tcp", transportOpts.Network)
+	assert.Equal(t, trpc.DefaultClientCodec, clientOpts.Codec)
 }
 
 func TestLoadClientConfig(t *testing.T) {
@@ -264,53 +486,31 @@ stream_filter:
 	require.Nil(t, client.RegisterClientConfig("trpc.test.hello", cfg))
 }
 
-func TestConfig(t *testing.T) {
-	require.Nil(t, client.RegisterConfig(make(map[string]*client.BackendConfig)))
-	c := client.Config("empty")
-	assert.Equal(t, "", c.ServiceName)
-	assert.Equal(t, "tcp", c.Network)
-	assert.Equal(t, "trpc", c.Protocol)
-
+func TestReportAnyErrToSelector(t *testing.T) {
 	backconfig := &client.BackendConfig{
-		ServiceName: "trpc.test.helloworld1", // backend service name
-		Target:      "ip://1.1.1.1:2222",     // backend address
-		Network:     "tcp",
-		Timeout:     1000,
-		Protocol:    "trpc",
-	}
-	conf := map[string]*client.BackendConfig{
-		"trpc.test.helloworld": backconfig,
-	}
-
-	err := client.RegisterConfig(conf)
-	assert.Nil(t, err)
-	assert.Equal(t, client.DefaultClientConfig(), conf)
-
-	require.Nil(t, client.RegisterClientConfig("trpc.test.helloworld2", backconfig))
-	assert.Equal(t, "trpc.test.helloworld1", client.Config("trpc.test.helloworld2").ServiceName)
-
-	c = client.Config("no-exist")
-	assert.Equal(t, "", c.ServiceName)
-	assert.Equal(t, "tcp", c.Network)
-	assert.Equal(t, "trpc", c.Protocol)
-
-	c = client.Config("trpc.test.helloworld")
-	assert.Equal(t, "trpc.test.helloworld1", c.ServiceName)
-	assert.Equal(t, "tcp", c.Network)
-	assert.Equal(t, "ip://1.1.1.1:2222", c.Target)
-	assert.Equal(t, 1000, c.Timeout)
-	assert.Equal(t, "trpc", c.Protocol)
-
-	backconfig = &client.BackendConfig{
-		ServiceName: "trpc.test.helloworld1", // backend service name
-		Network:     "tcp",
-		Timeout:     1000,
-		Protocol:    "trpc",
-		Compression: 1,
-		Password:    "xxx",
-		CACert:      "xxx",
+		ReportAnyErrToSelector: true,
 	}
 	require.Nil(t, client.RegisterClientConfig("trpc.test.helloworld3", backconfig))
+	clientOpts := &client.Options{}
+	require.Nil(t, clientOpts.LoadClientConfig("trpc.test.helloworld3"))
+}
+
+func TestMethodTimeoutCfg(t *testing.T) {
+	backendConfig := client.BackendConfig{}
+	require.Nil(t, yaml.Unmarshal([]byte(`
+method:
+  M0:
+    timeout: 1000
+  M1: {}
+`), &backendConfig))
+	require.Len(t, backendConfig.Method, 2)
+	m0, ok := backendConfig.Method["M0"]
+	require.True(t, ok)
+	require.NotNil(t, m0.Timeout)
+	require.Equal(t, 1000, *m0.Timeout)
+	m1, ok := backendConfig.Method["M1"]
+	require.True(t, ok)
+	require.Nil(t, m1.Timeout)
 }
 
 func TestRegisterWildcardClient(t *testing.T) {
@@ -333,4 +533,163 @@ func TestRegisterWildcardClient(t *testing.T) {
 		})))
 	opts := <-ch
 	require.True(t, opts.DisableServiceRouter)
+}
+
+func TestGetConfig(t *testing.T) {
+	client.RegisterConfig(nil) // clean up
+	_, err := client.GetConfig(t.Name(), "")
+	require.Error(t, err)
+
+	cfg1 := &client.BackendConfig{
+		Callee:      t.Name(),
+		ServiceName: t.Name(),            // backend service name
+		Target:      "ip://1.1.1.1:1111", // backend address
+		Network:     "tcp",
+		Timeout:     1000,
+		Protocol:    "trpc",
+	}
+	cfg2 := &client.BackendConfig{
+		Callee:      t.Name(),
+		ServiceName: t.Name() + "/1",     // backend service name
+		Target:      "ip://1.1.1.1:2222", // backend address
+		Network:     "tcp",
+		Timeout:     1200,
+		Protocol:    "trpc",
+	}
+	client.RegisterClientConfig(cfg1.Callee, cfg1)
+
+	cfg, err := client.GetConfig(cfg1.Callee, cfg1.ServiceName)
+	require.Nil(t, err)
+	require.Equal(t, cfg1, cfg)
+	cfg, err = client.GetConfig(cfg1.Callee, "")
+	require.Nil(t, err)
+	require.Equal(t, cfg1, cfg)
+	cfg, err = client.GetConfig(cfg1.Callee, cfg2.ServiceName)
+	require.Nil(t, err)
+	require.Equal(t, cfg1, cfg)
+
+	client.RegisterClientConfig(cfg2.Callee, cfg2)
+	cfg, err = client.GetConfig(cfg1.Callee, cfg1.ServiceName)
+	require.Nil(t, err)
+	require.Equal(t, cfg1, cfg)
+	cfg, err = client.GetConfig(cfg1.Callee, "")
+	require.Nil(t, err)
+	require.Equal(t, cfg1, cfg)
+	cfg, err = client.GetConfig(cfg2.Callee, cfg2.ServiceName)
+	require.Nil(t, err)
+	require.Equal(t, cfg2, cfg)
+	cfg, err = client.GetConfig(cfg2.Callee, "")
+	require.Nil(t, err)
+	require.Equal(t, cfg1, cfg)
+
+	cfg, err = client.GetConfig(t.Name()+"not-exist", "")
+	require.Error(t, err)
+	require.Nil(t, cfg)
+
+	cfg, err = client.GetConfig(cfg1.Callee, t.Name()+"not-exist")
+	require.Nil(t, err)
+	require.Equal(t, cfg2, cfg)
+	cfg3 := &client.BackendConfig{
+		Protocol: "trpc",
+		Target:   "ip://1.1.1.1:3333",
+	}
+	client.RegisterClientConfig("*", cfg3)
+	cfg, err = client.GetConfig(t.Name()+"not-exist", "")
+	require.Nil(t, err)
+	require.Equal(t, cfg3, cfg)
+}
+
+func TestGetOptionsByCalleeAndUserOptions(t *testing.T) {
+	client.RegisterConfig(nil)
+	defer client.RegisterConfig(nil)
+	_, err := client.GetConfig(t.Name(), "")
+	require.Error(t, err)
+
+	cfg1 := &client.BackendConfig{
+		Callee:      t.Name(),
+		ServiceName: t.Name(), // backend service name
+		Tag:         "tag1",
+		Target:      "ip://1.1.1.1:1111", // backend address
+		Network:     protocol.TCP,
+		Timeout:     1000,
+		Protocol:    protocol.TRPC,
+	}
+	client.RegisterClientConfig(cfg1.Callee, cfg1)
+
+	ctx, msg := codec.EnsureMessage(context.Background())
+	msg.WithCalleeServiceName(t.Name())
+	err = client.DefaultClient.Invoke(ctx, nil, nil,
+		client.WithServiceName(t.Name()),
+		client.WithTag("tag1"),
+	)
+	require.NotContains(t, err.Error(), "please check for configuration errors")
+
+	err = client.DefaultClient.Invoke(ctx, nil, nil,
+		client.WithServiceName(t.Name()),
+		client.WithTag("tag2"),
+	)
+	require.Contains(t, err.Error(), "please check for configuration errors")
+}
+
+func TestRegisterConnTypeForNonTRPCService(t *testing.T) {
+	const protocol = "http"
+	c, s := codec.GetClient(protocol), codec.GetServer(protocol)
+	defer func() {
+		codec.Register(protocol, s, c)
+	}()
+	codec.Register(protocol, &fakeCodec{}, &fakeCodec{})
+	tests := []struct {
+		name    string
+		config  string
+		success bool
+	}{
+		{
+			name: "conn_type short",
+			config: `
+name: trpc.test.helloworld.Greeter1  # backend service name.
+callee: trpc.test.helloworld.Greeter1  # proto name of the callee service defined in proto stub file.
+protocol: http
+conn_type: short
+`,
+			success: true,
+		},
+		{
+			name: "conn_type connpool",
+			config: `
+name: trpc.test.helloworld.Greeter1  # backend service name.
+callee: trpc.test.helloworld.Greeter1  # proto name of the callee service defined in proto stub file.
+protocol: http
+conn_type: connpool
+`,
+			success: false,
+		},
+		{
+			name: "conn_type multiplexed",
+			config: `
+name: trpc.test.helloworld.Greeter1  # backend service name.
+callee: trpc.test.helloworld.Greeter1  # proto name of the callee service defined in proto stub file.
+protocol: http
+conn_type: multiplexed
+`,
+			success: false,
+		},
+		{
+			name: "conn_type httppool",
+			config: `
+name: trpc.test.helloworld.Greeter1  # backend service name.
+callee: trpc.test.helloworld.Greeter1  # proto name of the callee service defined in proto stub file.
+protocol: http
+conn_type: httppool
+`,
+			success: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &client.BackendConfig{}
+			require.Nil(t, yaml.Unmarshal([]byte(tt.config), cfg))
+			err := client.RegisterClientConfig(t.Name(), cfg)
+			require.Equal(t, tt.success, err == nil)
+		})
+	}
 }

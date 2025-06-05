@@ -20,68 +20,75 @@ import (
 	"fmt"
 	"io"
 
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 )
 
 // trpc return code.
 const (
 	// RetOK means success.
-	RetOK = trpcpb.TrpcRetCode_TRPC_INVOKE_SUCCESS
+	RetOK = 0
 
 	// RetServerDecodeFail is the error code of the server decoding error.
-	RetServerDecodeFail = trpcpb.TrpcRetCode_TRPC_SERVER_DECODE_ERR
+	RetServerDecodeFail = 1
 	// RetServerEncodeFail is the error code of the server encoding error.
-	RetServerEncodeFail = trpcpb.TrpcRetCode_TRPC_SERVER_ENCODE_ERR
+	RetServerEncodeFail = 2
 	// RetServerNoService is the error code that the server does not call the corresponding service implementation.
-	RetServerNoService = trpcpb.TrpcRetCode_TRPC_SERVER_NOSERVICE_ERR
+	RetServerNoService = 11
 	// RetServerNoFunc is the error code that the server does not call the corresponding interface implementation.
-	RetServerNoFunc = trpcpb.TrpcRetCode_TRPC_SERVER_NOFUNC_ERR
+	RetServerNoFunc = 12
 	// RetServerTimeout is the error code that the request timed out in the server queue.
-	RetServerTimeout = trpcpb.TrpcRetCode_TRPC_SERVER_TIMEOUT_ERR
+	RetServerTimeout = 21
 	// RetServerOverload is the error code that the request is overloaded on the server side.
-	RetServerOverload = trpcpb.TrpcRetCode_TRPC_SERVER_OVERLOAD_ERR
+	RetServerOverload = 22
 	// RetServerThrottled is the error code of the server's current limit.
-	RetServerThrottled = trpcpb.TrpcRetCode_TRPC_SERVER_LIMITED_ERR
+	RetServerThrottled = 23
 	// RetServerFullLinkTimeout is the server full link timeout error code.
-	RetServerFullLinkTimeout = trpcpb.TrpcRetCode_TRPC_SERVER_FULL_LINK_TIMEOUT_ERR
+	RetServerFullLinkTimeout = 24
 	// RetServerSystemErr is the error code of the server system error.
-	RetServerSystemErr = trpcpb.TrpcRetCode_TRPC_SERVER_SYSTEM_ERR
+	RetServerSystemErr = 31
 	// RetServerAuthFail is the error code for authentication failure.
-	RetServerAuthFail = trpcpb.TrpcRetCode_TRPC_SERVER_AUTH_ERR
+	RetServerAuthFail = 41
 	// RetServerValidateFail is the error code for the failure of automatic validation of request parameters.
-	RetServerValidateFail = trpcpb.TrpcRetCode_TRPC_SERVER_VALIDATE_ERR
+	RetServerValidateFail = 51
 
 	// RetClientTimeout is the error code that the request timed out on the client side.
-	RetClientTimeout = trpcpb.TrpcRetCode_TRPC_CLIENT_INVOKE_TIMEOUT_ERR
+	RetClientTimeout = 101
 	// RetClientFullLinkTimeout is the client full link timeout error code.
-	RetClientFullLinkTimeout = trpcpb.TrpcRetCode_TRPC_CLIENT_FULL_LINK_TIMEOUT_ERR
+	RetClientFullLinkTimeout = 102
 	// RetClientConnectFail is the error code of the client connection error.
-	RetClientConnectFail = trpcpb.TrpcRetCode_TRPC_CLIENT_CONNECT_ERR
+	RetClientConnectFail = 111
 	// RetClientEncodeFail is the error code of the client encoding error.
-	RetClientEncodeFail = trpcpb.TrpcRetCode_TRPC_CLIENT_ENCODE_ERR
+	RetClientEncodeFail = 121
 	// RetClientDecodeFail is the error code of the client decoding error.
-	RetClientDecodeFail = trpcpb.TrpcRetCode_TRPC_CLIENT_DECODE_ERR
+	RetClientDecodeFail = 122
 	// RetClientThrottled is the error code of the client's current limit.
-	RetClientThrottled = trpcpb.TrpcRetCode_TRPC_CLIENT_LIMITED_ERR
+	RetClientThrottled = 123
 	// RetClientOverload is the error code for client overload.
-	RetClientOverload = trpcpb.TrpcRetCode_TRPC_CLIENT_OVERLOAD_ERR
+	RetClientOverload = 124
 	// RetClientRouteErr is the error code for the wrong ip route selected by the client.
-	RetClientRouteErr = trpcpb.TrpcRetCode_TRPC_CLIENT_ROUTER_ERR
+	RetClientRouteErr = 131
 	// RetClientNetErr is the error code of the client network error.
-	RetClientNetErr = trpcpb.TrpcRetCode_TRPC_CLIENT_NETWORK_ERR
+	RetClientNetErr = 141
 	// RetClientValidateFail is the error code for the failure of automatic validation of response parameters.
-	RetClientValidateFail = trpcpb.TrpcRetCode_TRPC_CLIENT_VALIDATE_ERR
+	RetClientValidateFail = 151
 	// RetClientCanceled is the error code for the upstream caller to cancel the request in advance.
-	RetClientCanceled = trpcpb.TrpcRetCode_TRPC_CLIENT_CANCELED_ERR
+	RetClientCanceled = 161
 	// RetClientReadFrameErr is the error code of the client read frame error.
-	RetClientReadFrameErr = trpcpb.TrpcRetCode_TRPC_CLIENT_READ_FRAME_ERR
+	RetClientReadFrameErr = 171
 	// RetClientStreamQueueFull is the error code of the client stream queue full.
-	RetClientStreamQueueFull = trpcpb.TrpcRetCode_TRPC_STREAM_SERVER_NETWORK_ERR
+	RetClientStreamQueueFull = 201
 	// RetClientStreamReadEnd is the error code of the client stream end error while receiving data.
-	RetClientStreamReadEnd = trpcpb.TrpcRetCode_TRPC_STREAM_CLIENT_READ_END
+	RetClientStreamReadEnd = 351
+	// RetClientStreamInitErr is the error code of the client stream init error.
+	RetClientStreamInitErr = 361
+
+	// RetInvalidArgument indicates client specified an invalid argument.
+	RetInvalidArgument = 400
+	// RetNotFound means some requested entity (e.g., file or directory) was not found.
+	RetNotFound = 404
 
 	// RetUnknown is the error code for unspecified errors.
-	RetUnknown = trpcpb.TrpcRetCode_TRPC_INVOKE_UNKNOWN_ERR
+	RetUnknown = 999
 )
 
 // Err frame error value.
@@ -115,8 +122,7 @@ var (
 const (
 	ErrorTypeFramework       = 1
 	ErrorTypeBusiness        = 2
-	ErrorTypeCalleeFramework = 3 // The error code returned by the client call
-	// represents the downstream framework error code.
+	ErrorTypeCalleeFramework = 3 // The Error code and Msg come from the downstream framework.
 )
 
 func typeDesc(t int) string {
@@ -138,7 +144,7 @@ const (
 // Error is the error code structure which contains error code type and error message.
 type Error struct {
 	Type int
-	Code trpcpb.TrpcRetCode
+	Code int32
 	Msg  string
 	Desc string
 
@@ -174,12 +180,12 @@ func (e *Error) Format(s fmt.State, verb rune) {
 			if e.stack != nil {
 				stackTrace = e.stack
 			}
-			if e.Unwrap() != nil {
-				_, _ = fmt.Fprintf(s, "\nCause by %+v", e.Unwrap())
+			if e.cause != nil {
+				_, _ = fmt.Fprintf(s, "\nCause by %+v", e.cause)
 			}
 			return
 		}
-		fallthrough
+		_, _ = io.WriteString(s, e.Error())
 	case 's':
 		_, _ = io.WriteString(s, e.Error())
 	case 'q':
@@ -189,8 +195,14 @@ func (e *Error) Format(s fmt.State, verb rune) {
 	}
 }
 
-// Unwrap support Go 1.13+ error chains.
-func (e *Error) Unwrap() error { return e.cause }
+// Unwrap supports Go 1.13+ error chains.
+func (e *Error) Unwrap() error {
+	// Check nil error to avoid panic.
+	if e == nil {
+		return nil
+	}
+	return e.cause
+}
 
 // IsTimeout checks whether this error is a timeout error with error type typ.
 func (e *Error) IsTimeout(typ int) bool {
@@ -201,16 +213,11 @@ func (e *Error) IsTimeout(typ int) bool {
 			e.Code == RetServerFullLinkTimeout)
 }
 
-// ErrCode permits any integer defined in https://go.dev/ref/spec#Numeric_types
-type ErrCode interface {
-	~uint8 | ~uint16 | ~uint32 | ~uint64 | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~int | ~uintptr
-}
-
 // New creates an error, which defaults to the business error type to improve business development efficiency.
-func New[T ErrCode](code T, msg string) error {
+func New(code int, msg string) error {
 	err := &Error{
 		Type: ErrorTypeBusiness,
-		Code: trpcpb.TrpcRetCode(code),
+		Code: int32(code),
 		Msg:  msg,
 	}
 	if traceable {
@@ -220,11 +227,11 @@ func New[T ErrCode](code T, msg string) error {
 }
 
 // Newf creates an error, the default is the business error type, msg supports format strings.
-func Newf[T ErrCode](code T, format string, params ...interface{}) error {
+func Newf(code int, format string, params ...interface{}) error {
 	msg := fmt.Sprintf(format, params...)
 	err := &Error{
 		Type: ErrorTypeBusiness,
-		Code: trpcpb.TrpcRetCode(code),
+		Code: int32(code),
 		Msg:  msg,
 	}
 	if traceable {
@@ -236,13 +243,13 @@ func Newf[T ErrCode](code T, format string, params ...interface{}) error {
 // Wrap creates a new error contains input error.
 // only add stack when traceable is true and the input type is not Error, this will ensure that there is no multiple
 // stacks in the error chain.
-func Wrap[T ErrCode](err error, code T, msg string) error {
+func Wrap(err error, code int, msg string) error {
 	if err == nil {
 		return nil
 	}
 	wrapErr := &Error{
 		Type:  ErrorTypeBusiness,
-		Code:  trpcpb.TrpcRetCode(code),
+		Code:  int32(code),
 		Msg:   msg,
 		cause: err,
 	}
@@ -255,14 +262,14 @@ func Wrap[T ErrCode](err error, code T, msg string) error {
 }
 
 // Wrapf the same as Wrap, msg supports format strings.
-func Wrapf[T ErrCode](err error, code T, format string, params ...interface{}) error {
+func Wrapf(err error, code int, format string, params ...interface{}) error {
 	if err == nil {
 		return nil
 	}
 	msg := fmt.Sprintf(format, params...)
 	wrapErr := &Error{
 		Type:  ErrorTypeBusiness,
-		Code:  trpcpb.TrpcRetCode(code),
+		Code:  int32(code),
 		Msg:   msg,
 		cause: err,
 	}
@@ -275,12 +282,26 @@ func Wrapf[T ErrCode](err error, code T, format string, params ...interface{}) e
 }
 
 // NewFrameError creates a frame error.
-func NewFrameError[T ErrCode](code T, msg string) error {
+func NewFrameError(code int, msg string) error {
 	err := &Error{
 		Type: ErrorTypeFramework,
-		Code: trpcpb.TrpcRetCode(code),
+		Code: int32(code),
 		Msg:  msg,
-		Desc: "trpc",
+		Desc: protocol.TRPC,
+	}
+	if traceable {
+		err.stack = callers()
+	}
+	return err
+}
+
+// NewCalleeFrameError creates a callee frame error.
+func NewCalleeFrameError(code int, msg string) error {
+	err := &Error{
+		Type: ErrorTypeCalleeFramework,
+		Code: int32(code),
+		Msg:  msg,
+		Desc: protocol.TRPC,
 	}
 	if traceable {
 		err.stack = callers()
@@ -289,15 +310,15 @@ func NewFrameError[T ErrCode](code T, msg string) error {
 }
 
 // WrapFrameError the same as Wrap, except type is ErrorTypeFramework
-func WrapFrameError[T ErrCode](err error, code T, msg string) error {
+func WrapFrameError(err error, code int, msg string) error {
 	if err == nil {
 		return nil
 	}
 	wrapErr := &Error{
 		Type:  ErrorTypeFramework,
-		Code:  trpcpb.TrpcRetCode(code),
+		Code:  int32(code),
 		Msg:   msg,
-		Desc:  "trpc",
+		Desc:  protocol.TRPC,
 		cause: err,
 	}
 	var e *Error
@@ -309,7 +330,7 @@ func WrapFrameError[T ErrCode](err error, code T, msg string) error {
 }
 
 // Code gets the error code through error.
-func Code(e error) trpcpb.TrpcRetCode {
+func Code(e error) int {
 	if e == nil {
 		return RetOK
 	}
@@ -323,7 +344,7 @@ func Code(e error) trpcpb.TrpcRetCode {
 	if err == nil {
 		return RetOK
 	}
-	return err.Code
+	return int(err.Code)
 }
 
 // Msg gets error msg through error.
@@ -345,3 +366,7 @@ func Msg(e error) string {
 	}
 	return err.Msg
 }
+
+// Cause returns the internal error.
+// Deprecated: use Unwrap instead.
+func (e *Error) Cause() error { return e.Unwrap() }

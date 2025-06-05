@@ -14,8 +14,11 @@
 package restful
 
 import (
+	"context"
 	"net/http"
 	"strings"
+
+	"github.com/valyala/fasthttp"
 )
 
 // Serializer is the interface for http body marshaling/unmarshalling.
@@ -64,34 +67,25 @@ func GetSerializer(name string) Serializer {
 	return serializers[name]
 }
 
-// serializerForTranscoding returns inbound/outbound Serializer for transcoding.
-func serializerForTranscoding(contentTypes []string, accepts []string) (Serializer, Serializer) {
-	var reqSerializer, respSerializer Serializer // neither should be nil
+func requestSerializer(contentTypes []string) Serializer {
+	s, ok := serializer(contentTypes)
+	if ok {
+		return s
+	}
+	return defaultSerializer
+}
 
-	// ContentType => Req Serializer
-	for _, contentType := range contentTypes {
-		if s := getSerializerWithDirectives(contentType); s != nil {
-			reqSerializer = s
-			break
+func responseSerializer(accepts []string) (Serializer, bool) {
+	return serializer(accepts)
+}
+
+func serializer(contentTypesOrAccepts []string) (Serializer, bool) {
+	for _, contentTypesOrAccept := range contentTypesOrAccepts {
+		if s := getSerializerWithDirectives(contentTypesOrAccept); s != nil {
+			return s, true
 		}
 	}
-
-	// Accept => Resp Serializer
-	for _, accept := range accepts {
-		if s := getSerializerWithDirectives(accept); s != nil {
-			respSerializer = s
-			break
-		}
-	}
-
-	if reqSerializer == nil { // use defaultSerializer if reqSerializer is nil
-		reqSerializer = defaultSerializer
-	}
-	if respSerializer == nil { // use reqSerializer if respSerializer is nil
-		respSerializer = reqSerializer
-	}
-
-	return reqSerializer, respSerializer
+	return nil, false
 }
 
 // getSerializerWithDirectives get Serializer by Content-Type or Accept. The name may have directives after ';'.
@@ -110,4 +104,55 @@ func getSerializerWithDirectives(name string) Serializer {
 		return s
 	}
 	return nil
+}
+
+// RespSerializerGetter is used to retrieve the corresponding serializer.
+type RespSerializerGetter func(ctx context.Context, r *http.Request) Serializer
+
+// DefaultRespSerializerGetter returns a serializer through negotiation, defaulting to JSONPBSerializer.
+var DefaultRespSerializerGetter = func(_ context.Context, r *http.Request) Serializer {
+	s, ok := responseSerializer(r.Header[headerAccept])
+	if !ok {
+		s = requestSerializer(r.Header[headerContentType])
+	}
+	return s
+}
+
+type respSerializerGetterKey struct{}
+
+func newContextWithRespSerializerGetter(ctx context.Context, sg RespSerializerGetter) context.Context {
+	return context.WithValue(ctx, respSerializerGetterKey{}, sg)
+}
+
+func respSerializerGetterFromContext(ctx context.Context) (RespSerializerGetter, bool) {
+	sg, ok := ctx.Value(respSerializerGetterKey{}).(RespSerializerGetter)
+	return sg, ok
+}
+
+// FastHTTPRespSerializerGetter is used to retrieve the corresponding serializer for FastHTTP.
+type FastHTTPRespSerializerGetter func(ctx context.Context, requestCtx *fasthttp.RequestCtx) Serializer
+
+// DefaultFastHTTPRespSerializerGetter returns a serializer through negotiation,
+// defaulting to JSONPBSerializer for FastHTTP.
+var DefaultFastHTTPRespSerializerGetter = func(_ context.Context, requestCtx *fasthttp.RequestCtx) Serializer {
+	s, ok := responseSerializer([]string{string(requestCtx.Request.Header.Peek(headerAccept))})
+	if !ok {
+		s = requestSerializer([]string{string(requestCtx.Request.Header.Peek(headerContentType))})
+	}
+	return s
+}
+
+type fastHTTPRespSerializerGetterKey struct{}
+
+func newContextWithFastHTTPRespSerializerGetter(
+	ctx context.Context, fsg FastHTTPRespSerializerGetter,
+) context.Context {
+	return context.WithValue(ctx, fastHTTPRespSerializerGetterKey{}, fsg)
+}
+
+func fastHTTPRespSerializerGetterFromContext(
+	ctx context.Context,
+) (FastHTTPRespSerializerGetter, bool) {
+	fsg, ok := ctx.Value(fastHTTPRespSerializerGetterKey{}).(FastHTTPRespSerializerGetter)
+	return fsg, ok
 }

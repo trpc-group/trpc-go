@@ -16,11 +16,16 @@ package restful
 import (
 	"bytes"
 	"context"
-	"unsafe"
+	"errors"
+	"fmt"
+	"net/url"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/valyala/fasthttp"
 	"google.golang.org/protobuf/proto"
+
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/log"
 )
 
 // FastHTTPHeaderMatcher matches fasthttp request header to tRPC Stub Context.
@@ -54,11 +59,8 @@ func DefaultFastHTTPRespHandler(stubCtx context.Context, requestCtx *fasthttp.Re
 	writer := requestCtx.Response.BodyWriter()
 	// fasthttp doesn't support getting multiple values of one key from http headers.
 	// ctx.Request.Header.Peek is equivalent to req.Header.Get from Go net/http.
-	_, c := compressorForTranscoding(
-		[]string{bytes2str(requestCtx.Request.Header.Peek(headerContentEncoding))},
-		[]string{bytes2str(requestCtx.Request.Header.Peek(headerAcceptEncoding))},
-	)
-	if c != nil {
+
+	if c := compressor([]string{string(requestCtx.Request.Header.Peek(headerAcceptEncoding))}); c != nil {
 		writeCloser, err := c.Compress(writer)
 		if err != nil {
 			return err
@@ -68,11 +70,12 @@ func DefaultFastHTTPRespHandler(stubCtx context.Context, requestCtx *fasthttp.Re
 		writer = writeCloser
 	}
 
-	// set response content-type
-	_, s := serializerForTranscoding(
-		[]string{bytes2str(requestCtx.Request.Header.Peek(headerContentType))},
-		[]string{bytes2str(requestCtx.Request.Header.Peek(headerAccept))},
-	)
+	sg, ok := fastHTTPRespSerializerGetterFromContext(stubCtx)
+	if !ok {
+		return errors.New("failed to get fastHTTPRespSerializerGetter")
+	}
+	s := sg(stubCtx, requestCtx)
+
 	requestCtx.Response.Header.Set(headerContentType, s.ContentType())
 
 	// set status code
@@ -87,68 +90,73 @@ func DefaultFastHTTPRespHandler(stubCtx context.Context, requestCtx *fasthttp.Re
 	return nil
 }
 
-// bytes2str is the high-performance way of converting []byte to string.
-func bytes2str(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
-}
-
 // HandleRequestCtx fasthttp handler
-func (r *Router) HandleRequestCtx(ctx *fasthttp.RequestCtx) {
+func (r *Router) HandleRequestCtx(requestCtx *fasthttp.RequestCtx) {
 	newCtx := context.Background()
-	for _, tr := range r.transcoders[bytes2str(ctx.Method())] {
-		fieldValues, err := tr.pat.Match(bytes2str(ctx.Path()))
-		if err == nil {
-			// header matching
-			stubCtx, err := r.opts.FastHTTPHeaderMatcher(newCtx, ctx,
-				r.opts.ServiceName, tr.name)
-			if err != nil {
-				r.opts.FastHTTPErrHandler(stubCtx, ctx, errs.New(errs.RetServerDecodeFail, err.Error()))
-				return
-			}
+	var transcodeRequestErr *multierror.Error
+	path := string(requestCtx.Path())
+	for _, tr := range r.transcoders[string(requestCtx.Method())] {
+		fieldValues, err := tr.pat.Match(path)
+		if err != nil {
+			log.Tracef("matching request URL.Path %s: %v", requestCtx.Path(), err)
+			continue
+		}
 
-			// get inbound/outbound Compressor & Serializer
-			reqCompressor, respCompressor := compressorForTranscoding(
-				[]string{bytes2str(ctx.Request.Header.Peek(headerContentEncoding))},
-				[]string{bytes2str(ctx.Request.Header.Peek(headerAcceptEncoding))},
-			)
-			reqSerializer, respSerializer := serializerForTranscoding(
-				[]string{bytes2str(ctx.Request.Header.Peek(headerContentType))},
-				[]string{bytes2str(ctx.Request.Header.Peek(headerAccept))},
-			)
-
-			// get query params
-			form := make(map[string][]string)
-			ctx.QueryArgs().VisitAll(func(key []byte, value []byte) {
-				form[bytes2str(key)] = append(form[bytes2str(key)], bytes2str(value))
-			})
-
-			// set transcoding params
-			params := paramsPool.Get().(*transcodeParams)
-			params.reqCompressor = reqCompressor
-			params.respCompressor = respCompressor
-			params.reqSerializer = reqSerializer
-			params.respSerializer = respSerializer
-			params.body = bytes.NewBuffer(ctx.PostBody())
-			params.fieldValues = fieldValues
-			params.form = form
-
-			// transcode
-			resp, body, err := tr.transcode(stubCtx, params)
-			if err != nil {
-				r.opts.FastHTTPErrHandler(stubCtx, ctx, err)
-				putBackCtxMessage(stubCtx)
-				putBackParams(params)
-				return
-			}
-
-			// response
-			if err := r.opts.FastHTTPRespHandler(stubCtx, ctx, resp, body); err != nil {
-				r.opts.FastHTTPErrHandler(stubCtx, ctx, errs.New(errs.RetServerEncodeFail, err.Error()))
-			}
-			putBackCtxMessage(stubCtx)
-			putBackParams(params)
+		stubCtx, err := r.opts.FastHTTPHeaderMatcher(newCtx, requestCtx,
+			r.opts.ServiceName, tr.name)
+		if err != nil {
+			r.opts.FastHTTPErrHandler(stubCtx, requestCtx, errs.New(errs.RetServerDecodeFail, err.Error()))
 			return
 		}
+
+		protoReq, err := tr.transcodeRequest(newFastHTTPRequestParams(requestCtx, fieldValues))
+		if err != nil {
+			transcodeRequestErr = multierror.Append(transcodeRequestErr, err)
+			continue
+		}
+
+		protoResp, err := r.handle(stubCtx, tr, protoReq)
+		if err != nil {
+			r.opts.FastHTTPErrHandler(stubCtx, requestCtx, err)
+			putBackCtxMessage(stubCtx)
+			return
+		}
+
+		stubCtx = newContextWithFastHTTPRespSerializerGetter(stubCtx, r.opts.FastHTTPRespSerializerGetter)
+		s := r.opts.FastHTTPRespSerializerGetter(stubCtx, requestCtx)
+		body, err := tr.transcodeResponse(protoResp, s)
+		if err != nil {
+			r.opts.FastHTTPErrHandler(stubCtx, requestCtx,
+				errs.Wrap(err, errs.RetServerEncodeFail, "transcoding response failed"))
+			putBackCtxMessage(stubCtx)
+			return
+		}
+
+		if err := r.opts.FastHTTPRespHandler(stubCtx, requestCtx, protoResp, body); err != nil {
+			r.opts.FastHTTPErrHandler(stubCtx, requestCtx, errs.New(errs.RetServerEncodeFail, err.Error()))
+		}
+		putBackCtxMessage(stubCtx)
+		return
 	}
-	r.opts.FastHTTPErrHandler(newCtx, ctx, errs.New(errs.RetServerNoFunc, "failed to match any pattern"))
+	if transcodeRequestErr != nil {
+		r.opts.FastHTTPErrHandler(newCtx, requestCtx,
+			errs.Newf(errs.RetServerDecodeFail, "transcoding request failed: %v", transcodeRequestErr))
+		return
+	}
+	r.opts.FastHTTPErrHandler(newCtx, requestCtx, errs.New(errs.RetServerNoFunc,
+		fmt.Sprintf("path `%s` failed to match any pattern", path)))
+}
+
+func newFastHTTPRequestParams(ctx *fasthttp.RequestCtx, fieldValues map[string]string) requestParams {
+	form := make(url.Values)
+	ctx.QueryArgs().VisitAll(func(key []byte, value []byte) {
+		form.Add(string(key), string(value))
+	})
+	return requestParams{
+		form:        form,
+		compressor:  compressor([]string{string(ctx.Request.Header.Peek(headerContentEncoding))}),
+		serializer:  requestSerializer([]string{string(ctx.Request.Header.Peek(headerContentType))}),
+		fieldValues: fieldValues,
+		body:        bytes.NewBuffer(ctx.PostBody()),
+	}
 }

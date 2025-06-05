@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"trpc.group/trpc-go/trpc-go/metrics"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestConsoleSink(t *testing.T) {

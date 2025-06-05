@@ -11,12 +11,10 @@
 //
 //
 
-// Package admin provides management capabilities for trpc services,
-// including but not limited to health checks, logging, performance monitoring, RPCZ, etc.
+// Package admin implements some common management functions.
 package admin
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -28,63 +26,76 @@ import (
 	"strings"
 	"sync"
 
-	"trpc.group/trpc-go/trpc-go/internal/reuseport"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
-
+	jsoniter "github.com/json-iterator/go"
+	reuseport "github.com/kavu/go_reuseport"
 	"trpc.group/trpc-go/trpc-go/config"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/healthcheck"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/rpcz"
 	"trpc.group/trpc-go/trpc-go/transport"
 )
 
+func init() {
+	// The pprof functionality supported by the admin package relies on the imported net/http/pprof package.
+	// However, the imported net/http/pprof package implicitly registers HTTP handlers for
+	// "/debug/pprof/", "/debug/pprof/cmdline", "/debug/pprof/profile", "/debug/pprof/symbol", "/debug/pprof/trace"
+	// in http.DefaultServeMux in its init function. This implicit behavior is too subtle and may contribute to people
+	// inadvertently leaving such endpoints open, and may cause security problems：https://github.com/golang/go/issues/22085
+	// if people use http.DefaultServeMux. So we decide to reset default serve mux to remove pprof registration.
+	// This requires making sure that people are not using http.DefaultServeMux before we reset it.
+	// In most cases, this works, which is guaranteed by the execution order of the init function.
+	// If you need to enable pprof on http.DefaultServeMux you need to
+	// register it explicitly after importing the admin package:
+	//
+	// http.DefaultServeMux.HandleFunc("/debug/pprof/", pprof.Index)
+	// http.DefaultServeMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	// http.DefaultServeMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	// http.DefaultServeMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	// http.DefaultServeMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	//
+	// Simply importing the net/http/pprof package anonymously will not work.
+	// More details see: https://git.woa.com/trpc-go/trpc-go/issues/912, and https://github.com/golang/go/issues/42834.
+	http.DefaultServeMux = http.NewServeMux()
+}
+
 // ServiceName is the service name of admin service.
 const ServiceName = "admin"
 
-// Patterns.
-const (
-	patternCmds          = "/cmds"
-	patternVersion       = "/version"
-	patternLoglevel      = "/cmds/loglevel"
-	patternConfig        = "/cmds/config"
-	patternHealthCheck   = "/is_healthy/"
+var (
+	pattenCmds         = "/cmds"
+	pattenVersion      = "/version"
+	pattenLoglevel     = "/cmds/loglevel"
+	pattenConfig       = "/cmds/config"
+	patternHealthCheck = "/is_healthy/"
+
 	patternRPCZSpansList = "/cmds/rpcz/spans"
 	patternRPCZSpanGet   = "/cmds/rpcz/spans/"
+
+	json = jsoniter.ConfigCompatibleWithStandardLibrary
 )
 
-// Pprof patterns.
-const (
-	pprofPprof   = "/debug/pprof/"
-	pprofCmdline = "/debug/pprof/cmdline"
-	pprofProfile = "/debug/pprof/profile"
-	pprofSymbol  = "/debug/pprof/symbol"
-	pprofTrace   = "/debug/pprof/trace"
+// return param.
+var (
+	ReturnErrCodeParam = "errorcode"
+	ReturnMessageParam = "message"
+	ErrCodeServer      = 1
 )
 
-// Return parameters.
-const (
-	retErrCode    = "errorcode"
-	retMessage    = "message"
-	errCodeServer = 1
-)
-
-// Server structure provides utilities related to administration.
-// It implements the server.Service interface.
+// Server admin manage server，implements server.Service.
 type Server struct {
-	config *configuration
-	server *http.Server
-
-	router      *router
+	config      *adminConfig
+	server      *http.Server
+	closeOnce   sync.Once
+	closeErr    error
+	router      Router
 	healthCheck *healthcheck.HealthCheck
-
-	closeOnce sync.Once
-	closeErr  error
 }
 
-// NewServer returns a new admin Server.
-func NewServer(opts ...Option) *Server {
-	cfg := newDefaultConfig()
+// NewTrpcAdminServer creates a new AdminServer.
+func NewTrpcAdminServer(opts ...Option) *Server {
+	cfg := loadDefaultConfig()
 	for _, opt := range opts {
 		opt(cfg)
 	}
@@ -94,59 +105,52 @@ func NewServer(opts ...Option) *Server {
 		healthCheck: healthcheck.New(healthcheck.WithStatusWatchers(healthcheck.GetWatchers())),
 	}
 	if !cfg.skipServe {
-		s.router = s.configRouter(newRouter())
+		s.initRouter()
 	}
 	return s
 }
 
-func (s *Server) configRouter(r *router) *router {
-	r.add(patternCmds, s.handleCmds)         // Admin Command List.
-	r.add(patternVersion, s.handleVersion)   // Framework version.
-	r.add(patternLoglevel, s.handleLogLevel) // View/Set the log level of the framework.
-	r.add(patternConfig, s.handleConfig)     // View framework configuration files.
-	r.add(patternHealthCheck,
-		http.StripPrefix(patternHealthCheck,
-			http.HandlerFunc(s.handleHealthCheck),
-		).ServeHTTP,
-	) // Health check.
+// inner router.
+var defaultRouter = NewRouter()
 
-	r.add(patternRPCZSpansList, s.handleRPCZSpansList)
-	r.add(patternRPCZSpanGet, s.handleRPCZSpanGet)
+// init at least once defaultRouter.
+var once sync.Once
 
-	r.add(pprofPprof, pprof.Index)
-	r.add(pprofCmdline, pprof.Cmdline)
-	r.add(pprofProfile, pprof.Profile)
-	r.add(pprofSymbol, pprof.Symbol)
-	r.add(pprofTrace, pprof.Trace)
+// initialization.
+func (s *Server) initRouter() {
+	once.Do(
+		func() {
+			defaultRouter.Config(pattenCmds, s.handleCmds).Desc("Admin Command List")
+			defaultRouter.Config(pattenVersion, s.handleVersion).Desc("Framework version")
+			defaultRouter.Config(pattenLoglevel, s.handleLogLevel).Desc("View/Set the log level of the framework")
+			defaultRouter.Config(pattenConfig, s.handleConfig).Desc("View framework configuration files")
+			defaultRouter.Config(patternHealthCheck,
+				http.StripPrefix(patternHealthCheck,
+					http.HandlerFunc(s.handleHealthCheck),
+				).ServeHTTP,
+			).Desc("Health check")
 
-	for pattern, handler := range pattern2Handler {
-		r.add(pattern, handler)
-	}
+			defaultRouter.Config(patternRPCZSpansList, s.handleRPCZSpansList)
+			defaultRouter.Config(patternRPCZSpanGet, s.handleRPCZSpanGet)
 
-	// Delete the router registered with http.DefaultServeMux.
-	// Avoid causing security problems: https://github.com/golang/go/issues/22085.
-	err := unregisterHandlers(
-		[]string{
-			pprofPprof,
-			pprofCmdline,
-			pprofProfile,
-			pprofSymbol,
-			pprofTrace,
+			defaultRouter.Config("/debug/pprof/", pprof.Index)
+			defaultRouter.Config("/debug/pprof/cmdline", pprof.Cmdline)
+			defaultRouter.Config("/debug/pprof/profile", pprof.Profile)
+			defaultRouter.Config("/debug/pprof/symbol", pprof.Symbol)
+			defaultRouter.Config("/debug/pprof/trace", pprof.Trace)
+			s.router = defaultRouter
 		},
 	)
-	if err != nil {
-		log.Errorf("failed to unregister pprof handlers from http.DefaultServeMux, err: %+v", err)
-	}
-	return r
 }
 
 // Register implements server.Service.
 func (s *Server) Register(serviceDesc interface{}, serviceImpl interface{}) error {
-	// The admin service does not need to do anything in this registration function.
+	// return nil， server.Server.Register, All business implementation interfaces will be registered in all services
+	// (TrpcAdminServer.Register will also be called).
 	return nil
 }
 
-// RegisterHealthCheck registers a new service and returns two functions, one for unregistering the service and one for
+// RegisterHealthCheck registers a new service and return two functions, one for unregistering the service and one for
 // updating the status of the service.
 func (s *Server) RegisterHealthCheck(
 	serviceName string,
@@ -157,21 +161,22 @@ func (s *Server) RegisterHealthCheck(
 	}, update, err
 }
 
-// Serve starts the admin HTTP server.
+// Serve start up http Server.
 func (s *Server) Serve() error {
 	cfg := s.config
 	if cfg.skipServe {
 		return nil
 	}
 	if cfg.enableTLS {
-		return errors.New("admin service does not support tls")
+		return errors.New("not support yet")
 	}
 
-	const network = "tcp"
-	ln, err := s.listen(network, cfg.addr)
+	ln, err := s.listen(protocol.TCP, cfg.getAddr())
 	if err != nil {
 		return err
 	}
+
+	log.Infof("admin service launch success, %s: %s, serving ...", ln.Addr().Network(), ln.Addr().String())
 
 	s.server = &http.Server{
 		Addr:         ln.Addr().String(),
@@ -179,17 +184,20 @@ func (s *Server) Serve() error {
 		WriteTimeout: cfg.writeTimeout,
 		Handler:      s.router,
 	}
-	if err := s.server.Serve(ln); err != nil && err != http.ErrServerClosed {
+	// Restricted access to the internal/poll.ErrNetClosing type necessitates comparing a string literal.
+	const closeError = "use of closed network connection"
+	if err := s.server.Serve(ln); err != nil &&
+		err != http.ErrServerClosed && !strings.Contains(err.Error(), closeError) {
 		return err
 	}
 	return nil
 }
 
-// Close shuts down server.
+// Close shut down server.
 func (s *Server) Close(ch chan struct{}) error {
 	pid := os.Getpid()
 	s.closeOnce.Do(s.close)
-	log.Infof("process:%d, admin server, closed", pid)
+	log.Infof("process: %d, admin server, closed", pid)
 	if ch != nil {
 		ch <- struct{}{}
 	}
@@ -201,30 +209,14 @@ func (s *Server) WatchStatus(serviceName string, onStatusChanged func(healthchec
 	s.healthCheck.Watch(serviceName, onStatusChanged)
 }
 
-// HandleFunc registers the handler function for the given pattern.
-func (s *Server) HandleFunc(pattern string, handler http.HandlerFunc) {
-	_ = s.router.add(pattern, handler)
+// HandleFunc registers custom service interface.
+func HandleFunc(patten string, handler func(w http.ResponseWriter, r *http.Request)) *RouterHandler {
+	return defaultRouter.Config(patten, handler)
 }
 
-func (s *Server) listen(network, addr string) (net.Listener, error) {
-	ln, err := s.obtainListener(network, addr)
-	if err != nil {
-		return nil, fmt.Errorf("get admin listener error: %w", err)
-	}
-	if ln == nil {
-		ln, err = reuseport.Listen(network, addr)
-		if err != nil {
-			return nil, fmt.Errorf("admin reuseport listen error: %w", err)
-		}
-	}
-	if err := transport.SaveListener(ln); err != nil {
-		return nil, fmt.Errorf("save admin listener error: %w", err)
-	}
-	return ln, nil
-}
-
-func (s *Server) obtainListener(network, addr string) (net.Listener, error) {
-	ok, _ := strconv.ParseBool(os.Getenv(transport.EnvGraceRestart)) // Ignore error caused by messy values.
+func (s *Server) getListener(network, addr string) (net.Listener, error) {
+	value := os.Getenv(transport.EnvGraceRestart)
+	ok, _ := strconv.ParseBool(value) // ignore error with messy values for compatibility
 	if !ok {
 		return nil, nil
 	}
@@ -234,7 +226,25 @@ func (s *Server) obtainListener(network, addr string) (net.Listener, error) {
 	}
 	ln, ok := pln.(net.Listener)
 	if !ok {
-		return nil, fmt.Errorf("the passed listener %T is not of type net.Listener", pln)
+		return nil, fmt.Errorf("invalid net.Listener")
+	}
+	return ln, nil
+}
+
+func (s *Server) listen(network, addr string) (net.Listener, error) {
+	ln, err := s.getListener(network, addr)
+	if err != nil {
+		return nil, fmt.Errorf("get admin listener error: %w", err)
+	}
+	if ln == nil {
+		ln, err = reuseport.Listen(network, addr)
+		if err != nil {
+			return nil, fmt.Errorf("admin reuseport listen error: %w", err)
+		}
+	}
+	err = transport.SaveListener(ln)
+	if err != nil {
+		return nil, fmt.Errorf("save admin listener error: %w", err)
 	}
 	return ln, nil
 }
@@ -246,65 +256,86 @@ func (s *Server) close() {
 	s.closeErr = s.server.Close()
 }
 
-var pattern2Handler = make(map[string]http.HandlerFunc)
-
-// HandleFunc registers the handler function for the given pattern.
-// Each time NewServer is called, all handlers registered through HandleFunc will be in effect.
-// Therefore, please prioritize using Server.HandleFunc.
-func HandleFunc(pattern string, handler http.HandlerFunc) {
-	pattern2Handler[pattern] = handler
-}
-
-// ErrorOutput normalizes the error output.
+// ErrorOutput Unified error output.
 func ErrorOutput(w http.ResponseWriter, error string, code int) {
-	ret := newDefaultRes()
-	ret[retErrCode] = code
-	ret[retMessage] = error
+	var ret = newDefaultRes()
+	ret[ReturnErrCodeParam] = code
+	ret[ReturnMessageParam] = error
+
 	_ = json.NewEncoder(w).Encode(ret)
 }
 
-// handleCmds gives a list of all currently available administrative commands.
+// handleCmds Admin Command List.
 func (s *Server) handleCmds(w http.ResponseWriter, r *http.Request) {
-	setCommonHeaders(w)
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		ErrorOutput(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
 
-	list := s.router.list()
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	list := s.router.List()
 	cmds := make([]string, 0, len(list))
 	for _, item := range list {
-		cmds = append(cmds, item.pattern)
+		cmds = append(cmds, item.GetPatten())
 	}
-	ret := newDefaultRes()
+	var ret = newDefaultRes()
 	ret["cmds"] = cmds
+
 	_ = json.NewEncoder(w).Encode(ret)
 }
 
-// newDefaultRes returns admin Default output format.
+// newDefaultRes admin Default output format.
 func newDefaultRes() map[string]interface{} {
 	return map[string]interface{}{
-		retErrCode: 0,
-		retMessage: "",
+		ReturnErrCodeParam: 0,
+		ReturnMessageParam: "",
 	}
 }
 
-// handleVersion gives the current version number.
+// handleVersion handle version number,
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
-	setCommonHeaders(w)
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		ErrorOutput(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
 
-	ret := newDefaultRes()
-	ret["version"] = s.config.version
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	ret := map[string]interface{}{
+		ReturnErrCodeParam: 0,
+		ReturnMessageParam: "",
+		"version":          s.config.version,
+	}
 	_ = json.NewEncoder(w).Encode(ret)
 }
 
 // getLevel returns the level of logger's output stream.
 func getLevel(logger log.Logger, output string) string {
-	return log.LevelStrings[logger.GetLevel(output)]
+	level := logger.GetLevel(output)
+	return log.LevelStrings[level]
 }
 
-// handleLogLevel returns the output level of the current logger.
+// handleLogLevel returns logger's level.
 func (s *Server) handleLogLevel(w http.ResponseWriter, r *http.Request) {
-	setCommonHeaders(w)
+	if r.Method != http.MethodGet && r.Method != http.MethodPut {
+		w.Header().Set("Allow", strings.Join([]string{http.MethodGet, http.MethodPut}, ", "))
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		ErrorOutput(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
 	if err := r.ParseForm(); err != nil {
-		ErrorOutput(w, err.Error(), errCodeServer)
+		ErrorOutput(w, err.Error(), ErrCodeServer)
 		return
 	}
 
@@ -314,57 +345,74 @@ func (s *Server) handleLogLevel(w http.ResponseWriter, r *http.Request) {
 	}
 	output := r.Form.Get("output")
 	if output == "" {
-		output = "0" // If no output is given in the request parameters, the first output is used.
+		output = "0" // don't have output, the first output，ordinary users can only configure one.
 	}
 
 	logger := log.Get(name)
 	if logger == nil {
-		ErrorOutput(w, fmt.Sprintf("logger %s not found", name), errCodeServer)
+		ErrorOutput(w, "logger not found", ErrCodeServer)
 		return
 	}
 
-	ret := newDefaultRes()
+	var ret = newDefaultRes()
 	if r.Method == http.MethodGet {
 		ret["level"] = getLevel(logger, output)
 		_ = json.NewEncoder(w).Encode(ret)
 	} else if r.Method == http.MethodPut {
-		ret["prelevel"] = getLevel(logger, output)
 		level := r.PostForm.Get("value")
+
+		ret["prelevel"] = getLevel(logger, output)
 		logger.SetLevel(output, log.LevelNames[level])
 		ret["level"] = getLevel(logger, output)
+
 		_ = json.NewEncoder(w).Encode(ret)
 	}
 }
 
-// handleConfig outputs the content of the current configuration file.
+// handleConfig configuration file content query.
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		ErrorOutput(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
+
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
 	buf, err := os.ReadFile(s.config.configPath)
 	if err != nil {
-		ErrorOutput(w, err.Error(), errCodeServer)
+		ErrorOutput(w, err.Error(), ErrCodeServer)
 		return
 	}
 
 	unmarshaler := config.GetUnmarshaler("yaml")
 	if unmarshaler == nil {
-		ErrorOutput(w, "cannot find yaml unmarshaler", errCodeServer)
+		ErrorOutput(w, "cannot find yaml unmarshaler", ErrCodeServer)
 		return
 	}
 
-	conf := make(map[string]interface{})
+	conf := map[interface{}]interface{}{}
 	if err = unmarshaler.Unmarshal(buf, &conf); err != nil {
-		ErrorOutput(w, err.Error(), errCodeServer)
+		ErrorOutput(w, err.Error(), ErrCodeServer)
 		return
 	}
-	ret := newDefaultRes()
+
+	var ret = newDefaultRes()
 	ret["content"] = conf
+
 	_ = json.NewEncoder(w).Encode(ret)
 }
 
 // handleHealthCheck handles health check requests.
 func (s *Server) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
+
 	check := s.healthCheck.CheckServer
 	if service := r.URL.Path; service != "" {
 		check = func() healthcheck.Status {
@@ -381,8 +429,49 @@ func (s *Server) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleRPCZSpansList returns #xxx span from r by url "http://ip:port/cmds/rpcz/spans?num=xxx".
+type response struct {
+	content string
+	err     error
+}
+
+func newResponse(content string, err error) response {
+	return response{
+		content: content,
+		err:     err,
+	}
+}
+func (r response) print(w http.ResponseWriter) {
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if r.err != nil {
+		e := struct {
+			ErrCode    int    `json:"err-code"`
+			ErrMessage string `json:"err-message"`
+		}{
+			ErrCode:    errs.Code(r.err),
+			ErrMessage: errs.Msg(r.err),
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		if err := json.NewEncoder(w).Encode(e); err != nil {
+			log.Trace("json.Encode failed when write to http.ResponseWriter")
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	if _, err := w.Write([]byte(r.content)); err != nil {
+		log.Trace("http.ResponseWriter write error")
+	}
+}
+
+// handleRPCZSpansList return #xxx span from r by url "http://ip:port/cmds/rpcz/spans?num=xxx".
 func (s *Server) handleRPCZSpansList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		ErrorOutput(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
+
 	num, err := parseNumParameter(r.URL)
 	if err != nil {
 		newResponse("", err).print(w)
@@ -394,33 +483,6 @@ func (s *Server) handleRPCZSpansList(w http.ResponseWriter, r *http.Request) {
 		content += span.PrintSketch("  ")
 	}
 	newResponse(content, nil).print(w)
-}
-
-// handleRPCZSpanGet returns span with id from r by url "http://ip:port/cmds/rpcz/span/{id}".
-func (s *Server) handleRPCZSpanGet(w http.ResponseWriter, r *http.Request) {
-	id, err := parseIDParameter(r.URL)
-	if err != nil {
-		newResponse("", err).print(w)
-		return
-	}
-
-	span, ok := rpcz.GlobalRPCZ.Query(rpcz.SpanID(id))
-	if !ok {
-		newResponse("", errs.New(errCodeServer, fmt.Sprintf("cannot find span-id: %d", id))).print(w)
-		return
-	}
-	newResponse(span.PrintDetail(""), nil).print(w)
-}
-
-func parseIDParameter(url *url.URL) (id int64, err error) {
-	id, err = strconv.ParseInt(strings.TrimPrefix(url.Path, patternRPCZSpanGet), 10, 64)
-	if err != nil {
-		return id, fmt.Errorf("undefined command, please follow http://ip:port/cmds/rpcz/span/{id}), %w", err)
-	}
-	if id < 0 {
-		return id, fmt.Errorf("span_id: %d can not be negative", id)
-	}
-	return id, err
 }
 
 func parseNumParameter(url *url.URL) (int, error) {
@@ -440,41 +502,36 @@ func parseNumParameter(url *url.URL) (int, error) {
 	return num, nil
 }
 
-type response struct {
-	content string
-	err     error
-}
-
-func newResponse(content string, err error) response {
-	return response{
-		content: content,
-		err:     err,
-	}
-}
-func (r response) print(w http.ResponseWriter) {
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	if r.err != nil {
-		e := struct {
-			ErrCode    trpcpb.TrpcRetCode `json:"err-code"`
-			ErrMessage string             `json:"err-message"`
-		}{
-			ErrCode:    errs.Code(r.err),
-			ErrMessage: errs.Msg(r.err),
-		}
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		if err := json.NewEncoder(w).Encode(e); err != nil {
-			log.Trace("json.Encode failed when write to http.ResponseWriter")
-		}
+// handleRPCZSpanGet return span with id from r by url "http://ip:port/cmds/rpcz/span/{id}".
+func (s *Server) handleRPCZSpanGet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		ErrorOutput(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	if _, err := w.Write([]byte(r.content)); err != nil {
-		log.Trace("http.ResponseWriter write error")
+	id, err := parseIDParameter(r.URL)
+	if err != nil {
+		newResponse("", err).print(w)
+		return
 	}
+
+	span, ok := rpcz.GlobalRPCZ.Query(rpcz.SpanID(id))
+	if !ok {
+		newResponse("", errs.New(ErrCodeServer, fmt.Sprintf("cannot find span-id: %d", id))).print(w)
+		return
+	}
+	newResponse(span.PrintDetail(""), nil).print(w)
 }
 
-func setCommonHeaders(w http.ResponseWriter) {
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+func parseIDParameter(url *url.URL) (id int64, err error) {
+	id, err = strconv.ParseInt(strings.TrimPrefix(url.Path, patternRPCZSpanGet), 10, 64)
+	if err != nil {
+		return id, fmt.Errorf("undefined command, please follow http://ip:port/cmds/rpcz/spans/{id}), %w", err)
+	}
+	if id < 0 {
+		return id, fmt.Errorf("span_id: %d can not be negative", id)
+	}
+	return id, err
 }

@@ -14,7 +14,7 @@ server:                                            # server configuration.
     rpcz:
       fraction: 1.0
       capacity: 10000
-  service:                                         # business service configuration，can have multiple.
+  service:                                         # business service configuration, can have multiple.
     - name: trpc.test.helloworld.Greeter           # the route name of the service.
       ip: 127.0.0.1                                # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
       port: 8000                                   # the service listening port, can use the placeholder ${port}.
@@ -23,8 +23,8 @@ server:                                            # server configuration.
       timeout: 1000                                # maximum request processing time in milliseconds.
       idletime: 300000                             # connection idle time in milliseconds.
 
-plugins:                                          # plugin configuration.
-  log:                                            # log configuration.
-    default:                                      # default log configuration, support multiple outputs.
-      - writer: console                           # console standard output default.
-        level: debug                              # standard output log level.
+plugins:                                           # plugin configuration.
+  log:                                             # log configuration.
+    default:                                       # default log configuration, support multiple outputs.
+      - writer: console                            # console standard output default.
+        level: debug                               # standard output log level.

@@ -82,6 +82,21 @@ func TestRegisterCompressor(t *testing.T) {
 	}
 }
 
+type mustMockCompressor struct {
+	mockCompressor
+}
+
+func (mustMockCompressor) Name() string { return "mustMockCompressor" }
+
+func TestMustRegisterCompressor(t *testing.T) {
+	t.Run("register compressor", func(t *testing.T) {
+		require.NotPanics(t, func() { restful.MustRegisterCompressor(mustMockCompressor{}) })
+	})
+	t.Run("panic if compressor has been registered", func(t *testing.T) {
+		require.Panics(t, func() { restful.MustRegisterCompressor(mustMockCompressor{}) })
+	})
+}
+
 func TestGZIPCompressor(t *testing.T) {
 	g := &restful.GZIPCompressor{}
 

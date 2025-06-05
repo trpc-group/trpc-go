@@ -19,72 +19,90 @@ import (
 
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/rpczenable"
 	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
-)
-
-const (
-	defaultMaxConcurrentStreams = 1000
-	defaultMaxIdleConnsPerHost  = 2
+	"trpc.group/trpc-go/trpc-go/rpcz"
 )
 
 // DefaultClientStreamTransport is the default client stream transport.
 var DefaultClientStreamTransport = NewClientStreamTransport()
 
 // NewClientStreamTransport creates a new ClientStreamTransport.
-func NewClientStreamTransport(opts ...ClientStreamTransportOption) ClientStreamTransport {
-	options := &cstOptions{
-		maxConcurrentStreams: defaultMaxConcurrentStreams,
-		maxIdleConnsPerHost:  defaultMaxIdleConnsPerHost,
-	}
-	for _, opt := range opts {
-		opt(options)
-	}
+func NewClientStreamTransport(opt ...ClientTransportOption) ClientStreamTransport {
 	t := &clientStreamTransport{
-		// Map streamID to connection. On the client side, ensure that the streamID is
-		// incremented and unique, otherwise the map of addr must be added.
-		streamIDToConn: make(map[uint32]multiplexed.MuxConn),
+		clientTransport: newClientTransport(opt...),
+		// Map streamID to connection.
+		// On the client side, ensure that the streamID is incremented and unique, otherwise the map of
+		// addr must be added.
+		streamIDToConn: make(map[uint32]multiplexed.VirtualConn),
 		m:              &sync.RWMutex{},
-		multiplexedPool: multiplexed.New(
-			multiplexed.WithMaxVirConnsPerConn(options.maxConcurrentStreams),
-			multiplexed.WithMaxIdleConnsPerHost(options.maxIdleConnsPerHost),
-		),
 	}
+
+	// If a stream multiplexed pool is set, use it directly.
+	if t.opts.StreamMultiplexedPool != nil {
+		t.multiplexedPool = t.opts.StreamMultiplexedPool
+		return t
+	}
+
+	t.multiplexedPool = multiplexed.New(
+		multiplexed.WithMaxVirConnsPerConn(t.opts.MaxConcurrentStreams),
+		multiplexed.WithMaxIdleConnsPerHost(t.opts.MaxIdleConnsPerHost))
 	return t
-}
-
-// cstOptions is the client stream transport options.
-type cstOptions struct {
-	maxConcurrentStreams int
-	maxIdleConnsPerHost  int
-}
-
-// ClientStreamTransportOption sets properties of ClientStreamTransport.
-type ClientStreamTransportOption func(*cstOptions)
-
-// WithMaxConcurrentStreams sets the maximum concurrent streams in each TCP connection.
-func WithMaxConcurrentStreams(n int) ClientStreamTransportOption {
-	return func(opts *cstOptions) {
-		opts.maxConcurrentStreams = n
-	}
-}
-
-// WithMaxIdleConnsPerHost sets the maximum idle connections per host.
-func WithMaxIdleConnsPerHost(n int) ClientStreamTransportOption {
-	return func(opts *cstOptions) {
-		opts.maxIdleConnsPerHost = n
-	}
 }
 
 // clientStreamTransport keeps compatibility with the original client transport.
 type clientStreamTransport struct {
-	streamIDToConn  map[uint32]multiplexed.MuxConn
+	clientTransport
+	streamIDToConn  map[uint32]multiplexed.VirtualConn
 	m               *sync.RWMutex
 	multiplexedPool multiplexed.Pool
 }
 
+// RoundTrip keeps compatibility with the original transport RoundTrip.
+// Call clientTransport.RoundTrip directly.
+func (c *clientStreamTransport) RoundTrip(ctx context.Context, req []byte,
+	opts ...RoundTripOption) (rsp []byte, err error) {
+	return c.clientTransport.RoundTrip(ctx, req, opts...)
+}
+
+// getOptions inits RoundTripOptions and does some basic check.
+func (c *clientStreamTransport) getOptions(_ context.Context,
+	roundTripOpts ...RoundTripOption) (*RoundTripOptions, error) {
+	opts := &RoundTripOptions{
+		Multiplexed: c.multiplexedPool,
+	}
+
+	// use roundTripOpts to modify opts.
+	for _, o := range roundTripOpts {
+		o(opts)
+	}
+
+	if opts.FramerBuilder == nil {
+		return nil, errs.NewFrameError(errs.RetClientConnectFail,
+			"tcp client transport: framer builder empty")
+	}
+
+	if opts.Msg == nil {
+		return nil, errs.NewFrameError(errs.RetClientConnectFail,
+			"tcp client transport: message empty")
+	}
+	return opts, nil
+}
+
 // Init inits clientStreamTransport. It gets a connection from the multiplexing pool. A stream is
 // corresponding to a virtual connection, which provides the interface for the stream.
-func (c *clientStreamTransport) Init(ctx context.Context, roundTripOpts ...RoundTripOption) error {
+func (c *clientStreamTransport) Init(ctx context.Context, roundTripOpts ...RoundTripOption) (err error) {
+	var (
+		span  rpcz.Span
+		ender rpcz.Ender
+	)
+	if rpczenable.Enabled {
+		span, ender, ctx = rpcz.NewSpanContext(ctx, "client stream transport init")
+		defer func() {
+			span.SetAttribute(rpcz.TRPCAttributeError, err)
+			ender.End()
+		}()
+	}
 	opts, err := c.getOptions(ctx, roundTripOpts...)
 	if err != nil {
 		return err
@@ -100,21 +118,18 @@ func (c *clientStreamTransport) Init(ctx context.Context, roundTripOpts ...Round
 	}
 	msg := opts.Msg
 	streamID := msg.StreamID()
+	// Set requestID to streamID which will be used to obtain a connection from multiplexed pool.
+	msg.WithRequestID(streamID)
 
 	getOpts := multiplexed.NewGetOptions()
-	getOpts.WithVID(streamID)
-	fp, ok := opts.FramerBuilder.(multiplexed.FrameParser)
-	if !ok {
-		return errs.NewFrameError(errs.RetClientConnectFail,
-			"frame builder does not implement multiplexed.FrameParser")
-	}
-	getOpts.WithFrameParser(fp)
+	getOpts.WithMsg(msg)
+	getOpts.WithFramerBuilder(opts.FramerBuilder)
 	getOpts.WithDialTLS(opts.TLSCertFile, opts.TLSKeyFile, opts.CACertFile, opts.TLSServerName)
 	getOpts.WithLocalAddr(opts.LocalAddr)
-	conn, err := opts.Multiplexed.GetMuxConn(ctx, opts.Network, opts.Address, getOpts)
+	conn, err := opts.Multiplexed.GetVirtualConn(ctx, opts.Network, opts.Address, getOpts)
 	if err != nil {
 		return errs.NewFrameError(errs.RetClientConnectFail,
-			"tcp client transport multiplexd pool: "+err.Error())
+			"tcp client transport multiplexed pool: "+err.Error())
 	}
 	msg.WithRemoteAddr(conn.RemoteAddr())
 	msg.WithLocalAddr(conn.LocalAddr())
@@ -125,7 +140,18 @@ func (c *clientStreamTransport) Init(ctx context.Context, roundTripOpts ...Round
 }
 
 // Send sends stream data and provides interface for stream.
-func (c *clientStreamTransport) Send(ctx context.Context, req []byte, roundTripOpts ...RoundTripOption) error {
+func (c *clientStreamTransport) Send(ctx context.Context, req []byte, roundTripOpts ...RoundTripOption) (err error) {
+	var (
+		span  rpcz.Span
+		ender rpcz.Ender
+	)
+	if rpczenable.Enabled {
+		span, ender, ctx = rpcz.NewSpanContext(ctx, "client stream transport send")
+		defer func() {
+			span.SetAttribute(rpcz.TRPCAttributeError, err)
+			ender.End()
+		}()
+	}
 	msg := codec.Message(ctx)
 	streamID := msg.StreamID()
 	// StreamID is uniquely generated by stream client.
@@ -136,13 +162,37 @@ func (c *clientStreamTransport) Send(ctx context.Context, req []byte, roundTripO
 		return errs.NewFrameError(errs.RetServerSystemErr, "Connection is Closed")
 	}
 	if err := cc.Write(req); err != nil {
-		return err
+		return errs.WrapFrameError(err, errs.RetClientConnectFail, "Connection writes failed")
 	}
 	return nil
 }
 
+func (c *clientStreamTransport) getConnect(ctx context.Context,
+	_ ...RoundTripOption) (multiplexed.VirtualConn, error) {
+	msg := codec.Message(ctx)
+	streamID := msg.StreamID()
+	c.m.RLock()
+	cc := c.streamIDToConn[streamID]
+	c.m.RUnlock()
+	if cc == nil {
+		return nil, errs.NewFrameError(errs.RetServerSystemErr, "Stream is not initialized yet")
+	}
+	return cc, nil
+}
+
 // Recv receives stream data and provides interface for stream.
-func (c *clientStreamTransport) Recv(ctx context.Context, roundTripOpts ...RoundTripOption) ([]byte, error) {
+func (c *clientStreamTransport) Recv(ctx context.Context, roundTripOpts ...RoundTripOption) (_ []byte, err error) {
+	var (
+		span  rpcz.Span
+		ender rpcz.Ender
+	)
+	if rpczenable.Enabled {
+		span, ender, ctx = rpcz.NewSpanContext(ctx, "client stream transport recv")
+		defer func() {
+			span.SetAttribute(rpcz.TRPCAttributeError, err)
+			ender.End()
+		}()
+	}
 	cc, err := c.getConnect(ctx, roundTripOpts...)
 	if err != nil {
 		return nil, err
@@ -173,46 +223,4 @@ func (c *clientStreamTransport) Close(ctx context.Context) {
 		conn.Close()
 		delete(c.streamIDToConn, streamID)
 	}
-}
-
-// getOptions inits RoundTripOptions and does some basic check.
-func (c *clientStreamTransport) getOptions(ctx context.Context,
-	roundTripOpts ...RoundTripOption) (*RoundTripOptions, error) {
-	opts := &RoundTripOptions{
-		Multiplexed: c.multiplexedPool,
-	}
-
-	// use roundTripOpts to modify opts.
-	for _, o := range roundTripOpts {
-		o(opts)
-	}
-
-	if opts.Multiplexed == nil {
-		return nil, errs.NewFrameError(errs.RetClientConnectFail,
-			"tcp client transport: multiplexd pool empty")
-	}
-
-	if opts.FramerBuilder == nil {
-		return nil, errs.NewFrameError(errs.RetClientConnectFail,
-			"tcp client transport: framer builder empty")
-	}
-
-	if opts.Msg == nil {
-		return nil, errs.NewFrameError(errs.RetClientConnectFail,
-			"tcp client transport: message empty")
-	}
-	return opts, nil
-}
-
-func (c *clientStreamTransport) getConnect(ctx context.Context,
-	roundTripOpts ...RoundTripOption) (multiplexed.MuxConn, error) {
-	msg := codec.Message(ctx)
-	streamID := msg.StreamID()
-	c.m.RLock()
-	cc := c.streamIDToConn[streamID]
-	c.m.RUnlock()
-	if cc == nil {
-		return nil, errs.NewFrameError(errs.RetServerSystemErr, "Stream is not inited yet")
-	}
-	return cc, nil
 }

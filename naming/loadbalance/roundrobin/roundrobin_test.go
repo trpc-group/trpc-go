@@ -14,13 +14,14 @@
 package roundrobin
 
 import (
-	"sync"
 	"testing"
 	"time"
 
-	"trpc.group/trpc-go/trpc-go/naming/registry"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
+
+	"trpc.group/trpc-go/trpc-go/naming/registry"
 )
 
 func TestRoundRobinGetOne(t *testing.T) {
@@ -66,18 +67,14 @@ func TestRoundRobinInterval(t *testing.T) {
 
 func TestRoundRobinConCurrentSelect(t *testing.T) {
 	rr := NewRoundRobin(time.Second * 1)
-
-	var wg sync.WaitGroup
-	wg.Add(10)
+	var g errgroup.Group
 	for i := 0; i < 10; i++ {
-		go func() {
+		g.Go(func() error {
 			_, err := rr.Select("test1", list1)
-			assert.Nil(t, err)
-			wg.Done()
-		}()
+			return err
+		})
 	}
-
-	wg.Wait()
+	require.Nil(t, g.Wait())
 }
 
 func TestRoundRobinSelectDifferentService(t *testing.T) {

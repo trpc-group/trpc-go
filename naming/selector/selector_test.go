@@ -44,13 +44,13 @@ func (ts *testSelector) Report(node *registry.Node, cost time.Duration, success 
 func TestSelectorRegister(t *testing.T) {
 	Register("test-selector", &testSelector{})
 	assert.NotNil(t, Get("test-selector"))
-	unregisterForTesting("test-selector")
+	delete(selectors, "test-selector")
 }
 
 func TestSelectorGet(t *testing.T) {
 	Register("test-selector", &testSelector{})
 	s := Get("test-selector")
 	assert.NotNil(t, s)
-	unregisterForTesting("test-selector")
+	delete(selectors, "test-selector")
 	assert.Nil(t, Get("not_exist"))
 }

@@ -80,6 +80,8 @@ var (
 	TCPServerTransportJobQueueFullFail = metrics.Counter("trpc.TcpServerTransportJobQueueFullFail")
 	// receive queue of udp goroutine pool is full, the requests are overwhelming.
 	UDPServerTransportJobQueueFullFail = metrics.Counter("trpc.UdpServerTransportJobQueueFullFail")
+	// the quest is limited by the overload control.
+	TCPServerTransportRequestLimitedByOverloadCtrl = metrics.Counter("trpc.TcpServerTransportRequestLimitedByOverloadCtrl")
 	// TCPServerAsyncGoroutineScheduleDelay is the schedule delay of goroutine pool when async is on.
 	// DO NOT change the name, as the overload control algorithm depends on it.
 	TCPServerAsyncGoroutineScheduleDelay = metrics.Gauge("trpc.TcpServerAsyncGoroutineScheduleDelay_us")

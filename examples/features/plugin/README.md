@@ -8,7 +8,7 @@ Plugins are the bridge that connects the framework core and external service gov
 
     ```go
     import (
-    	_ "trpc.group/trpc-go/trpc-go/examples/features/plugin"
+        _ "git.code.oa.com/trpc-go/trpc-go/examples/features/plugin"
     )
     ```
 
@@ -26,21 +26,21 @@ Plugins are the bridge that connects the framework core and external service gov
         key3: 1234
   ```
 
-* Start server.
+- Start server.
 
 ```shell
-$ go run server/main.go -conf server/trpc_go.yaml
+go run server/main.go -conf server/trpc_go.yaml
 ```
 
-* Start client.
+- Start client.
 
 ```shell
-$ go run client/main.go -conf client/trpc_go.yaml
+go run client/main.go -conf client/trpc_go.yaml
 ```
 
-* Server output
+- Server output
 
-```
+```log
 2023-05-10 11:20:13.046 INFO    plugin/custom_plugin.go:48      [plugin] init customPlugin success, config: {test {value1 false 1234}}
 2023-05-10 11:20:13.047 DEBUG   maxprocs/maxprocs.go:47 maxprocs: Leaving GOMAXPROCS=16: CPU quota undefined
 2023-05-10 11:20:13.047 INFO    server/service.go:164   process:25080, trpc service:trpc.test.helloworld.Greeter launch success, tcp:127.0.0.1:9091, serving ...
@@ -48,6 +48,3 @@ $ go run client/main.go -conf client/trpc_go.yaml
 2023-05-10 11:20:20.307 INFO    plugin/custom_plugin.go:55      [plugin] call key1 : value1, key2 : false, key3 : 1234
 ```
   
-  
-
-

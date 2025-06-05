@@ -22,16 +22,19 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"os"
+	"path/filepath"
+	"runtime/pprof"
 	"sync"
 	"testing"
 	"time"
 
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
-
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/errs"
+	"github.com/google/pprof/profile"
+	"github.com/stretchr/testify/require"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/stream"
 
 	"trpc.group/trpc-go/trpc-go/codec"
@@ -141,10 +144,10 @@ func TestStreamDispatcherHandleInit(t *testing.T) {
 	rsp, err := dispatcher.StreamHandleFunc(ctx, streamHandler, si, nil)
 	assert.Nil(t, rsp)
 	assert.Contains(t, err.Error(), "frameHead is not contained in msg")
-	msg.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{})
+	msg.WithStreamFrame(&trpc.TrpcStreamInitMeta{})
 	// StreamHandleFunc handle init
 	fh := &trpc.FrameHead{}
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
 	msg.WithFrameHead(fh)
 	msg.WithStreamID(uint32(100))
 	msg.WithRemoteAddr(&fakeAddr{})
@@ -158,7 +161,7 @@ func TestStreamDispatcherHandleInit(t *testing.T) {
 	msg.WithStreamID(uint32(99))
 	rsp, err = dispatcher.StreamHandleFunc(ctx, streamHandler, si, []byte("init"))
 	assert.Nil(t, rsp)
-	assert.Equal(t, err.Error(), "streamID less than 100")
+	assert.Contains(t, err.Error(), "streamID less than 100")
 
 	// StreamHandleFunc handle init send error
 	msg.WithFrameHead(fh)
@@ -168,7 +171,7 @@ func TestStreamDispatcherHandleInit(t *testing.T) {
 	assert.Contains(t, err.Error(), "init-error")
 
 	// StreamHandleFun handle data to validate streamID was stored
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
 	msg.WithFrameHead(fh)
 	rsp, err = dispatcher.StreamHandleFunc(ctx, streamHandler, si, []byte("data"))
 	assert.Nil(t, rsp)
@@ -181,6 +184,14 @@ func TestStreamDispatcherHandleInit(t *testing.T) {
 	assert.Nil(t, rsp)
 	assert.Equal(t, err, errs.ErrServerNoResponse)
 	time.Sleep(100 * time.Millisecond)
+
+	// StreamHandleFunc handle nil streamHandler
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
+	msg.WithFrameHead(fh)
+	msg.WithStreamID(100)
+	rsp, err = dispatcher.StreamHandleFunc(ctx, nil, si, []byte("init"))
+	assert.Nil(t, rsp)
+	assert.Equal(t, errs.RetServerNoFunc, errs.Code(err))
 }
 
 // TestStreamDispatcherHandleData test StreamDispatcher Handle data
@@ -203,10 +214,10 @@ func TestStreamDispatcherHandleData(t *testing.T) {
 	ctx := context.Background()
 	ctx, msg := codec.WithNewMessage(ctx)
 	fh := &trpc.FrameHead{}
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
 	msg.WithFrameHead(fh)
 	msg.WithStreamID(uint32(100))
-	msg.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{})
+	msg.WithStreamFrame(&trpc.TrpcStreamInitMeta{})
 	addr := &fakeAddr{}
 	msg.WithRemoteAddr(addr)
 	msg.WithLocalAddr(addr)
@@ -215,7 +226,7 @@ func TestStreamDispatcherHandleData(t *testing.T) {
 	assert.Equal(t, err, errs.ErrServerNoResponse)
 
 	// handleData normal
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
 	msg.WithFrameHead(fh)
 	rsp, err = dispatcher.StreamHandleFunc(ctx, streamHandler, si, []byte("data"))
 	assert.Nil(t, rsp)
@@ -224,7 +235,7 @@ func TestStreamDispatcherHandleData(t *testing.T) {
 	// handleData error no such addr
 	raddr, _ := net.ResolveTCPAddr("tcp", "127.0.0.1:1")
 	msg.WithRemoteAddr(raddr)
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
 	msg.WithFrameHead(fh)
 	rsp, err = dispatcher.StreamHandleFunc(ctx, streamHandler, si, []byte("data"))
 	assert.Nil(t, rsp)
@@ -233,7 +244,7 @@ func TestStreamDispatcherHandleData(t *testing.T) {
 	// handle data error no such stream id
 	msg.WithRemoteAddr(addr)
 	msg.WithStreamID(uint32(101))
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
 	msg.WithFrameHead(fh)
 	rsp, err = dispatcher.StreamHandleFunc(ctx, streamHandler, si, []byte("data"))
 	assert.Nil(t, rsp)
@@ -261,10 +272,10 @@ func TestStreamDispatcherHandleClose(t *testing.T) {
 	ctx := context.Background()
 	ctx, msg := codec.WithNewMessage(ctx)
 	fh := &trpc.FrameHead{}
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
 	msg.WithFrameHead(fh)
 	msg.WithStreamID(uint32(100))
-	msg.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{})
+	msg.WithStreamFrame(&trpc.TrpcStreamInitMeta{})
 
 	addr := &fakeAddr{}
 	msg.WithRemoteAddr(addr)
@@ -275,7 +286,7 @@ func TestStreamDispatcherHandleClose(t *testing.T) {
 	assert.Equal(t, err, errs.ErrServerNoResponse)
 
 	// handle close normal
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE)
 	msg.WithFrameHead(fh)
 	rsp, err = dispatcher.StreamHandleFunc(ctx, streamHandler, si, []byte("close"))
 	assert.Nil(t, rsp)
@@ -297,9 +308,9 @@ func TestStreamDispatcherHandleClose(t *testing.T) {
 	assert.Nil(t, rsp)
 	assert.Equal(t, errs.ErrServerNoResponse, err)
 
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK)
 	msg.WithFrameHead(fh)
-	msg.WithStreamFrame(&trpcpb.TrpcStreamFeedBackMeta{})
+	msg.WithStreamFrame(&trpc.TrpcStreamFeedBackMeta{})
 	rsp, err = dispatcher.StreamHandleFunc(ctx, streamHandler, si, []byte("feedback"))
 	assert.Nil(t, rsp)
 	assert.Equal(t, err, errs.ErrServerNoResponse)
@@ -332,12 +343,12 @@ func TestServerStreamSendMsg(t *testing.T) {
 	ctx := context.Background()
 	ctx, msg := codec.WithNewMessage(ctx)
 	fh := &trpc.FrameHead{}
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
 	msg.WithFrameHead(fh)
 	msg.WithStreamID(uint32(100))
 	msg.WithRemoteAddr(&fakeAddr{})
 	msg.WithLocalAddr(&fakeAddr{})
-	msg.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{})
+	msg.WithStreamFrame(&trpc.TrpcStreamInitMeta{})
 
 	opts.CurrentCompressType = codec.CompressTypeNoop
 	opts.CurrentSerializationType = codec.SerializationTypeNoop
@@ -353,6 +364,19 @@ func TestServerStreamSendMsg(t *testing.T) {
 	assert.Nil(t, rsp)
 	assert.Equal(t, err, errs.ErrServerNoResponse)
 	time.Sleep(100 * time.Millisecond)
+
+	opts.CurrentCompressType = codec.CompressTypeNoop
+	opts.CurrentSerializationType = codec.SerializationTypeJCE
+	sh = func(ss server.Stream) error {
+		ctx = ss.Context()
+		assert.NotNil(t, ctx)
+		err := ss.SendMsg(&codec.Body{Data: []byte("init")})
+		assert.NotNil(t, err)
+		// assert.Contains(t, err.Error(), "server codec Marshal")
+		return err
+	}
+	dispatcher.StreamHandleFunc(ctx, sh, si, []byte("init"))
+	time.Sleep(200 * time.Millisecond)
 
 	opts.CurrentCompressType = 5
 	opts.CurrentSerializationType = codec.SerializationTypeNoop
@@ -415,7 +439,7 @@ func TestServerStreamRecvMsg(t *testing.T) {
 	msg.WithStreamID(uint32(100))
 	msg.WithRemoteAddr(&fakeAddr{})
 	msg.WithLocalAddr(&fakeAddr{})
-	msg.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{})
+	msg.WithStreamFrame(&trpc.TrpcStreamInitMeta{})
 	opts.CurrentCompressType = codec.CompressTypeNoop
 	opts.CurrentSerializationType = codec.SerializationTypeNoop
 
@@ -433,18 +457,19 @@ func TestServerStreamRecvMsg(t *testing.T) {
 		assert.Equal(t, err, io.EOF)
 		return err
 	}
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
 	rsp, err := dispatcher.StreamHandleFunc(ctx, sh, si, []byte("init"))
 	assert.Nil(t, rsp)
 	assert.Equal(t, err, errs.ErrServerNoResponse)
 	// handleData normal
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
 	msg.WithFrameHead(fh)
 	rsp, err = dispatcher.StreamHandleFunc(ctx, sh, si, []byte("data"))
 	assert.Nil(t, rsp)
 	assert.Equal(t, err, errs.ErrServerNoResponse)
 
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE)
+	msg.WithStreamFrame(&trpc.TrpcStreamCloseMeta{})
 	msg.WithFrameHead(fh)
 	rsp, err = dispatcher.StreamHandleFunc(ctx, sh, si, []byte("close"))
 	assert.Nil(t, rsp)
@@ -476,7 +501,7 @@ func TestServerStreamRecvMsgFail(t *testing.T) {
 	msg.WithStreamID(uint32(100))
 	msg.WithRemoteAddr(&fakeAddr{})
 	msg.WithLocalAddr(&fakeAddr{})
-	msg.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{})
+	msg.WithStreamFrame(&trpc.TrpcStreamInitMeta{})
 
 	opts.CurrentCompressType = codec.CompressTypeGzip
 	opts.CurrentSerializationType = codec.SerializationTypeNoop
@@ -494,17 +519,28 @@ func TestServerStreamRecvMsgFail(t *testing.T) {
 		assert.Contains(t, err.Error(), "server codec Unmarshal")
 		return err
 	}
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
 	msg.WithFrameHead(fh)
 	rsp, err := dispatcher.StreamHandleFunc(ctx, sh, si, []byte("init"))
 	assert.Nil(t, rsp)
 	assert.Equal(t, err, errs.ErrServerNoResponse)
 	// handleData normal
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
 	msg.WithFrameHead(fh)
 	rsp, err = dispatcher.StreamHandleFunc(ctx, sh, si, []byte("data"))
 	assert.Nil(t, rsp)
 	assert.Equal(t, err, errs.ErrServerNoResponse)
+
+	time.Sleep(100 * time.Millisecond)
+
+	opts.CurrentCompressType = codec.CompressTypeNoop
+	opts.CurrentSerializationType = codec.SerializationTypeJCE
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
+	msg.WithFrameHead(fh)
+	rsp, err = dispatcher.StreamHandleFunc(ctx, sh, si, []byte("data"))
+	assert.Nil(t, rsp)
+	assert.Equal(t, err, errs.ErrServerNoResponse)
+	time.Sleep(300 * time.Millisecond)
 }
 
 // TesthandleError test server error condition
@@ -530,7 +566,7 @@ func TestHandleError(t *testing.T) {
 	msg.WithStreamID(uint32(100))
 	msg.WithRemoteAddr(&fakeAddr{})
 	msg.WithLocalAddr(&fakeAddr{})
-	msg.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{})
+	msg.WithStreamFrame(&trpc.TrpcStreamInitMeta{})
 
 	opts.CurrentCompressType = codec.CompressTypeGzip
 	opts.CurrentSerializationType = codec.SerializationTypeNoop
@@ -544,7 +580,7 @@ func TestHandleError(t *testing.T) {
 		assert.Contains(t, err.Error(), "Connection is closed")
 		return err
 	}
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
 	rsp, err := dispatcher.StreamHandleFunc(ctx, sh, si, []byte("init"))
 	assert.Nil(t, rsp)
 	assert.Equal(t, err, errs.ErrServerNoResponse)
@@ -583,10 +619,10 @@ func TestStreamDispatcherHandleFeedback(t *testing.T) {
 	ctx := context.Background()
 	ctx, msg := codec.WithNewMessage(ctx)
 	fh := &trpc.FrameHead{}
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
 	msg.WithFrameHead(fh)
 	msg.WithStreamID(uint32(100))
-	msg.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{InitWindowSize: 10})
+	msg.WithStreamFrame(&trpc.TrpcStreamInitMeta{InitWindowSize: 10})
 
 	sh := func(ss server.Stream) error {
 		time.Sleep(time.Second)
@@ -604,7 +640,7 @@ func TestStreamDispatcherHandleFeedback(t *testing.T) {
 	raddr, _ := net.ResolveTCPAddr("tcp", "127.0.0.1:1")
 	msg.WithRemoteAddr(raddr)
 	msg.WithLocalAddr(raddr)
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK)
 	msg.WithFrameHead(fh)
 	rsp, err = dispatcher.StreamHandleFunc(ctx, nil, si, []byte("feedback"))
 	assert.Nil(t, rsp)
@@ -613,16 +649,16 @@ func TestStreamDispatcherHandleFeedback(t *testing.T) {
 	// handle feedback invalid stream
 	msg.WithRemoteAddr(addr)
 	msg.WithLocalAddr(addr)
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK)
 	msg.WithFrameHead(fh)
 	rsp, err = dispatcher.StreamHandleFunc(ctx, nil, si, []byte("feedback"))
 	assert.Nil(t, rsp)
 	assert.NotNil(t, err)
 
 	// normal feedback
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK)
 	msg.WithFrameHead(fh)
-	msg.WithStreamFrame(&trpcpb.TrpcStreamFeedBackMeta{WindowSizeIncrement: 1000})
+	msg.WithStreamFrame(&trpc.TrpcStreamFeedBackMeta{WindowSizeIncrement: 1000})
 	rsp, err = dispatcher.StreamHandleFunc(ctx, nil, si, []byte("feedback"))
 	assert.Nil(t, rsp)
 	assert.Equal(t, err, errs.ErrServerNoResponse)
@@ -650,7 +686,7 @@ func TestServerFlowControl(t *testing.T) {
 	addr := &fakeAddr{}
 	msg.WithRemoteAddr(addr)
 	msg.WithLocalAddr(addr)
-	msg.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{InitWindowSize: 65535})
+	msg.WithStreamFrame(&trpc.TrpcStreamInitMeta{InitWindowSize: 65535})
 	opts.CurrentCompressType = codec.CompressTypeNoop
 	opts.CurrentSerializationType = codec.SerializationTypeNoop
 	var wg sync.WaitGroup
@@ -665,7 +701,7 @@ func TestServerFlowControl(t *testing.T) {
 		}
 		return nil
 	}
-	fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
+	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
 	rsp, err := dispatcher.StreamHandleFunc(ctx, sh, si, []byte("init"))
 	assert.Nil(t, rsp)
 	assert.Equal(t, err, errs.ErrServerNoResponse)
@@ -679,7 +715,7 @@ func TestServerFlowControl(t *testing.T) {
 		newMsg.WithLocalAddr(addr)
 		newFh := &trpc.FrameHead{}
 		newFh.StreamID = uint32(100)
-		newFh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
+		newFh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
 		newMsg.WithFrameHead(newFh)
 		rsp, err := dispatcher.StreamHandleFunc(newCtx, sh, si, []byte("data"))
 		assert.Nil(t, rsp)
@@ -689,7 +725,6 @@ func TestServerFlowControl(t *testing.T) {
 }
 
 func TestClientStreamFlowControl(t *testing.T) {
-	svrOpts := []server.Option{server.WithAddress("127.0.0.1:30210")}
 	handle := func(s server.Stream) error {
 		req := getBytes(1024)
 		for i := 0; i < 1000; i++ {
@@ -707,10 +742,10 @@ func TestClientStreamFlowControl(t *testing.T) {
 		}
 		return nil
 	}
-	svr := startStreamServer(handle, svrOpts)
+	svr, lis := startStreamServer(t, handle)
 	defer closeStreamServer(svr)
 
-	cliOpts := []client.Option{client.WithTarget("ip://127.0.0.1:30210")}
+	cliOpts := []client.Option{client.WithTarget("ip://" + lis.Addr().String())}
 	cliStream, err := getClientStream(context.Background(), bidiDesc, cliOpts)
 	assert.Nil(t, err)
 
@@ -733,7 +768,6 @@ func TestClientStreamFlowControl(t *testing.T) {
 }
 
 func TestServerStreamFlowControl(t *testing.T) {
-	svrOpts := []server.Option{server.WithAddress("127.0.0.1:30211")}
 	handle := func(s server.Stream) error {
 		req := getBytes(1024)
 		err := s.RecvMsg(req)
@@ -747,10 +781,10 @@ func TestServerStreamFlowControl(t *testing.T) {
 		}
 		return nil
 	}
-	svr := startStreamServer(handle, svrOpts)
+	svr, lis := startStreamServer(t, handle)
 	defer closeStreamServer(svr)
 
-	cliOpts := []client.Option{client.WithTarget("ip://127.0.0.1:30211")}
+	cliOpts := []client.Option{client.WithTarget("ip://" + lis.Addr().String())}
 	cliStream, err := getClientStream(context.Background(), bidiDesc, cliOpts)
 	assert.Nil(t, err)
 
@@ -770,7 +804,14 @@ func TestServerStreamFlowControl(t *testing.T) {
 	assert.Equal(t, err, io.EOF)
 }
 
-func startStreamServer(handle func(server.Stream) error, opts []server.Option) server.Service {
+func startStreamServer(
+	t *testing.T,
+	handle func(server.Stream) error,
+	opts ...server.Option,
+) (server.Service, net.Listener) {
+	l, err := net.Listen("tcp", "")
+	require.Nil(t, err)
+
 	svrOpts := []server.Option{
 		server.WithProtocol("trpc"),
 		server.WithNetwork("tcp"),
@@ -778,6 +819,7 @@ func startStreamServer(handle func(server.Stream) error, opts []server.Option) s
 		server.WithTransport(transport.NewServerStreamTransport(transport.WithReusePort(true))),
 		// The server must actively set the serialization method
 		server.WithCurrentSerializationType(codec.SerializationTypeNoop),
+		server.WithListener(l),
 	}
 	svrOpts = append(svrOpts, opts...)
 	svr := server.New(svrOpts...)
@@ -788,8 +830,7 @@ func startStreamServer(handle func(server.Stream) error, opts []server.Option) s
 			panic(err)
 		}
 	}()
-	time.Sleep(100 * time.Millisecond)
-	return svr
+	return svr, l
 }
 
 func closeStreamServer(svr server.Service) {
@@ -816,12 +857,12 @@ var (
 	}
 )
 
-func getClientStream(ctx context.Context, desc *client.ClientStreamDesc, opts []client.Option) (client.ClientStream, error) {
+func getClientStream(ctx context.Context, desc *client.ClientStreamDesc, opts []client.Option) (stream.ClientStream, error) {
 	cli := stream.NewStreamClient()
 	method := "/trpc.test.stream.Greeter/StreamSayHello"
 	cliOpts := []client.Option{
 		client.WithProtocol("trpc"),
-		client.WithTransport(transport.NewClientTransport()),
+		client.WithTransport(transport.NewClientStreamTransport()),
 		client.WithStreamTransport(transport.NewClientStreamTransport()),
 		client.WithCurrentSerializationType(codec.SerializationTypeNoop),
 	}
@@ -933,10 +974,6 @@ func serverFilterAdd2(ss server.Stream, si *server.StreamServerInfo,
 // and RecvMsg on the server side result in errors.
 func TestServerStreamAllFailWhenConnectionClosedAndReconnect(t *testing.T) {
 	ch := make(chan struct{})
-	addr := "127.0.0.1:30211"
-	svrOpts := []server.Option{
-		server.WithAddress(addr),
-	}
 	handle := func(s server.Stream) error {
 		<-ch
 		err := s.SendMsg(getBytes(100))
@@ -946,19 +983,19 @@ func TestServerStreamAllFailWhenConnectionClosedAndReconnect(t *testing.T) {
 		ch <- struct{}{}
 		return nil
 	}
-	svr := startStreamServer(handle, svrOpts)
+	svr, lis := startStreamServer(t, handle)
 	defer closeStreamServer(svr)
 
 	// Init a stream
 	dialer := net.Dialer{
 		LocalAddr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 20001},
 	}
-	conn, err := dialer.Dial("tcp", addr)
+	conn, err := dialer.Dial("tcp", lis.Addr().String())
 	assert.Nil(t, err)
 	_, msg := codec.WithNewMessage(context.Background())
 	msg.WithFrameHead(&trpc.FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
-		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT),
+		FrameType:       uint8(trpc.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		StreamFrameType: uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT),
 	})
 	msg.WithClientRPCName("/trpc.test.stream.Greeter/StreamSayHello")
 	initReq, err := trpc.DefaultClientCodec.Encode(msg, nil)
@@ -971,7 +1008,7 @@ func TestServerStreamAllFailWhenConnectionClosedAndReconnect(t *testing.T) {
 
 	// Dial another connection using the same client ip:port
 	time.Sleep(time.Millisecond * 200)
-	_, err = dialer.Dial("tcp", addr)
+	_, err = dialer.Dial("tcp", lis.Addr().String())
 	assert.Nil(t, err)
 
 	// Notify server to send and receive
@@ -991,9 +1028,9 @@ func TestSameClientAddrDiffServerAddr(t *testing.T) {
 
 	initFrame := func(localAddr, remoteAddr net.Addr) {
 		ctx, msg := codec.WithNewMessage(context.Background())
-		msg.WithFrameHead(&trpc.FrameHead{StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)})
+		msg.WithFrameHead(&trpc.FrameHead{StreamFrameType: uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)})
 		msg.WithStreamID(200)
-		msg.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{})
+		msg.WithStreamFrame(&trpc.TrpcStreamInitMeta{})
 		msg.WithRemoteAddr(remoteAddr)
 		msg.WithLocalAddr(localAddr)
 		msg.WithSerializationType(codec.SerializationTypeNoop)
@@ -1014,9 +1051,9 @@ func TestSameClientAddrDiffServerAddr(t *testing.T) {
 
 	dataFrame := func(localAddr, remoteAddr net.Addr) {
 		ctx, msg := codec.WithNewMessage(context.Background())
-		msg.WithFrameHead(&trpc.FrameHead{StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)})
+		msg.WithFrameHead(&trpc.FrameHead{StreamFrameType: uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)})
 		msg.WithStreamID(200)
-		msg.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{})
+		msg.WithStreamFrame(&trpc.TrpcStreamInitMeta{})
 		msg.WithRemoteAddr(remoteAddr)
 		msg.WithLocalAddr(localAddr)
 		rsp, err := dp.StreamHandleFunc(ctx, nil, &server.StreamServerInfo{}, []byte("data"))
@@ -1042,4 +1079,116 @@ func TestSameClientAddrDiffServerAddr(t *testing.T) {
 	case <-time.After(time.Millisecond * 500): // timed out
 		assert.FailNow(t, "server did not receive data frame")
 	}
+}
+
+func TestServerStreamProfilerTagger(t *testing.T) {
+	tempDir := t.TempDir()
+	profilePath := filepath.Join(tempDir, "cpuprofile.pb.gz")
+
+	// generate profile in profilePath
+	generateProfile(t, profilePath)
+
+	// Parse profile
+	ff, err := os.Open(profilePath)
+	if err != nil {
+		t.Fatal("could not open CPU profile: ", err)
+	}
+	defer ff.Close()
+	p, err := profile.Parse(ff)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Find the corresponding labelValue in the label by labelKey
+	labels := make(map[string]string)
+	for _, sample := range p.Sample {
+		if sample.Label == nil {
+			continue
+		}
+		for k, v := range sample.Label {
+			if len(v) > 0 {
+				labels[k] = v[0]
+			}
+		}
+	}
+	assert.Equal(t, map[string]string{
+		"serviceName": "streamService",
+		"RecvMsg":     "TagRecvMsg",
+		"SendMsg":     "TagSendMsg"},
+		labels)
+}
+
+func generateProfile(t *testing.T, profilePath string) {
+	// Setup CPU profiling.
+	f, err := os.Create(profilePath)
+	if err != nil {
+		t.Fatal("could not create CPU profile:", err)
+	}
+	defer f.Close()
+	if err := pprof.StartCPUProfile(f); err != nil {
+		t.Fatal("could not start CPU profile:", err)
+	}
+	defer pprof.StopCPUProfile()
+
+	handle := func(s server.Stream) error {
+		req := getBytes(1024)
+		for i := 0; i < 1_000_00; i++ {
+			err := s.RecvMsg(req)
+			assert.Nil(t, err)
+		}
+		err := s.RecvMsg(req)
+		assert.Equal(t, io.EOF, err)
+
+		rsp := getBytes(1024)
+		copy(rsp.Data, req.Data)
+		for i := 0; i < 1_000_00; i++ {
+			err = s.SendMsg(rsp)
+			assert.Nil(t, err)
+		}
+		return nil
+	}
+	svr, lis := startStreamServer(t, handle, server.WithStreamProfilerTagger(&serviceNameTagger{}))
+	defer closeStreamServer(svr)
+
+	cliOpts := []client.Option{client.WithTarget("ip://" + lis.Addr().String())}
+	cliStream, err := getClientStream(context.Background(), bidiDesc, cliOpts)
+	assert.Nil(t, err)
+
+	req := getBytes(1024)
+	rand.Read(req.Data)
+	for i := 0; i < 1_000_00; i++ {
+		err = cliStream.SendMsg(req)
+		assert.Nil(t, err)
+	}
+	err = cliStream.CloseSend()
+	assert.Nil(t, err)
+	rsp := getBytes(1024)
+	for i := 0; i < 1_000_00; i++ {
+		err = cliStream.RecvMsg(rsp)
+		assert.Nil(t, err)
+		assert.Equal(t, req, rsp)
+	}
+	err = cliStream.RecvMsg(rsp)
+	assert.Equal(t, io.EOF, err)
+}
+
+type serviceNameTagger struct {
+}
+
+func (t *serviceNameTagger) Tag(ctx context.Context, info *server.StreamServerInfo) (*server.ProfileLabel, error) {
+	profileLabel := server.NewProfileLabel()
+	profileLabel.Store("serviceName", "streamService")
+	return profileLabel, nil
+}
+
+func (t *serviceNameTagger) TagRecvMsg(ctx context.Context) (*server.ProfileLabel, error) {
+	profileLabel := server.NewProfileLabel()
+	profileLabel.Store("RecvMsg", "TagRecvMsg")
+	return profileLabel, nil
+}
+
+func (t *serviceNameTagger) TagSendMsg(ctx context.Context, m interface{}) (*server.ProfileLabel, error) {
+	profileLabel := server.NewProfileLabel()
+	profileLabel.Store("SendMsg", "TagSendMsg")
+	return profileLabel, nil
 }

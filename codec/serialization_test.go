@@ -16,13 +16,14 @@ package codec_test
 import (
 	"testing"
 
+	"git.woa.com/jce/jce"
 	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/stretchr/testify/assert"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
+	trpc "trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 	fb "trpc.group/trpc-go/trpc-go/testdata/fbstest"
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
 )
 
 // go test -v -coverprofile=cover.out
@@ -72,6 +73,20 @@ func TestSerialization(t *testing.T) {
 	err = codec.Unmarshal(codec.SerializationTypeFlatBuffer, []byte("Serializer Unmarshal Body"), body)
 	assert.NotNil(t, err)
 
+	data, err = codec.Marshal(codec.SerializationTypeThriftBinary, body)
+	assert.NotNil(t, err)
+	assert.Nil(t, data)
+
+	err = codec.Unmarshal(codec.SerializationTypeThriftBinary, []byte("Serializer Unmarshal Body"), body)
+	assert.NotNil(t, err)
+
+	data, err = codec.Marshal(codec.SerializationTypeThriftCompact, body)
+	assert.NotNil(t, err)
+	assert.Nil(t, data)
+
+	err = codec.Unmarshal(codec.SerializationTypeThriftCompact, []byte("Serializer Unmarshal Body"), body)
+	assert.NotNil(t, err)
+
 	data, err = codec.Marshal(codec.SerializationTypeUnsupported, body)
 	assert.Nil(t, err)
 	assert.Nil(t, data)
@@ -111,11 +126,30 @@ func TestSerialization(t *testing.T) {
 	err = codec.Unmarshal(codec.SerializationTypeUnsupported, []byte{1, 2}, body)
 	assert.Nil(t, err)
 
-	_, err = codec.Marshal(100009, body)
+	data, err = codec.Marshal(100009, body)
 	assert.NotNil(t, err)
 
 	err = codec.Unmarshal(100009, []byte{1, 2}, body)
 	assert.NotNil(t, err)
+}
+
+func TestMustRegisterSerializer(t *testing.T) {
+	noop := &codec.NoopSerialization{}
+	codec.MustRegisterSerializer(1000, noop)
+
+	t.Run("no registered serializer", func(t *testing.T) {
+		assert.Nil(t, codec.GetSerializer(100))
+	})
+
+	t.Run("registered serializer", func(t *testing.T) {
+		assert.Equal(t, noop, codec.GetSerializer(1000))
+	})
+
+	t.Run("repeat register", func(t *testing.T) {
+		assert.Panics(t, func() {
+			codec.MustRegisterSerializer(1000, noop)
+		})
+	})
 }
 
 func TestJson(t *testing.T) {
@@ -178,7 +212,7 @@ func TestJsonPBNotImplProto(t *testing.T) {
 }
 
 func TestProto(t *testing.T) {
-	p := &trpcpb.RequestProtocol{
+	p := &trpc.RequestProtocol{
 		Version: 1,
 		Func:    []byte("/trpc.test.helloworld.Greeter/SayHello"),
 	}
@@ -186,7 +220,7 @@ func TestProto(t *testing.T) {
 	s := &codec.PBSerialization{}
 	data, err := s.Marshal(p)
 	assert.Nil(t, err)
-	p1 := &trpcpb.RequestProtocol{}
+	p1 := &trpc.RequestProtocol{}
 
 	err = s.Unmarshal(data, p1)
 	assert.Nil(t, err)
@@ -209,6 +243,98 @@ func TestFlatbuffers(t *testing.T) {
 	err = s.Unmarshal(data, req)
 	assert.Nil(t, err)
 	assert.Equal(t, "this is a string", string(req.Message()))
+}
+
+// GetReq struct implement
+// GetReq is code generate by
+// [trpc4videopacket]
+// (https://git.woa.com/trpc-go/trpc-codec/tree/master/videopacket/tools/trpc4videopacket)
+// source jce content:
+//
+// module Hello
+//
+//	{
+//	   struct GetReq {
+//	      0 optional int a;
+//	      1 optional int b;
+//	   };
+//	}
+type GetReq struct {
+	A int32 `json:"a"`
+	B int32 `json:"b"`
+}
+
+func (st *GetReq) ResetDefault() {
+}
+
+// ReadFrom reads  from _is and put into struct.
+func (st *GetReq) ReadFrom(_is *jce.Reader) error {
+	var err error
+	var length int32
+	var have bool
+	var ty byte
+	st.ResetDefault()
+
+	err = _is.Read_int32(&st.A, 0, false)
+	if err != nil {
+		return err
+	}
+
+	err = _is.Read_int32(&st.B, 1, false)
+	if err != nil {
+		return err
+	}
+
+	_ = err
+	_ = length
+	_ = have
+	_ = ty
+	return nil
+}
+
+// WriteTo encode struct to buffer
+func (st *GetReq) WriteTo(_os *jce.Buffer) error {
+	var err error
+	_ = err
+	err = _os.Write_int32(st.A, 0)
+	if err != nil {
+		return err
+	}
+
+	err = _os.Write_int32(st.B, 1)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type GetReqNotJce struct {
+	A int32 `json:"a"`
+	B int32 `json:"b"`
+}
+
+func TestJCE(t *testing.T) {
+	s := codec.GetSerializer(codec.SerializationTypeJCE)
+
+	// 异常用例
+	p1 := &GetReqNotJce{A: 100, B: 1000}
+	data, err := s.Marshal(p1)
+	assert.Nil(t, data)
+
+	p2 := &GetReqNotJce{}
+	err = s.Unmarshal(data, p2)
+	assert.NotNil(t, err)
+
+	// 正常用例
+	p3 := &GetReq{A: 100, B: 1000}
+	data, err = s.Marshal(p3)
+	assert.Nil(t, err)
+
+	p4 := &GetReq{}
+	err = s.Unmarshal(data, p4)
+	assert.Nil(t, err)
+	assert.Equal(t, p3.A, p4.A)
+	assert.Equal(t, p3.B, p4.B)
 }
 
 func TestXML(t *testing.T) {

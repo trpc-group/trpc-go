@@ -3,7 +3,7 @@
 ### start the server
 
 ```shell
-$ go run server/main.go -conf server/trpc_go.yaml 
+go run server/main.go -conf server/trpc_go.yaml 
 ```
 
 ### start the client
@@ -11,7 +11,7 @@ $ go run server/main.go -conf server/trpc_go.yaml
 #### 1. send request with compress type `gzip`
 
 ```shell
-$ go run client/main.go -conf client/trpc_go.yaml -type "gzip"
+go run client/main.go -conf client/trpc_go.yaml -type "gzip"
 ```
 
 The server log will be displayed as follows:
@@ -31,7 +31,7 @@ The client log will be displayed as follows:
 #### 2. send request with compress type `snappy`
 
 ```shell
-$ go run client/main.go -conf client/trpc_go.yaml -type "snappy"
+go run client/main.go -conf client/trpc_go.yaml -type "snappy"
 ```
 
 The server log will be displayed as follows:
@@ -51,7 +51,7 @@ The client log will be displayed as follows:
 #### 3. send request with compress type `zlib`
 
 ```shell
-$ go run client/main.go -conf client/trpc_go.yaml -type "zlib"
+go run client/main.go -conf client/trpc_go.yaml -type "zlib"
 ```
 
 The server log will be displayed as follows:
@@ -71,7 +71,7 @@ The client log will be displayed as follows:
 #### 4. send request with compress type `streamSnappy`
 
 ```shell
-$ go run client/main.go -conf client/trpc_go.yaml -type "streamSnappy"
+go run client/main.go -conf client/trpc_go.yaml -type "streamSnappy"
 ```
 
 The server log will be displayed as follows:
@@ -91,7 +91,7 @@ The client log will be displayed as follows:
 #### 5. send request with compress type `blockSnappy`
 
 ```shell
-$ go run client/main.go -conf client/trpc_go.yaml -type "blockSnappy"
+go run client/main.go -conf client/trpc_go.yaml -type "blockSnappy"
 ```
 
 The server log will be displayed as follows:
@@ -108,11 +108,10 @@ The client log will be displayed as follows:
 2023-05-23 19:39:11.632 INFO    client/main.go:56       reply is: msg:"Hello Hi trpc-go-client"
 ```
 
-
 ### use `rpcz` to check the `RequestSize`
 
 ```shell
-$ curl http://ip:port/cmds/rpcz/spans?num=2
+curl "http://ip:port/cmds/rpcz/spans?num=2"
 
 1:
   span: (server, 2710336014210592128)
@@ -125,6 +124,3 @@ $ curl http://ip:port/cmds/rpcz/spans?num=2
     duration: (0, 68.264µs, 0)
     attributes: (RequestSize, 134),(ResponseSize, 37),(RPCName, /trpc.test.helloworld.Greeter/SayHi),(Error, success)
 ```
-
-
-

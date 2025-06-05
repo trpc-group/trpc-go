@@ -5,7 +5,7 @@ global:                             # global config.
 server:                                            # server configuration.
   app: examples                                    # business application name.
   server: echo                                     # service process name.
-  service:                                         # business service configuration，can have multiple.
+  service:                                         # business service configuration, can have multiple.
     - name: trpc.examples.echo.Echo                # the route name of the service.
       ip: 127.0.0.1                                # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
       nic: eth0                                    # the service listening network card address, if configures ip, you don't need to configure it.

@@ -33,7 +33,7 @@ var (
 	selectors = make(map[string]Selector)
 )
 
-// Register registers a named Selector.
+// Register registers a named Selector, such as l5, cmlb and tseer.
 func Register(name string, s Selector) {
 	selectors[name] = s
 }
@@ -42,8 +42,4 @@ func Register(name string, s Selector) {
 func Get(name string) Selector {
 	s := selectors[name]
 	return s
-}
-
-func unregisterForTesting(name string) {
-	delete(selectors, name)
 }

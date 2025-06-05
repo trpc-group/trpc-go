@@ -18,7 +18,9 @@ import (
 
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/pool/connpool"
+	"trpc.group/trpc-go/trpc-go/pool/httppool"
 	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
+	"trpc.group/trpc-go/trpc-go/transport/internal/dialer"
 )
 
 // RoundTripOptions is the options for one roundtrip.
@@ -36,7 +38,8 @@ type RoundTripOptions struct {
 	EnableMultiplexed     bool // enable multiplexed
 	Multiplexed           multiplexed.Pool
 	Msg                   codec.Msg
-	Protocol              string // protocol type
+	Protocol              string               // protocol type
+	HTTPOpts              HTTPRoundTripOptions // http round trip options
 
 	CACertFile    string // CA certificate file
 	TLSCertFile   string // client certificate file
@@ -44,13 +47,18 @@ type RoundTripOptions struct {
 	TLSServerName string // the name when client verifies the server, default as HTTP hostname
 }
 
+// HTTPRoundTripOptions is the options for one http roundtrip.
+type HTTPRoundTripOptions struct {
+	Pool httppool.Options // http pool options
+}
+
 // ConnectionMode is the connection mode, either Connected or NotConnected.
-type ConnectionMode bool
+type ConnectionMode = dialer.ConnectionMode
 
 // ConnectionMode of UDP.
 const (
-	Connected    = false // UDP which isolates packets from non-same path
-	NotConnected = true  // UDP which allows returning packets from non-same path
+	Connected    = dialer.Connected    // UDP which isolates packets from non-same path
+	NotConnected = dialer.NotConnected // UDP which allows returning packets from non-same path
 )
 
 // RequestType is the client request type, such as SendAndRecv or SendOnly.
@@ -173,5 +181,12 @@ func WithDialTimeout(dur time.Duration) RoundTripOption {
 func WithProtocol(s string) RoundTripOption {
 	return func(o *RoundTripOptions) {
 		o.Protocol = s
+	}
+}
+
+// WithHTTPRoundTripOptions returns a RoundTripOption which sets HTTPRoundTripOptions.
+func WithHTTPRoundTripOptions(h HTTPRoundTripOptions) RoundTripOption {
+	return func(o *RoundTripOptions) {
+		o.HTTPOpts = h
 	}
 }

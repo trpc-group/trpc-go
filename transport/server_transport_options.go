@@ -22,7 +22,6 @@ const (
 	defaultRecvMsgChannelSize      = 100
 	defaultSendMsgChannelSize      = 100
 	defaultRecvUDPPacketBufferSize = 65536
-	defaultIdleTimeout             = time.Minute
 )
 
 // ServerTransportOptions is options of the server transport.
@@ -34,6 +33,8 @@ type ServerTransportOptions struct {
 	IdleTimeout             time.Duration
 	KeepAlivePeriod         time.Duration
 	ReusePort               bool
+
+	EnableH2C bool
 }
 
 // ServerTransportOption modifies the ServerTransportOptions.
@@ -94,6 +95,13 @@ func WithIdleTimeout(timeout time.Duration) ServerTransportOption {
 func WithKeepAlivePeriod(d time.Duration) ServerTransportOption {
 	return func(options *ServerTransportOptions) {
 		options.KeepAlivePeriod = d
+	}
+}
+
+// WithEnableH2C returns a ServerTransportOption which enable h2c.
+func WithEnableH2C(enable bool) ServerTransportOption {
+	return func(options *ServerTransportOptions) {
+		options.EnableH2C = enable
 	}
 }
 

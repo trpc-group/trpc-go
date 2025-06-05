@@ -16,6 +16,7 @@ package codec_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"reflect"
 	"testing"
@@ -23,7 +24,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	trpc "trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
@@ -36,7 +36,7 @@ import (
 
 func TestPutBackMessage(t *testing.T) {
 	ctx := context.Background()
-	_, msg := codec.WithCloneMessage(ctx)
+	ctx, msg := codec.WithCloneMessage(ctx)
 	type foo struct {
 		I int
 	}
@@ -85,7 +85,7 @@ func TestPutBackMessage(t *testing.T) {
 	codec.PutBackMessage(msg)
 
 	ctx2 := context.Background()
-	_, msg2 := codec.WithNewMessage(ctx2)
+	ctx2, msg2 := codec.WithNewMessage(ctx2)
 
 	assert.Nil(t, msg2.FrameHead())
 	assert.Equal(t, time.Duration(0), msg2.RequestTimeout())
@@ -131,22 +131,21 @@ func TestPutBackMessage(t *testing.T) {
 }
 
 func TestRegisterMessage(t *testing.T) {
-	ctx := context.Background()
-	m0 := codec.Message(ctx)
-	assert.NotNil(t, m0)
-	assert.Equal(t, ctx, m0.Context())
-	ctx, m0 = codec.WithCloneMessage(ctx)
-	assert.NotNil(t, m0)
-	assert.Equal(t, ctx, m0.Context())
+	t.Run("Message and WithCloneMessage", func(t *testing.T) {
+		ctx := context.Background()
+		msg := codec.Message(ctx)
+		assert.Equal(t, ctx, msg.Context())
+
+		ctx, msg = codec.WithCloneMessage(ctx)
+		assert.Equal(t, ctx, msg.Context())
+	})
 
 	meta := codec.MetaData{}
-	reqhead := &trpcpb.RequestProtocol{}
-	rsphead := &trpcpb.ResponseProtocol{}
-
 	meta["key"] = []byte("value")
 	clone := meta.Clone()
 	assert.Equal(t, []byte("value"), clone["key"])
 
+	ctx := context.Background()
 	ctx, msg := codec.WithNewMessage(ctx)
 	assert.NotNil(t, msg)
 	assert.NotNil(t, ctx)
@@ -154,21 +153,31 @@ func TestRegisterMessage(t *testing.T) {
 
 	msg.WithRequestTimeout(time.Second)
 	assert.Equal(t, time.Second, msg.RequestTimeout())
+
 	msg.WithSerializationType(codec.SerializationTypePB)
 	assert.Equal(t, codec.SerializationTypePB, msg.SerializationType())
+
 	msg.WithServerRPCName("/package.service/method")
 	msg.WithServerRPCName("/package.service/method") // dup set
 	assert.Equal(t, "/package.service/method", msg.ServerRPCName())
+
 	msg.WithServerMetaData(meta)
 	assert.Equal(t, meta, msg.ServerMetaData())
+
 	msg.WithServerMetaData(nil)
 	assert.NotNil(t, msg.ServerMetaData())
-	msg.WithServerReqHead(reqhead)
-	assert.Equal(t, reqhead, msg.ServerReqHead().(*trpcpb.RequestProtocol))
-	msg.WithServerRspHead(rsphead)
-	assert.Equal(t, rsphead, msg.ServerRspHead().(*trpcpb.ResponseProtocol))
+
+	reqHead := &trpc.RequestProtocol{}
+	msg.WithServerReqHead(reqHead)
+	assert.Equal(t, reqHead, msg.ServerReqHead().(*trpc.RequestProtocol))
+
+	rspHead := &trpc.ResponseProtocol{}
+	msg.WithServerRspHead(rspHead)
+	assert.Equal(t, rspHead, msg.ServerRspHead().(*trpc.ResponseProtocol))
+
 	msg.WithDyeing(true)
 	assert.Equal(t, true, msg.Dyeing())
+
 	msg.WithDyeingKey("hellotrpc")
 	assert.Equal(t, "hellotrpc", msg.DyeingKey())
 
@@ -188,30 +197,43 @@ func TestRegisterMessage(t *testing.T) {
 
 	msg.WithCallerApp("callerApp")
 	assert.Equal(t, "callerApp", msg.CallerApp())
+
 	msg.WithCallerServer("callerServer")
 	assert.Equal(t, "callerServer", msg.CallerServer())
+
 	msg.WithCallerService("callerService")
 	assert.Equal(t, "callerService", msg.CallerService())
+
 	msg.WithCallerMethod("callerMethod")
 	assert.Equal(t, "callerMethod", msg.CallerMethod())
+
 	msg.WithCalleeApp("calleeApp")
 	assert.Equal(t, "calleeApp", msg.CalleeApp())
+
 	msg.WithCalleeServer("calleeServer")
 	assert.Equal(t, "calleeServer", msg.CalleeServer())
+
 	msg.WithCalleeService("calleeService")
 	assert.Equal(t, "calleeService", msg.CalleeService())
+
 	msg.WithCalleeMethod("calleeMethod")
 	assert.Equal(t, "calleeMethod", msg.CalleeMethod())
+
 	msg.WithSetName("setName")
 	assert.Equal(t, "setName", msg.SetName())
+
 	msg.WithCalleeSetName("calleeSetName")
 	assert.Equal(t, "calleeSetName", msg.CalleeSetName())
+
 	msg.WithEnvName("test")
 	assert.Equal(t, "test", msg.EnvName())
+
 	msg.WithNamespace("Production")
 	assert.Equal(t, "Production", msg.Namespace())
+
 	msg.WithEnvTransfer("test-test")
 	assert.Equal(t, "test-test", msg.EnvTransfer())
+
 	msg.WithCalleeContainerName("container")
 	assert.Equal(t, "container", msg.CalleeContainerName())
 
@@ -227,28 +249,37 @@ func TestMoreRegisterMessage(t *testing.T) {
 	meta := codec.MetaData{}
 	commonMeta := codec.CommonMeta{32: []byte("aaa")}
 	ctx, msg := codec.WithNewMessage(ctx)
-	reqhead := &trpcpb.RequestProtocol{}
-	rsphead := &trpcpb.ResponseProtocol{}
+
 	// client codec marshal
 	msg.WithClientRPCName("/package.service/method")
 	msg.WithClientRPCName("/package.service/method") // dup set
 	assert.Equal(t, "/package.service/method", msg.ClientRPCName())
+
 	msg.WithClientMetaData(meta)
 	assert.Equal(t, meta, msg.ClientMetaData())
+
 	msg.WithClientMetaData(nil)
 	assert.NotNil(t, msg.ClientMetaData())
+
 	msg.WithCommonMeta(commonMeta)
 	assert.Equal(t, commonMeta, msg.CommonMeta())
+
 	msg.WithCallerServiceName("package.service")
 	msg.WithCallerServiceName("package.service") // dup set
 	assert.Equal(t, "package.service", msg.CallerServiceName())
+
 	msg.WithCalleeServiceName("package.service")
 	msg.WithCalleeServiceName("package.service") // dup set
 	assert.Equal(t, "package.service", msg.CalleeServiceName())
-	msg.WithClientReqHead(reqhead)
-	assert.Equal(t, reqhead, msg.ClientReqHead().(*trpcpb.RequestProtocol))
-	msg.WithClientRspHead(rsphead)
-	assert.Equal(t, rsphead, msg.ClientRspHead().(*trpcpb.ResponseProtocol))
+
+	reqHead := &trpc.RequestProtocol{}
+	msg.WithClientReqHead(reqHead)
+	assert.Equal(t, reqHead, msg.ClientReqHead().(*trpc.RequestProtocol))
+
+	rspHead := &trpc.ResponseProtocol{}
+	msg.WithClientRspHead(rspHead)
+	assert.Equal(t, rspHead, msg.ClientRspHead().(*trpc.ResponseProtocol))
+
 	msg.WithCompressType(1)
 	assert.Equal(t, msg.CompressType(), 1)
 
@@ -261,7 +292,7 @@ func TestMoreRegisterMessage(t *testing.T) {
 	msg.WithServerRspErr(errs.ErrServerNoResponse)
 	assert.Equal(t, errs.ErrServerNoResponse, msg.ServerRspErr())
 	msg.WithServerRspErr(errors.New("no trpc errs"))
-	assert.EqualValues(t, int32(999), msg.ServerRspErr().Code)
+	assert.Equal(t, int32(999), msg.ServerRspErr().Code)
 
 	m1 := codec.Message(ctx)
 	assert.Equal(t, msg, m1)
@@ -283,14 +314,13 @@ func TestMoreRegisterMessage(t *testing.T) {
 	ctx, m3 := codec.WithNewMessage(ctx)
 	assert.Equal(t, m3, msg)
 	assert.Equal(t, m3.CalleeApp(), "")
-	_, m4 := codec.WithNewMessage(ctx)
+	ctx, m4 := codec.WithNewMessage(ctx)
 	assert.NotEqual(t, m4, m1)
 
 	var fakemsg codec.Msg = nil
 	codec.PutBackMessage(fakemsg)
 }
 
-// TestWithCallerServiceName WithCallerServiceName 单测
 func TestWithCallerServiceName(t *testing.T) {
 	ctx := trpc.BackgroundContext()
 	msg := codec.Message(ctx)
@@ -478,6 +508,33 @@ func TestEnsureMessage(t *testing.T) {
 	require.Equal(t, msg, newMsg)
 }
 
+func TestWithServerRspErrorWrapped(t *testing.T) {
+	const (
+		code        = 666
+		wrappedInfo = "wrapped info"
+	)
+	e := errs.NewFrameError(code, "some error")
+	err := fmt.Errorf("%s: %w", wrappedInfo, e)
+	_, msg := codec.EnsureMessage(context.Background())
+	msg.WithServerRspErr(err)
+	rspErr := msg.ServerRspErr()
+	require.NotNil(t, rspErr)
+	require.EqualValues(t, code, rspErr.Code)
+	require.Contains(t, rspErr.Msg, wrappedInfo)
+}
+
+func TestWithServerRspErrorWrappedNilError(t *testing.T) {
+	const wrappedInfo = "wrapped info"
+	var e *errs.Error
+	err := fmt.Errorf("%s: %w", wrappedInfo, e)
+	_, msg := codec.EnsureMessage(context.Background())
+	msg.WithServerRspErr(err)
+	rspErr := msg.ServerRspErr()
+	require.NotNil(t, rspErr)
+	require.EqualValues(t, errs.Code(e), rspErr.Code)
+	require.Contains(t, rspErr.Msg, wrappedInfo)
+}
+
 func TestSetMethodNameUsingRPCName(t *testing.T) {
 	msg := codec.Message(context.Background())
 	testSetMethodNameUsingRPCName(t, msg, msg.WithServerRPCName)
@@ -494,7 +551,7 @@ func testSetMethodNameUsingRPCName(t *testing.T, msg codec.Msg, msgWithRPCName f
 		{"normal trpc rpc name", "", "/trpc.app.server.service/method", "method"},
 		{"normal http url path", "", "/v1/subject/info/get", "/v1/subject/info/get"},
 		{"invalid trpc rpc name (method name is empty)", "", "trpc.app.server.service", "trpc.app.server.service"},
-		{"invalid trpc rpc name (method name is not mepty)", "/v1/subject/info/get", "trpc.app.server.service", "/v1/subject/info/get"},
+		{"invalid trpc rpc name (method name is not empty)", "/v1/subject/info/get", "trpc.app.server.service", "/v1/subject/info/get"},
 		{"valid trpc rpc name will override existing method name", "/v1/subject/info/get", "/trpc.app.server.service/method", "method"},
 		{"invalid trpc rpc will not override existing method name", "/v1/subject/info/get", "/trpc.app.server.service", "/v1/subject/info/get"},
 	}

@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
+	"trpc.group/trpc-go/trpc-go/codec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"trpc.group/trpc-go/trpc-go/codec"
 )
 
 var (
@@ -51,7 +51,7 @@ func TestInitialMinIdle(t *testing.T) {
 		WithHealthChecker(mockChecker))
 	defer closePool(t, p)
 
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 	require.Nil(t, pc.Close())
 
@@ -79,7 +79,7 @@ func TestKeepMinIdle(t *testing.T) {
 	defer closePool(t, p)
 
 	// clear idle conns
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 	require.Nil(t, pc.Close())
 	start := time.Now()
@@ -91,7 +91,7 @@ func TestKeepMinIdle(t *testing.T) {
 	}
 	cnt := (int)(atomic.LoadInt32(&established))
 	for i := 0; i < cnt; i++ {
-		pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+		pc, err := p.Get(t.Name(), t.Name(), time.Second)
 		assert.Nil(t, err)
 		defer pc.Close()
 	}
@@ -116,7 +116,7 @@ func TestGetTokenWithoutMaxActive(t *testing.T) {
 		WithHealthChecker(mockChecker))
 	defer closePool(t, p)
 
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 	require.Nil(t, pc.Close())
 }
@@ -134,12 +134,12 @@ func TestGetTokenWait(t *testing.T) {
 
 	pcs := make([]net.Conn, 0, maxActive)
 	for i := 0; i < maxActive; i++ {
-		pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+		pc, err := p.Get(t.Name(), t.Name(), time.Second)
 		assert.Nil(t, err)
 		pcs = append(pcs, pc)
 	}
 
-	_, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	_, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Equal(t, err, context.DeadlineExceeded)
 
 	for _, pc := range pcs {
@@ -160,19 +160,19 @@ func TestGetTokenNoWait(t *testing.T) {
 
 	pcs := make([]net.Conn, 0, maxActive)
 	for i := 0; i < maxActive; i++ {
-		pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+		pc, err := p.Get(t.Name(), t.Name(), time.Second)
 		assert.Nil(t, err)
 		pcs = append(pcs, pc)
 	}
 
-	_, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	_, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Equal(t, err, ErrPoolLimit)
 
 	for _, pc := range pcs {
 		require.Nil(t, pc.Close())
 	}
 
-	pc, err2 := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err2 := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err2)
 	require.Nil(t, pc.Close())
 }
@@ -193,7 +193,7 @@ func TestIdleTimeout(t *testing.T) {
 	cnt := 3
 	pcs := make([]net.Conn, 0, cnt)
 	for i := 0; i < cnt; i++ {
-		pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+		pc, err := p.Get(t.Name(), t.Name(), time.Second)
 		require.Nil(t, err)
 		pcs = append(pcs, pc)
 	}
@@ -209,7 +209,7 @@ func TestIdleTimeout(t *testing.T) {
 		}
 		runtime.Gosched()
 	}
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 	require.Equal(t, atomic.LoadInt32(&established), int32(1))
 	require.Nil(t, pc.Close())
@@ -231,7 +231,7 @@ func TestMaxConnLifetime(t *testing.T) {
 	cnt := 3
 	pcs := make([]net.Conn, 0, cnt)
 	for i := 0; i < cnt; i++ {
-		pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+		pc, err := p.Get(t.Name(), t.Name(), time.Second)
 		require.Nil(t, err)
 		pcs = append(pcs, pc)
 	}
@@ -247,7 +247,7 @@ func TestMaxConnLifetime(t *testing.T) {
 		}
 		runtime.Gosched()
 	}
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 	require.Equal(t, atomic.LoadInt32(&established), int32(1))
 	require.Nil(t, pc.Close())
@@ -268,7 +268,7 @@ func TestConcurrencyGet(t *testing.T) {
 		wg.Add(1)
 		idx := i
 		go func() {
-			pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+			pc, err := p.Get(t.Name(), t.Name(), time.Second)
 			assert.Nil(t, err)
 			pcs[idx] = pc
 			wg.Done()
@@ -297,7 +297,7 @@ func TestPutForceClose(t *testing.T) {
 	cnt := 5
 	pcs := make([]net.Conn, 0, cnt)
 	for i := 0; i < cnt; i++ {
-		pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+		pc, err := p.Get(t.Name(), t.Name(), time.Second)
 		require.Nil(t, err)
 		pcs = append(pcs, pc)
 	}
@@ -319,7 +319,7 @@ func TestIdleFifo(t *testing.T) {
 	cnt := 5
 	pcs := make([]net.Conn, 0, cnt)
 	for i := 0; i < cnt; i++ {
-		pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+		pc, err := p.Get(t.Name(), t.Name(), time.Second)
 		require.Nil(t, err)
 		pcs = append(pcs, pc)
 	}
@@ -329,12 +329,12 @@ func TestIdleFifo(t *testing.T) {
 	}
 
 	pcs = make([]net.Conn, 0, cnt)
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 	pcs = append(pcs, pc)
 	created := pc.(*PoolConn).t
 	for i := 1; i < cnt; i++ {
-		pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+		pc, err := p.Get(t.Name(), t.Name(), time.Second)
 		require.Nil(t, err)
 		pcs = append(pcs, pc)
 		require.True(t, created.Before(pc.(*PoolConn).t))
@@ -358,7 +358,7 @@ func TestIdleLifo(t *testing.T) {
 	cnt := 5
 	pcs := make([]net.Conn, 0, cnt)
 	for i := 0; i < cnt; i++ {
-		pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+		pc, err := p.Get(t.Name(), t.Name(), time.Second)
 		require.Nil(t, err)
 		pcs = append(pcs, pc)
 	}
@@ -368,12 +368,12 @@ func TestIdleLifo(t *testing.T) {
 	}
 
 	pcs = make([]net.Conn, 0, cnt)
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 	pcs = append(pcs, pc)
 	created := pc.(*PoolConn).t
 	for i := 1; i < cnt; i++ {
-		pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+		pc, err := p.Get(t.Name(), t.Name(), time.Second)
 		require.Nil(t, err)
 		pcs = append(pcs, pc)
 		require.True(t, created.After(pc.(*PoolConn).t))
@@ -387,7 +387,7 @@ func TestIdleLifo(t *testing.T) {
 
 func TestOverMaxIdle(t *testing.T) {
 	var established int32
-	maxIdle := 5
+	maxIdle := 50
 	p := NewConnectionPool(
 		WithMaxIdle(maxIdle),
 		WithDialFunc(func(*DialOptions) (net.Conn, error) {
@@ -399,10 +399,10 @@ func TestOverMaxIdle(t *testing.T) {
 		WithHealthChecker(mockChecker))
 	defer closePool(t, p)
 
-	cnt := 10
+	cnt := 100
 	pcs := make([]net.Conn, 0, cnt)
 	for i := 0; i < cnt; i++ {
-		pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+		pc, err := p.Get(t.Name(), t.Name(), time.Second)
 		assert.Nil(t, err)
 		pcs = append(pcs, pc)
 	}
@@ -428,7 +428,7 @@ func TestPoolClose(t *testing.T) {
 	cnt := 10
 	pcs := make([]net.Conn, 0, cnt)
 	for i := 0; i < cnt; i++ {
-		pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+		pc, err := p.Get(t.Name(), t.Name(), time.Second)
 		assert.Nil(t, err)
 		pcs = append(pcs, pc)
 	}
@@ -447,13 +447,13 @@ func TestGetAfterPoolClose(t *testing.T) {
 		}),
 		WithHealthChecker(mockChecker))
 
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 	require.Nil(t, pc.Close())
 
 	closePool(t, p)
 
-	_, err2 := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	_, err2 := p.Get(t.Name(), t.Name(), time.Second)
 	require.Equal(t, err2, ErrPoolClosed)
 }
 
@@ -469,7 +469,7 @@ func TestCloseConnAfterPoolClose(t *testing.T) {
 		WithHealthChecker(mockChecker))
 	defer closePool(t, p)
 
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 
 	closePool(t, p)
@@ -490,7 +490,7 @@ func TestCloseConnAfterConnCloseWithForceClose(t *testing.T) {
 		WithForceClose(true))
 	defer closePool(t, p)
 
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 	require.Nil(t, pc.Close())
 	require.Equal(t, atomic.LoadInt32(&established), int32(0))
@@ -509,7 +509,7 @@ func TestCloseConnAfterConnCloseWithoutForceClose(t *testing.T) {
 		WithHealthChecker(mockChecker))
 	defer closePool(t, p)
 
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 	require.Nil(t, pc.Close())
 	require.Equal(t, pc.Close(), ErrConnInPool)
@@ -524,7 +524,7 @@ func TestReadFrameAfterClosed(t *testing.T) {
 		WithForceClose(true))
 	defer closePool(t, p)
 
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 	require.Nil(t, pc.Close())
 
@@ -541,7 +541,7 @@ func TestReadFrameWithoutFramer(t *testing.T) {
 		WithForceClose(true))
 	defer closePool(t, p)
 
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 	_, err2 := pc.(codec.Framer).ReadFrame()
 	require.Equal(t, err2, ErrFrameSet)
@@ -557,10 +557,7 @@ func TestReadFrameFailed(t *testing.T) {
 		WithForceClose(true))
 	defer closePool(t, p)
 
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader,
-		DialTimeout:   time.Second,
-		FramerBuilder: &noopFramerBuilder{false},
-	})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second, WithFramerBuilder(&noopFramerBuilder{false}))
 	require.Nil(t, err)
 	_, err2 := pc.(codec.Framer).ReadFrame()
 	require.Equal(t, err2, ErrReamFrame)
@@ -575,10 +572,7 @@ func TestReadFrameWithCopyFrame(t *testing.T) {
 		WithHealthChecker(mockChecker),
 		WithForceClose(true))
 
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader,
-		DialTimeout:   time.Second,
-		FramerBuilder: &noopFramerBuilder{true},
-	})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second, WithFramerBuilder(&noopFramerBuilder{true}))
 	require.Nil(t, err)
 	_, err2 := pc.(codec.Framer).ReadFrame()
 	require.Nil(t, err2)
@@ -594,7 +588,7 @@ func TestWriteAfterClosed(t *testing.T) {
 		WithForceClose(true))
 	defer closePool(t, p)
 
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 	require.Nil(t, pc.Close())
 
@@ -613,7 +607,7 @@ func TestWriteFailed(t *testing.T) {
 		WithForceClose(true))
 	defer closePool(t, p)
 
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 
 	buf := make([]byte, 1)
@@ -631,7 +625,7 @@ func TestReadAfterClosed(t *testing.T) {
 		WithForceClose(true))
 	defer closePool(t, p)
 
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 	require.Nil(t, pc.Close())
 
@@ -651,7 +645,7 @@ func TestReadFailed(t *testing.T) {
 		WithForceClose(true))
 	defer closePool(t, p)
 
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 
 	buf := make([]byte, 1)
@@ -670,7 +664,7 @@ func TestReadFailedFreeToken(t *testing.T) {
 		WithForceClose(true))
 	defer closePool(t, p)
 
-	pc, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 	require.Equal(t, 1, len(pc.(*PoolConn).pool.token))
 
@@ -704,7 +698,7 @@ func TestConnPoolIdleTimeout(t *testing.T) {
 
 	assert.Equal(t, 0, getSize(p))
 
-	c, err := p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	c, err := p.Get(t.Name(), t.Name(), time.Second)
 	assert.Nil(t, err)
 	assert.NotNil(t, c)
 	assert.Nil(t, c.Close())
@@ -713,8 +707,8 @@ func TestConnPoolIdleTimeout(t *testing.T) {
 	time.Sleep(poolIdleTimeout + defaultCheckInterval)
 	assert.Equal(t, 0, getSize(p))
 
-	// get again
-	c, err = p.Get(t.Name(), t.Name(), GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	//get again
+	c, err = p.Get(t.Name(), t.Name(), time.Second)
 	assert.Nil(t, err)
 	assert.NotNil(t, c)
 	assert.Nil(t, c.Close())
@@ -728,7 +722,7 @@ func TestConnPoolTokenFreeOnReadFrameError(t *testing.T) {
 		}),
 		WithMaxActive(maxActive),
 	)
-	c, err := p.Get(t.Name(), t.Name(), GetOptions{DialTimeout: time.Second})
+	c, err := p.Get(t.Name(), t.Name(), time.Second)
 	require.Nil(t, err)
 	pc, ok := c.(*PoolConn)
 	require.True(t, ok)
@@ -758,6 +752,33 @@ func TestConnPoolTokenFreeOnReadFrameError(t *testing.T) {
 		err = errTimeout
 	}
 	require.False(t, errors.Is(err, errTimeout))
+}
+
+func TestConnPoolGetConnFailure(t *testing.T) {
+	idleTimeout := time.Millisecond * 100
+	poolIdleTimeout := time.Millisecond * 100
+	p := NewConnectionPool(
+		WithDialFunc(func(*DialOptions) (net.Conn, error) {
+			return nil, errors.New("Not Connected")
+		}),
+		WithIdleTimeout(idleTimeout),
+		WithPoolIdleTimeout(poolIdleTimeout))
+	c, err := p.Get(t.Name(), t.Name(), time.Second)
+	assert.NotNil(t, err)
+	assert.Nil(t, c)
+	getSize := func(p Pool) int {
+		pool, ok := p.(*pool)
+		assert.Equal(t, true, ok)
+		var count int
+		pool.connectionPools.Range(func(key, value interface{}) bool {
+			count++
+			return true
+		})
+		return count
+	}
+	assert.Equal(t, 1, getSize(p))
+	time.Sleep(poolIdleTimeout + defaultCheckInterval)
+	assert.Equal(t, 0, getSize(p))
 }
 
 func closePool(t *testing.T, p Pool) {

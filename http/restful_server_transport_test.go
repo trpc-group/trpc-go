@@ -55,7 +55,7 @@ func TestCompatibility(t *testing.T) {
 		server.WithServiceName(serviceName),
 		server.WithProtocol("restful"),
 	)
-	s.AddService(serviceName, service)
+	s.AddService("trpc.test.helloworld.Greeter", service)
 	helloworld.RegisterGreeterService(s, &greeterServerImpl{})
 
 	go func() { require.Nil(t, s.Serve()) }()
@@ -71,7 +71,7 @@ func TestCompatibility(t *testing.T) {
 	)
 
 	// Sends restful request.
-	req1, err := http.NewRequest("POST", url+"/v1/foobar",
+	req1, err := http.NewRequest(http.MethodPost, url+"/v1/foobar",
 		bytes.NewBuffer([]byte(`{"name": "xyz"}`)))
 	require.Nil(t, err)
 	cli := http.Client{}
@@ -87,7 +87,7 @@ func TestCompatibility(t *testing.T) {
 	})
 
 	// Sends restful request.
-	req2, err := http.NewRequest("POST", url+"/v1/foobar",
+	req2, err := http.NewRequest(http.MethodPost, url+"/v1/foobar",
 		bytes.NewBuffer([]byte(`{"name": "xyz"}`)))
 	require.Nil(t, err)
 	resp2, err := cli.Do(req2)
@@ -140,7 +140,7 @@ func TestEnableTLS(t *testing.T) {
 		},
 	}
 
-	req, err := http.NewRequest("POST", url+"/v1/foobar",
+	req, err := http.NewRequest(http.MethodPost, url+"/v1/foobar",
 		bytes.NewBuffer([]byte(`{"name": "xyz"}`)))
 	require.Nil(t, err)
 
@@ -157,16 +157,6 @@ func TestEnableTLS(t *testing.T) {
 	respBody := &responseBody{}
 	json.Unmarshal(bodyBytes, respBody)
 	require.Equal(t, respBody.Message, "test restful server transport")
-}
-
-func TestReplaceRouter(t *testing.T) {
-	st := thttp.NewRESTServerTransport(true, transport.WithReusePort(true))
-	restful.RegisterRouter("replacing", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	restful.RegisterRouter("no_replacing", restful.NewRouter())
-	err := st.ListenAndServe(context.Background(), transport.WithServiceName("replacing"))
-	require.NotNil(t, err)
-	err = st.ListenAndServe(context.Background(), transport.WithServiceName("no_replacing"))
-	require.Nil(t, err)
 }
 
 var (
@@ -270,7 +260,7 @@ func TestPassListenerUseTLS(t *testing.T) {
 		},
 	}
 
-	req, err := http.NewRequest("POST", url+"/v1/foobar",
+	req, err := http.NewRequest(http.MethodPost, url+"/v1/foobar",
 		bytes.NewBuffer([]byte(`{"name": "xyz"}`)))
 	require.Nil(t, err)
 
@@ -300,6 +290,59 @@ func TestListenAndServeInvalidAddrErr(t *testing.T) {
 	)
 	s.AddService(serviceName, service)
 	require.NotNil(t, s.Serve())
+}
+
+func TestRESTfulListenAndServeOptions(t *testing.T) {
+	routerName := t.Name()
+	restful.RegisterRouter(routerName, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	st := thttp.NewRESTServerTransportBasedOnStdHTTP(
+		func() *http.Server {
+			return &http.Server{}
+		},
+		thttp.WithReusePort(),
+	)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	defer ln.Close()
+	ctx := context.Background()
+	go func() {
+		if err := st.ListenAndServe(
+			ctx,
+			transport.WithListener(ln),
+			transport.WithServerIdleTimeout(time.Second),
+			transport.WithServeTLS("../testdata/server.crt", "../testdata/server.key", ""),
+			transport.WithDisableKeepAlives(true),
+			transport.WithServiceName(routerName),
+		); err != nil {
+			t.Logf("listen and serve error: %v", err)
+		}
+	}()
+	time.Sleep(50 * time.Millisecond)
+}
+
+func TestRESTfulListenAndServeOptionsFastHTTP(t *testing.T) {
+	st := thttp.NewRestServerFastHTTPTransport(
+		func() *fasthttp.Server {
+			return &fasthttp.Server{}
+		},
+		thttp.WithReusePort(),
+	)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	defer ln.Close()
+	ctx := context.Background()
+	go func() {
+		if err := st.ListenAndServe(
+			ctx,
+			transport.WithListener(ln),
+			transport.WithServerIdleTimeout(time.Second),
+			transport.WithServeTLS("../testdata/server.crt", "../testdata/server.key", ""),
+			transport.WithDisableKeepAlives(true),
+		); err != nil {
+			t.Logf("listen and serve error: %v", err)
+		}
+	}()
+	time.Sleep(50 * time.Millisecond)
 }
 
 type greeterServerImpl struct{}

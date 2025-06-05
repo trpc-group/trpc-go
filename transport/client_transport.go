@@ -18,17 +18,13 @@ import (
 	"fmt"
 
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/pool/connpool"
 	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
 )
 
-func init() {
-	RegisterClientTransport(transportName, DefaultClientTransport)
-	RegisterClientStreamTransport(transportName, DefaultClientStreamTransport)
-}
-
 // DefaultClientTransport is the default client transport.
-var DefaultClientTransport = NewClientTransport()
+var DefaultClientTransport = NewClientStreamTransport()
 
 // NewClientTransport creates a new ClientTransport.
 func NewClientTransport(opt ...ClientTransportOption) ClientTransport {
@@ -39,7 +35,7 @@ func NewClientTransport(opt ...ClientTransportOption) ClientTransport {
 // newClientTransport creates a new clientTransport.
 func newClientTransport(opt ...ClientTransportOption) clientTransport {
 	// the default options.
-	opts := &ClientTransportOptions{}
+	opts := defaultClientTransportOptions()
 
 	// use opt to modify the opts.
 	for _, o := range opt {
@@ -80,9 +76,9 @@ func (c *clientTransport) RoundTrip(ctx context.Context, req []byte,
 	}
 
 	switch opts.Network {
-	case "tcp", "tcp4", "tcp6", "unix":
+	case protocol.TCP, protocol.TCP4, protocol.TCP6, protocol.UNIX:
 		return c.tcpRoundTrip(ctx, req, opts)
-	case "udp", "udp4", "udp6":
+	case protocol.UDP, protocol.UDP4, protocol.UDP6:
 		return c.udpRoundTrip(ctx, req, opts)
 	default:
 		return nil, errs.NewFrameError(errs.RetClientConnectFail,

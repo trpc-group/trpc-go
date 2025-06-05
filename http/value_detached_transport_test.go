@@ -15,7 +15,6 @@ package http
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptrace"
@@ -24,10 +23,34 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
+	"trpc.group/trpc-go/trpc-go/pool/httppool"
+	"trpc.group/trpc-go/trpc-go/transport"
 )
+
+func TestNewValueDetachedTransportWithOpts(t *testing.T) {
+	httpRoundTripper := newValueDetachedTransport(&http.Transport{})
+	httpRoundTripper = roundTripperWithOptions(httpRoundTripper, transport.RoundTripOptions{
+		HTTPOpts: transport.HTTPRoundTripOptions{
+			Pool: httppool.Options{
+				MaxIdleConns:        100,
+				MaxIdleConnsPerHost: 10,
+				MaxConnsPerHost:     20,
+				IdleConnTimeout:     time.Second,
+			},
+		},
+	})
+	vdt, ok := httpRoundTripper.(*valueDetachedTransport)
+	require.True(t, ok)
+	httpTransport, ok := vdt.RoundTripper.(*http.Transport)
+	require.True(t, ok)
+	require.Equal(t, 100, httpTransport.MaxIdleConns)
+	require.Equal(t, 10, httpTransport.MaxIdleConnsPerHost)
+	require.Equal(t, 20, httpTransport.MaxConnsPerHost)
+	require.Equal(t, time.Second, httpTransport.IdleConnTimeout)
+}
 
 func TestValueDetachedTransport(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -72,7 +95,7 @@ func TestValueDetachedTransport(t *testing.T) {
 	httpClientTransport.Client.Transport = &testTransport{
 		RoundTripper: httpClientTransport.Client.Transport,
 		assertFunc: func(request *http.Request) {
-			t.Log(fmt.Sprintf("%+v", request))
+			t.Logf("%+v", request)
 			ctx := request.Context()
 			// Can get data.
 			if ctx.Value(contextType{}) == nil {
@@ -101,9 +124,7 @@ func TestValueDetachedTransport(t *testing.T) {
 
 type handler struct{}
 
-func (h *handler) ServeHTTP(http.ResponseWriter, *http.Request) {
-	return
-}
+func (h *handler) ServeHTTP(http.ResponseWriter, *http.Request) {}
 
 type testTransport struct {
 	http.RoundTripper

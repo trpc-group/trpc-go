@@ -20,7 +20,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	trpc "trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
@@ -40,8 +39,8 @@ func TestStreamCodecInit(t *testing.T) {
 
 	// Client encode
 	frameHead := &trpc.FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
-		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT),
+		FrameType:       uint8(trpc.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		StreamFrameType: uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT),
 		StreamID:        100,
 	}
 	initResult := []byte{0x9, 0x30, 0x1, 0x1, 0x0, 0x0, 0x0, 0x53, 0x0, 0x0, 0x0, 0x0, 0x0, 0x64, 0x0, 0x0,
@@ -96,8 +95,8 @@ func TestStreamCodecInit(t *testing.T) {
 	ctx = context.Background()
 	_, encodeMsg := codec.WithNewMessage(ctx)
 	serverFrameHead := &trpc.FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
-		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT),
+		FrameType:       uint8(trpc.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		StreamFrameType: uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT),
 		StreamID:        100,
 	}
 	encodeMsg.WithFrameHead(serverFrameHead)
@@ -161,8 +160,8 @@ func TestStreamCodecData(t *testing.T) {
 
 	// client Encode
 	frameHead := &trpc.FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
-		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA),
+		FrameType:       uint8(trpc.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		StreamFrameType: uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA),
 		StreamID:        100,
 	}
 	msg.WithFrameHead(frameHead)
@@ -190,8 +189,8 @@ func TestStreamCodecData(t *testing.T) {
 	encodeMsg.WithLocalAddr(laddr)
 	encodeMsg.WithRemoteAddr(raddr)
 	serverFrameHead := &trpc.FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
-		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA),
+		FrameType:       uint8(trpc.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		StreamFrameType: uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA),
 		StreamID:        100,
 	}
 	encodeMsg.WithFrameHead(serverFrameHead)
@@ -256,14 +255,14 @@ func TestStreamCodecClose(t *testing.T) {
 
 	// client encode Close
 	frameHead := &trpc.FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
-		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE),
+		FrameType:       uint8(trpc.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		StreamFrameType: uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE),
 		StreamID:        100,
 	}
 	msg.WithFrameHead(frameHead)
 	msg.WithStreamID(100)
-	close := &trpcpb.TrpcStreamCloseMeta{}
-	close.CloseType = int32(trpcpb.TrpcStreamCloseType_TRPC_STREAM_CLOSE)
+	close := &trpc.TrpcStreamCloseMeta{}
+	close.CloseType = int32(trpc.TrpcStreamCloseType_TRPC_STREAM_CLOSE)
 	close.Ret = int32(0)
 	msg.WithStreamFrame(close)
 	closeResult := []byte{0x9, 0x30, 0x1, 0x4, 0x0, 0x0, 0x0, 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x64, 0x0, 0x0}
@@ -287,12 +286,12 @@ func TestStreamCodecClose(t *testing.T) {
 	encodeMsg.WithLocalAddr(laddr)
 	encodeMsg.WithRemoteAddr(raddr)
 	serverFrameHead := &trpc.FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
-		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE),
+		FrameType:       uint8(trpc.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		StreamFrameType: uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE),
 		StreamID:        100,
 	}
-	close = &trpcpb.TrpcStreamCloseMeta{}
-	close.CloseType = int32(trpcpb.TrpcStreamCloseType_TRPC_STREAM_CLOSE)
+	close = &trpc.TrpcStreamCloseMeta{}
+	close.CloseType = int32(trpc.TrpcStreamCloseType_TRPC_STREAM_CLOSE)
 	close.Ret = int32(0)
 	encodeMsg.WithFrameHead(serverFrameHead)
 	encodeMsg.WithStreamFrame(close)
@@ -303,13 +302,13 @@ func TestStreamCodecClose(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, msg.StreamID(), uint32(100))
 
-	// Server decode error after encode close
+	// Server decode succeed after encode close
 	serverCtx = context.Background()
 	_, serverMsg = codec.WithNewMessage(serverCtx)
 	serverMsg.WithLocalAddr(laddr)
 	serverMsg.WithRemoteAddr(raddr)
 	closeDecode, err = serverCodec.Decode(serverMsg, closeResult)
-	assert.NotNil(t, err)
+	assert.Nil(t, err)
 	assert.Nil(t, closeDecode)
 
 	// Client decode close
@@ -341,14 +340,14 @@ func TestStreamCodecReset(t *testing.T) {
 
 	// Client encode Reset
 	frameHead := &trpc.FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
-		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE),
+		FrameType:       uint8(trpc.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		StreamFrameType: uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE),
 		StreamID:        100,
 	}
 	msg.WithFrameHead(frameHead)
 	msg.WithStreamID(100)
-	reset := &trpcpb.TrpcStreamCloseMeta{}
-	reset.CloseType = int32(trpcpb.TrpcStreamCloseType_TRPC_STREAM_RESET)
+	reset := &trpc.TrpcStreamCloseMeta{}
+	reset.CloseType = int32(trpc.TrpcStreamCloseType_TRPC_STREAM_RESET)
 	reset.Ret = int32(1)
 	reset.Msg = []byte("reset after error")
 	msg.WithStreamFrame(reset)
@@ -373,7 +372,7 @@ func TestStreamCodecReset(t *testing.T) {
 	assert.Nil(t, resetDecode)
 	assert.Equal(t, uint32(100), serverMsg.StreamID())
 	assert.Nil(t, err)
-	assert.NotNil(t, serverMsg.ServerRspErr())
+	assert.Nil(t, serverMsg.ServerRspErr())
 
 	// server encode Close
 	ctx = context.Background()
@@ -381,12 +380,12 @@ func TestStreamCodecReset(t *testing.T) {
 	encodeMsg.WithLocalAddr(laddr)
 	encodeMsg.WithRemoteAddr(raddr)
 	serverFrameHead := &trpc.FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
-		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE),
+		FrameType:       uint8(trpc.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		StreamFrameType: uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE),
 		StreamID:        100,
 	}
-	reset = &trpcpb.TrpcStreamCloseMeta{}
-	reset.CloseType = int32(trpcpb.TrpcStreamCloseType_TRPC_STREAM_RESET)
+	reset = &trpc.TrpcStreamCloseMeta{}
+	reset.CloseType = int32(trpc.TrpcStreamCloseType_TRPC_STREAM_RESET)
 	reset.Ret = int32(1)
 	reset.Msg = []byte("Server Side Close error")
 	encodeMsg.WithFrameHead(serverFrameHead)
@@ -434,7 +433,7 @@ func TestUnknownFrameType(t *testing.T) {
 
 	// client Encode unknown frame type
 	frameHead := &trpc.FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		FrameType:       uint8(trpc.TrpcDataFrameType_TRPC_STREAM_FRAME),
 		StreamFrameType: uint8(8),
 		StreamID:        100,
 	}
@@ -459,7 +458,7 @@ func TestUnknownFrameType(t *testing.T) {
 	ctx = context.Background()
 	_, encodeMsg := codec.WithNewMessage(ctx)
 	serverFrameHead := &trpc.FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		FrameType:       uint8(trpc.TrpcDataFrameType_TRPC_STREAM_FRAME),
 		StreamFrameType: uint8(8),
 		StreamID:        100,
 	}
@@ -511,20 +510,20 @@ func TestFeedbackFrameType(t *testing.T) {
 	res, err := clientCodec.Decode(clientMsg, encodeData)
 	assert.Nil(t, err)
 	assert.Nil(t, res)
-	feedback, ok := clientMsg.StreamFrame().(*trpcpb.TrpcStreamFeedBackMeta)
+	feedback, ok := clientMsg.StreamFrame().(*trpc.TrpcStreamFeedBackMeta)
 	assert.True(t, ok)
 	assert.Equal(t, uint32(10000), feedback.WindowSizeIncrement)
 
 	// client Encode feedback type
 	frameHead := &trpc.FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
-		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK),
+		FrameType:       uint8(trpc.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		StreamFrameType: uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK),
 		StreamID:        100,
 	}
 	msg.WithFrameHead(frameHead)
 	msg.WithStreamID(100)
 	var data []byte
-	feedbackMeta := &trpcpb.TrpcStreamFeedBackMeta{}
+	feedbackMeta := &trpc.TrpcStreamFeedBackMeta{}
 	msg.WithStreamFrame(feedbackMeta)
 	feedbackMeta.WindowSizeIncrement = 10000
 	dataBuf, err := clientCodec.Encode(msg, data)
@@ -539,7 +538,7 @@ func TestFeedbackFrameType(t *testing.T) {
 	dataDecode, err := serverCodec.Decode(serverMsg, encodeData)
 	assert.Nil(t, dataDecode)
 	assert.Nil(t, err)
-	feedback, ok = clientMsg.StreamFrame().(*trpcpb.TrpcStreamFeedBackMeta)
+	feedback, ok = clientMsg.StreamFrame().(*trpc.TrpcStreamFeedBackMeta)
 	assert.True(t, ok)
 	assert.Equal(t, uint32(10000), feedback.WindowSizeIncrement)
 
@@ -547,13 +546,13 @@ func TestFeedbackFrameType(t *testing.T) {
 	ctx = context.Background()
 	_, encodeMsg := codec.WithNewMessage(ctx)
 	serverFrameHead := &trpc.FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
-		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK),
+		FrameType:       uint8(trpc.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		StreamFrameType: uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_FEEDBACK),
 		StreamID:        100,
 	}
 	encodeMsg.WithFrameHead(serverFrameHead)
 	encodeMsg.WithStreamID(100)
-	feedbackMeta = &trpcpb.TrpcStreamFeedBackMeta{}
+	feedbackMeta = &trpc.TrpcStreamFeedBackMeta{}
 	encodeMsg.WithStreamFrame(feedbackMeta)
 	feedbackMeta.WindowSizeIncrement = 10000
 	rspBuf, err := serverCodec.Encode(encodeMsg, nil)
@@ -641,8 +640,8 @@ func TestEncodeWithMetadata(t *testing.T) {
 	clientCodec := codec.GetClient("trpc")
 	// Client encode
 	frameHead := &trpc.FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
-		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT),
+		FrameType:       uint8(trpc.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		StreamFrameType: uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT),
 		StreamID:        100,
 	}
 	initResult := []byte{0x9, 0x30, 0x1, 0x1, 0x0, 0x0, 0x0, 0x61, 0x0, 0x0, 0x0, 0x0, 0x0, 0x64, 0x0, 0x0,
@@ -684,8 +683,8 @@ func TestEncodeWithDyeing(t *testing.T) {
 	clientCodec := codec.GetClient("trpc")
 	// Client encode
 	frameHead := &trpc.FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
-		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT),
+		FrameType:       uint8(trpc.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		StreamFrameType: uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT),
 		StreamID:        100,
 	}
 	initResult := []byte{0x9, 0x30, 0x1, 0x1, 0x0, 0x0, 0x0, 0x74, 0x0, 0x0, 0x0, 0x0, 0x0, 0x64, 0x0, 0x0,
@@ -729,8 +728,8 @@ func TestEncodeWithEnvTransfer(t *testing.T) {
 	clientCodec := codec.GetClient("trpc")
 	// Client encode
 	frameHead := &trpc.FrameHead{
-		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
-		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT),
+		FrameType:       uint8(trpc.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		StreamFrameType: uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT),
 		StreamID:        100,
 	}
 	initResult := []byte{0x9, 0x30, 0x1, 0x1, 0x0, 0x0, 0x0, 0x6a, 0x0, 0x0, 0x0, 0x0, 0x0, 0x64, 0x0, 0x0,

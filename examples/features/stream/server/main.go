@@ -15,13 +15,16 @@
 // the client and server can establish a continuous connection to send and receive data continuously,
 // allowing the server to provide continuous responses
 // this file is stream RPC server samples.
+//
+//go:generate trpc create -p ./proto/helloworld.proto --api-version 2 --rpconly -o ./proto --protodir . --mock=false
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	pb "trpc.group/trpc-go/trpc-go/examples/features/stream/proto"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/server"
@@ -33,7 +36,7 @@ func main() {
 	s := trpc.NewServer(server.WithMaxWindowSize(1 * 1024 * 1024))
 
 	// Register the current implementation into the service object.
-	pb.RegisterTestStreamService(s, &testStreamImpl{})
+	pb.RegisterTestStreamService(s.Service("trpc.examples.stream.TestStream"), &testStreamImpl{})
 
 	// Start the service and block here.
 	if err := s.Serve(); err != nil {
@@ -44,6 +47,12 @@ func main() {
 // testStreamImpl TestStream service implement.
 type testStreamImpl struct {
 	pb.UnimplementedTestStream
+}
+
+func (s *testStreamImpl) UnaryCall(_ context.Context, req *pb.HelloReq) (*pb.HelloRsp, error) {
+	return &pb.HelloRsp{
+		Msg: req.Msg,
+	}, nil
 }
 
 // ClientStream Client-side streaming,
@@ -95,11 +104,12 @@ func (s *testStreamImpl) BidirectionalStream(stream pb.TestStream_BidirectionalS
 			return nil
 		}
 		if err != nil {
-			log.Errorf("ClientStream receive error: %v", err)
+			log.Errorf("BidirectionalStream receive error: %s", err)
 			return err
 		}
 		log.Infof("BidirectionalStream receive Msg: %s", req.GetMsg())
-		if err = stream.Send(&pb.HelloRsp{Msg: fmt.Sprintf("pong: :%v", req.GetMsg())}); err != nil {
+		if err := stream.Send(&pb.HelloRsp{Msg: fmt.Sprintf("pong: %v", req.GetMsg())}); err != nil {
+			log.Errorf("BidirectionalStream send error: %s", err)
 			return err
 		}
 	}

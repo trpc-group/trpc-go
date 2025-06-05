@@ -16,13 +16,15 @@ package discovery
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"trpc.group/trpc-go/trpc-go/naming/registry"
 )
 
 func TestIpDiscovery(t *testing.T) {
+	const serviceName = "ipDiscovery.ip.62:8989"
 	d := &IPDiscovery{}
-	list, err := d.List("ipdiscovery.ip.62:8989", nil)
-	assert.Nil(t, err)
-	assert.Equal(t, len(list), 1)
-	assert.Equal(t, list[0].Address, "ipdiscovery.ip.62:8989")
+	nodes, err := d.List(serviceName, nil)
+	require.Nil(t, err)
+	require.Equal(t, []*registry.Node{{ServiceName: serviceName, Address: serviceName}}, nodes)
 }

@@ -52,6 +52,7 @@ func TestOptions(t *testing.T) {
 	WithDestinationMetadata("dstMeta", "value")(opts)
 	WithEnvTransfer("env_transfer")(opts)
 	WithLoadBalanceType("hash")(opts)
+	WithBroadcast(true)(opts)
 
 	assert.Equal(t, opts.Ctx, ctx)
 	assert.Equal(t, opts.SourceSetName, "set")
@@ -73,4 +74,5 @@ func TestOptions(t *testing.T) {
 	assert.Equal(t, opts.DestinationMetadata["dstMeta"], "value")
 	assert.Equal(t, opts.EnvTransfer, "env_transfer")
 	assert.Len(t, opts.LoadBalanceOptions, 5)
+	assert.True(t, opts.Broadcast)
 }

@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"trpc.group/trpc-go/trpc-go/codec"
 )
 
 const network = "tcp"
@@ -39,7 +38,7 @@ func TestRemoteEOF(t *testing.T) {
 		WithForceClose(true))
 	defer closePool(t, p)
 
-	pc, err := p.Get(network, s.addr, GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(network, s.addr, time.Second)
 	require.Nil(t, err)
 
 	clientConn := pc.(*PoolConn).GetRawConn()
@@ -64,7 +63,7 @@ func TestUnexpectedRead(t *testing.T) {
 		WithHealthChecker(mockChecker))
 	defer closePool(t, p)
 
-	pc, err := p.Get(network, s.addr, GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(network, s.addr, time.Second)
 	require.Nil(t, err)
 
 	clientConn := pc.(*PoolConn).GetRawConn()
@@ -97,7 +96,7 @@ func TestEAGAIN(t *testing.T) {
 		WithForceClose(true))
 	defer closePool(t, p)
 
-	pc, err := p.Get(network, s.addr, GetOptions{CustomReader: codec.NewReader, DialTimeout: time.Second})
+	pc, err := p.Get(network, s.addr, time.Second)
 	require.Nil(t, err)
 
 	clientConn := pc.(*PoolConn).GetRawConn()

@@ -105,6 +105,12 @@ func ReportSingleDimensionMetrics(name string, value float64, policy Policy, opt
 	}, opts...)
 }
 
+// NewMultiDimensionMetrics creates a Record with multiple dimensions and metrics.
+// Deprecated use NewMultiDimensionMetricsX instead.
+func NewMultiDimensionMetrics(dimensions []*Dimension, metrics []*Metrics) Record {
+	return NewMultiDimensionMetricsX("", dimensions, metrics)
+}
+
 // NewMultiDimensionMetricsX creates a named Record with multiple dimensions and metrics.
 func NewMultiDimensionMetricsX(name string, dimensions []*Dimension, metrics []*Metrics) Record {
 	return Record{
@@ -112,6 +118,16 @@ func NewMultiDimensionMetricsX(name string, dimensions []*Dimension, metrics []*
 		dimensions: dimensions,
 		metrics:    metrics,
 	}
+}
+
+// ReportMultiDimensionMetrics creates and reports a Record with multiple dimensions and metrics.
+// Deprecated use ReportMultiDimensionMetricsX instead.
+func ReportMultiDimensionMetrics(
+	dimensions []*Dimension,
+	metrics []*Metrics,
+	opts ...Option,
+) error {
+	return ReportMultiDimensionMetricsX("", dimensions, metrics, opts...)
 }
 
 // ReportMultiDimensionMetricsX creates and reports a named Record with multiple dimensions and

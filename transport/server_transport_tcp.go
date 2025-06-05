@@ -15,11 +15,14 @@ package transport
 
 import (
 	"context"
+	"errors"
 	"io"
 	"math"
 	"net"
+	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/panjf2000/ants/v2"
@@ -27,14 +30,17 @@ import (
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/addrutil"
+	icontext "trpc.group/trpc-go/trpc-go/internal/context"
+	ierror "trpc.group/trpc-go/trpc-go/internal/error"
+	ikeeporder "trpc.group/trpc-go/trpc-go/internal/keeporder"
 	"trpc.group/trpc-go/trpc-go/internal/report"
+	"trpc.group/trpc-go/trpc-go/internal/rpczenable"
 	"trpc.group/trpc-go/trpc-go/internal/writev"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/rpcz"
+	ibufio "trpc.group/trpc-go/trpc-go/transport/internal/bufio"
 	"trpc.group/trpc-go/trpc-go/transport/internal/frame"
 )
-
-const defaultBufferSize = 128 * 1024
 
 type handleParam struct {
 	req   []byte
@@ -72,13 +78,15 @@ func createRoutinePool(size int) *ants.PoolWithFunc {
 		handleParamPool.Put(param)
 	})
 	if err != nil {
-		log.Tracef("routine pool create error:%v", err)
+		log.Tracef("routine pool create error: %v", err)
 		return nil
 	}
 	return pool
 }
 
 func (s *serverTransport) serveTCP(ctx context.Context, ln net.Listener, opts *ListenServeOptions) error {
+	opts.ActiveCnt.Add(1)
+	defer opts.ActiveCnt.Add(-1)
 	// Create a goroutine pool if ServerAsync enabled.
 	var pool *ants.PoolWithFunc
 	if opts.ServerAsync {
@@ -88,7 +96,9 @@ func (s *serverTransport) serveTCP(ctx context.Context, ln net.Listener, opts *L
 		rwc, err := ln.Accept()
 		if err != nil {
 			if ne, ok := err.(net.Error); ok && ne.Temporary() {
-				tempDelay = doTempDelay(tempDelay)
+				tempDelay = nextTempDelay(tempDelay)
+				log.Tracef("transport: accept error: %+v, tempDelay: %+v", err, tempDelay)
+				time.Sleep(tempDelay)
 				continue
 			}
 			select {
@@ -111,43 +121,64 @@ func (s *serverTransport) serveTCP(ctx context.Context, ln net.Listener, opts *L
 		tempDelay = 0
 		if tcpConn, ok := rwc.(*net.TCPConn); ok {
 			if err := tcpConn.SetKeepAlive(true); err != nil {
-				log.Tracef("tcp conn set keepalive error:%v", err)
+				log.Tracef("tcp conn set keepalive error: %v", err)
 			}
 			if s.opts.KeepAlivePeriod > 0 {
 				if err := tcpConn.SetKeepAlivePeriod(s.opts.KeepAlivePeriod); err != nil {
-					log.Tracef("tcp conn set keepalive period error:%v", err)
+					log.Tracef("tcp conn set keepalive period error: %v", err)
 				}
 			}
 		}
-		tc := &tcpconn{
-			conn:        s.newConn(ctx, opts),
-			rwc:         rwc,
-			fr:          opts.FramerBuilder.New(codec.NewReader(rwc)),
-			remoteAddr:  rwc.RemoteAddr(),
-			localAddr:   rwc.LocalAddr(),
-			serverAsync: opts.ServerAsync,
-			writev:      opts.Writev,
-			st:          s,
-			pool:        pool,
-		}
-		// Start goroutine sending with writev.
-		if tc.writev {
-			tc.buffer = writev.NewBuffer()
-			tc.closeNotify = make(chan struct{}, 1)
-			tc.buffer.Start(tc.rwc, tc.closeNotify)
-		}
-		// To avoid over writing packages, checks whether should we copy packages by Framer and
-		// some other configurations.
-		tc.copyFrame = frame.ShouldCopy(opts.CopyFrame, tc.serverAsync, codec.IsSafeFramer(tc.fr))
-		key := addrutil.AddrToKey(tc.localAddr, tc.remoteAddr)
+
+		key, tc := s.newTCPConn(ctx, rwc, pool, opts)
 		s.m.Lock()
 		s.addrToConn[key] = tc
 		s.m.Unlock()
-		go tc.serve()
+
+		opts.ActiveCnt.Add(1)
+		go func() {
+			tc.serve()
+			opts.ActiveCnt.Add(-1)
+		}()
 	}
 }
 
-func doTempDelay(tempDelay time.Duration) time.Duration {
+func (s *serverTransport) newTCPConn(
+	ctx context.Context,
+	rwc net.Conn,
+	pool *ants.PoolWithFunc,
+	opts *ListenServeOptions,
+) (string, *tcpconn) {
+	br := ibufio.NewReader(rwc, codec.GetReaderSize())
+	tc := &tcpconn{
+		conn:                           s.newConn(ctx, opts),
+		rwc:                            rwc,
+		bufReader:                      br,
+		fr:                             opts.FramerBuilder.New(br),
+		remoteAddr:                     rwc.RemoteAddr(),
+		localAddr:                      rwc.LocalAddr(),
+		serverAsync:                    opts.ServerAsync,
+		writev:                         opts.Writev,
+		keepOrderPreDecodeExtractor:    opts.KeepOrderPreDecodeExtractor,
+		keepOrderPreUnmarshalExtractor: opts.KeepOrderPreUnmarshalExtractor,
+		orderedGroups:                  opts.OrderedGroups,
+		st:                             s,
+		pool:                           pool,
+		serviceActiveCnt:               opts.ActiveCnt,
+	}
+	// Start goroutine sending with writev.
+	if tc.writev {
+		tc.buffer = writev.NewBuffer()
+		tc.closeNotify = make(chan struct{}, 1)
+		tc.buffer.Start(tc.rwc, tc.closeNotify)
+	}
+	// To avoid over writing packages, checks whether should we copy packages by Framer and
+	// some other configurations.
+	tc.copyFrame = frame.ShouldCopy(opts.CopyFrame, tc.serverAsync, codec.IsSafeFramer(tc.fr))
+	return addrutil.AddrToKey(tc.localAddr, tc.remoteAddr), tc
+}
+
+func nextTempDelay(tempDelay time.Duration) time.Duration {
 	if tempDelay == 0 {
 		tempDelay = 5 * time.Millisecond
 	} else {
@@ -156,7 +187,6 @@ func doTempDelay(tempDelay time.Duration) time.Duration {
 	if max := 1 * time.Second; tempDelay > max {
 		tempDelay = max
 	}
-	time.Sleep(tempDelay)
 	return tempDelay
 }
 
@@ -164,6 +194,7 @@ func doTempDelay(tempDelay time.Duration) time.Duration {
 type tcpconn struct {
 	*conn
 	rwc         net.Conn
+	bufReader   *ibufio.Reader
 	fr          codec.Framer
 	localAddr   net.Addr
 	remoteAddr  net.Addr
@@ -175,6 +206,25 @@ type tcpconn struct {
 	pool        *ants.PoolWithFunc
 	buffer      *writev.Buffer
 	closeNotify chan struct{}
+
+	serveDone chan struct{}
+
+	// keepOrderPreDecodeExtractor specifies whether the current connection should
+	// keep order for the incoming requests with respect to the extracted key from the decoded information.
+	keepOrderPreDecodeExtractor ikeeporder.PreDecodeExtractor
+	// keepOrderPreUnmarshalExtractor specifies whether the current connection should
+	// keep order for the incoming requests with respect to the extracted key from request struct.
+	keepOrderPreUnmarshalExtractor ikeeporder.PreUnmarshalExtractor
+	// orderedGroups specifies the groups in which to keep order for incoming requests.
+	orderedGroups ikeeporder.OrderedGroups
+
+	// serviceActiveCnt comes from the service for which tcpconn is serving.
+	// It's tcpconn's responsibility to +/- serviceActiveCnt.
+	// activeCnt-1 represents remaining requests within tcpconn for which responses have not yet been sent.
+	// The one comes from tcp connection reading loop.
+	// It works as if a reference cnt for tcpconn.close.
+	serviceActiveCnt activeCnt
+	activeCnt        int32
 }
 
 // close closes socket and cleans up.
@@ -182,15 +232,10 @@ func (c *tcpconn) close() {
 	c.closeOnce.Do(func() {
 		// Send error msg to handler.
 		ctx, msg := codec.WithNewMessage(context.Background())
+		defer codec.PutBackMessage(msg)
 		msg.WithLocalAddr(c.localAddr)
 		msg.WithRemoteAddr(c.remoteAddr)
-		e := &errs.Error{
-			Type: errs.ErrorTypeFramework,
-			Code: errs.RetServerSystemErr,
-			Desc: "trpc",
-			Msg:  "Server connection closed",
-		}
-		msg.WithServerRspErr(e)
+		msg.WithServerRspErr(errs.NewFrameError(errs.RetServerSystemErr, "Server connection closed"))
 		// The connection closing message is handed over to handler.
 		if err := c.conn.handleClose(ctx); err != nil {
 			log.Trace("transport: notify connection close failed", err)
@@ -220,28 +265,29 @@ func (c *tcpconn) write(p []byte) (int, error) {
 }
 
 func (c *tcpconn) serve() {
-	defer c.close()
-	for {
-		// Check if upstream has closed.
-		select {
-		case <-c.ctx.Done():
-			return
-		default:
-		}
+	atomic.AddInt32(&c.activeCnt, 1)
+	c.serveDone = make(chan struct{})
+	defer close(c.serveDone)
+	addConnection(c)
 
-		if c.idleTimeout > 0 {
-			now := time.Now()
-			// SetReadDeadline has poor performance, so, update timeout every 5 seconds.
-			if now.Sub(c.lastVisited) > 5*time.Second {
-				c.lastVisited = now
-				err := c.rwc.SetReadDeadline(now.Add(c.idleTimeout))
-				if err != nil {
-					log.Trace("transport: tcpconn SetReadDeadline fail ", err)
-					return
-				}
+	var drainBuffer bool
+	var readDeadline time.Time
+	lastVisited := time.Now()
+	// The updateInterval is the minimum of 5s and c.readTimeout/2.
+	updateInterval := minDuration(5*time.Second, c.readTimeout/2)
+	for {
+		now := time.Now()
+		if c.idleTimeout > 0 && now.Sub(lastVisited) > c.idleTimeout {
+			report.TCPServerTransportIdleTimeout.Incr()
+			return
+		}
+		if c.readTimeout > 0 && readDeadline.Sub(now) < c.readTimeout-updateInterval {
+			readDeadline = now.Add(c.readTimeout)
+			if err := c.rwc.SetReadDeadline(readDeadline); err != nil {
+				log.Trace("transport: tcpconn SetReadDeadline fail ", err)
+				return
 			}
 		}
-
 		req, err := c.fr.ReadFrame()
 		if err != nil {
 			if err == io.EOF {
@@ -250,13 +296,32 @@ func (c *tcpconn) serve() {
 			}
 			// Server closes the connection if client sends no package in last idle timeout.
 			if e, ok := err.(net.Error); ok && e.Timeout() {
-				report.TCPServerTransportIdleTimeout.Incr()
-				return
+				if errors.Is(icontext.Cause(c.ctx), ierror.GracefulRestart) {
+					return
+				}
+				continue
 			}
 			report.TCPServerTransportReadFail.Incr()
 			log.Trace("transport: tcpconn serve ReadFrame fail ", err)
 			return
 		}
+
+		lastVisited = now
+		c.serviceActiveCnt.Add(1)
+		atomic.AddInt32(&c.activeCnt, 1)
+		if !drainBuffer {
+			select {
+			case <-c.ctx.Done():
+				if !errors.Is(icontext.Cause(c.ctx), ierror.GracefulRestart) {
+					c.decrActiveCnt()
+					return
+				}
+				drainBuffer = true
+				c.bufReader.Unbuffer()
+			default:
+			}
+		}
+
 		report.TCPServerTransportReceiveSize.Set(float64(len(req)))
 		// if framer is not concurrent safe, copy the data to avoid over writing.
 		if c.copyFrame {
@@ -264,13 +329,35 @@ func (c *tcpconn) serve() {
 			copy(reqCopy, req)
 			req = reqCopy
 		}
-
 		c.handle(req)
+		if drainBuffer && c.bufReader.Buffered() == 0 {
+			return
+		}
 	}
 }
 
+func minDuration(d1, d2 time.Duration) time.Duration {
+	if d2 < d1 {
+		return d2
+	}
+	return d1
+}
+
 func (c *tcpconn) handle(req []byte) {
-	if !c.serverAsync || c.pool == nil {
+	if c.keepOrderPreDecodeExtractor != nil {
+		if ok := c.handleKeepOrderPreDecode(req); ok {
+			return
+		}
+		// If not ok, the request will be processed as a normal non-keep-order request.
+	}
+	if c.keepOrderPreUnmarshalExtractor != nil {
+		if ok := c.handleKeepOrderPreUnmarshal(req); ok {
+			return
+		}
+		// If not ok, the request will be processed as a normal non-keep-order request.
+	}
+
+	if !c.serverAsync || c.pool == nil || frame.ContainTRPCStreamHeader(req) {
 		c.handleSync(req)
 		return
 	}
@@ -288,32 +375,114 @@ func (c *tcpconn) handle(req []byte) {
 	}
 }
 
+func (c *tcpconn) handleKeepOrderPreDecode(req []byte) bool {
+	pdh, ok := c.handler.(ikeeporder.PreDecodeHandler)
+	if !ok {
+		panic("bug: handler must implement pre-decode interface for keep-order requests")
+	}
+	ctx, msg := codec.WithNewMessage(context.Background())
+	reqBody, err := pdh.PreDecode(ctx, req)
+	if err != nil {
+		log.Warnf("pre-decode error: %+v, fallback to non-keep-order scenario", err)
+		codec.PutBackMessage(msg)
+		return false
+	}
+	keepOrderKey, ok := c.keepOrderPreDecodeExtractor(ctx, reqBody)
+	if !ok {
+		// Do not keep order.
+		codec.PutBackMessage(msg)
+		return false
+	}
+	ctx = ikeeporder.NewContextWithPreDecode(ctx, &ikeeporder.PreDecodeInfo{ReqBodyBuf: reqBody})
+	c.orderedGroups.Add(keepOrderKey, func() {
+		defer func() {
+			codec.PutBackMessage(msg)
+			c.decrActiveCnt()
+			if err := recover(); err != nil {
+				log.ErrorContextf(ctx, "[PANIC]%v\n%s\n", err, debug.Stack())
+				report.PanicNum.Incr()
+			}
+		}()
+		c.handleSyncWithErrAndContext(ctx, msg, req, nil)
+	})
+	return true
+}
+
+func (c *tcpconn) handleKeepOrderPreUnmarshal(req []byte) bool {
+	puh, ok := c.handler.(ikeeporder.PreUnmarshalHandler)
+	if !ok {
+		panic("bug: handler must implement pre-unmarshal interface for keep-order requests")
+	}
+	ctx, msg := codec.WithNewMessage(context.Background())
+	info := &ikeeporder.PreUnmarshalInfo{}
+	ctx = ikeeporder.NewContextWithPreUnmarshal(ctx, info)
+	reqBody, err := puh.PreUnmarshal(ctx, req)
+	if err != nil {
+		log.Warnf("pre-unmarshal error: %+v, fallback to non-keep-order scenario", err)
+		codec.PutBackMessage(msg)
+		return false
+	}
+	keepOrderKey, ok := c.keepOrderPreUnmarshalExtractor(ctx, reqBody)
+	if !ok {
+		// Do not keep order.
+		codec.PutBackMessage(msg)
+		return false
+	}
+	c.orderedGroups.Add(keepOrderKey, func() {
+		defer func() {
+			codec.PutBackMessage(msg)
+			c.decrActiveCnt()
+			if err := recover(); err != nil {
+				log.ErrorContextf(ctx, "[PANIC]%v\n%s\n", err, debug.Stack())
+				report.PanicNum.Incr()
+			}
+		}()
+		c.handleSyncWithErrAndContext(ctx, msg, req, nil)
+	})
+	return true
+}
+
 func (c *tcpconn) handleSync(req []byte) {
 	c.handleSyncWithErr(req, nil)
 }
 
 func (c *tcpconn) handleSyncWithErr(req []byte, e error) {
+	defer c.decrActiveCnt()
+
 	ctx, msg := codec.WithNewMessage(context.Background())
 	defer codec.PutBackMessage(msg)
+	c.handleSyncWithErrAndContext(ctx, msg, req, e)
+}
+
+func (c *tcpconn) handleSyncWithErrAndContext(ctx context.Context, msg codec.Msg, req []byte, e error) {
 	msg.WithServerRspErr(e)
 	// Record local addr and remote addr to context.
 	msg.WithLocalAddr(c.localAddr)
 	msg.WithRemoteAddr(c.remoteAddr)
 
-	span, ender, ctx := rpcz.NewSpanContext(ctx, "server")
-	span.SetAttribute(rpcz.TRPCAttributeRequestSize, len(req))
+	var (
+		span             rpcz.Span
+		ender            rpcz.Ender
+		sendMessageEnder rpcz.Ender
+	)
+	if rpczenable.Enabled {
+		span, ender, ctx = rpcz.NewSpanContext(ctx, "server")
+		span.SetAttribute(rpcz.TRPCAttributeRequestSize, len(req))
+	}
 
 	rsp, err := c.conn.handle(ctx, req)
 
-	defer func() {
-		span.SetAttribute(rpcz.TRPCAttributeRPCName, msg.ServerRPCName())
-		if err == nil {
-			span.SetAttribute(rpcz.TRPCAttributeError, msg.ServerRspErr())
-		} else {
-			span.SetAttribute(rpcz.TRPCAttributeError, err)
-		}
-		ender.End()
-	}()
+	if rpczenable.Enabled {
+		defer func() {
+			span.SetAttribute(rpcz.TRPCAttributeRPCName, msg.ServerRPCName())
+			if err == nil {
+				span.SetAttribute(rpcz.TRPCAttributeError, msg.ServerRspErr())
+			} else {
+				span.SetAttribute(rpcz.TRPCAttributeError, err)
+			}
+			ender.End()
+		}()
+	}
 	if err != nil {
 		if err != errs.ErrServerNoResponse {
 			report.TCPServerTransportHandleFail.Incr()
@@ -325,12 +494,14 @@ func (c *tcpconn) handleSyncWithErr(req []byte, e error) {
 		return
 	}
 	report.TCPServerTransportSendSize.Set(float64(len(rsp)))
-	span.SetAttribute(rpcz.TRPCAttributeResponseSize, len(rsp))
-	{
-		// common RPC write rsp.
-		_, ender := span.NewChild("SendMessage")
-		_, err = c.write(rsp)
-		ender.End()
+	if rpczenable.Enabled {
+		span.SetAttribute(rpcz.TRPCAttributeResponseSize, len(rsp))
+		_, sendMessageEnder = span.NewChild("SendMessage")
+	}
+	// common RPC write rsp.
+	_, err = c.write(rsp)
+	if rpczenable.Enabled {
+		sendMessageEnder.End()
 	}
 
 	if err != nil {
@@ -338,4 +509,11 @@ func (c *tcpconn) handleSyncWithErr(req []byte, e error) {
 		log.Trace("transport: tcpconn write fail ", err)
 		c.close()
 	}
+}
+
+func (c *tcpconn) decrActiveCnt() {
+	if atomic.AddInt32(&c.activeCnt, -1) == 0 {
+		c.close()
+	}
+	c.serviceActiveCnt.Add(-1)
 }

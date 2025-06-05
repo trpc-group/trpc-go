@@ -35,9 +35,8 @@ func TestStream(t *testing.T) {
 	codec.RegisterSerializer(0, &codec.NoopSerialization{})
 	codec.Register("fake", nil, &fakeCodec{})
 	codec.Register("fake-nil", nil, nil)
-
-	// calling without error
 	streamCli := client.NewStream()
+
 	t.Run("calling without error", func(t *testing.T) {
 		require.NotNil(t, streamCli)
 		opts, err := streamCli.Init(ctx,
@@ -158,10 +157,10 @@ func TestStream(t *testing.T) {
 }
 
 func TestGetStreamFilter(t *testing.T) {
-	type noopClientStream struct {
+	type noopClientStrem struct {
 		client.ClientStream
 	}
-	testClientStream := &noopClientStream{}
+	testClientStream := &noopClientStrem{}
 	testFilter := func(ctx context.Context, desc *client.ClientStreamDesc,
 		streamer client.Streamer) (client.ClientStream, error) {
 		return testClientStream, nil

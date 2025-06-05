@@ -2,7 +2,6 @@ English | [中文](README.zh_CN.md)
 
 # tRPC-Go Development of Filter
 
-
 ## Introduction
 
 This article introduces how to develop filter also known as interceptor, for the tRPC-Go framework. The tRPC framework uses the filter mechanism to modularize and make specific logic components of interface requests pluggable. This decouples specific business logic and promotes reusability. Examples of filters include monitoring filters, distributed tracing filters, logging filters, authentication filters, and more.
@@ -11,11 +10,11 @@ This article introduces how to develop filter also known as interceptor, for the
 
 Understanding the principles of filters is crucial, focusing on the `trigger timing` and `sequencing` of filters.
 
-**Trigger Timing**: Filters can intercept interface requests and responses, and handle requests, responses, and contexts (in simpler terms, they can perform actions `before receiving a request` and `after processing a request`). Therefore, filters can be functionally divided into two parts: pre-processing (before business logic) and post-processing (after business logic).
+- **Trigger Timing**: Filters can intercept interface requests and responses, and handle requests, responses, and contexts (in simpler terms, they can perform actions `before receiving a request` and `after processing a request`). Therefore, filters can be functionally divided into two parts: pre-processing (before business logic) and post-processing (after business logic).
 
-**Sequencing**: As shown in the diagram below, filters follow a clear sequence. They execute the pre-processing logic in the order of filter registration and then execute the post-processing logic in reverse order.
+- **Sequencing**: As shown in the diagram below, filters follow a clear sequence. They execute the pre-processing logic in the order of filter registration and then execute the post-processing logic in reverse order.
 
-![The Order of Filters](/.resources-without-git-lfs/filter/filter.png)
+![The Order of Filters](https://git.woa.com/trpc-go/trpc-go/raw/master/.resources/filter/filter.png)
 
 ## Examples
 
@@ -85,9 +84,7 @@ client:
 
 ## Stream Filters
 
-Due to the significant differences between streaming services and regular RPC calls, such as how a client initiates a streaming request and how a server handles streaming, tRPC-Go provides a different interface for stream filters.
-
-While the exposed interface is different, the underlying implementation is similar to regular RPC filters. The principles are the same as those explained for regular RPC filters.
+The underlying implementation of streaming interceptors is similar to regular RPC, but the interceptor interfaces are different, so the steps for developing streaming interceptors and regular interceptors are different. This is due to the significant differences between the interfaces of streaming services and regular RPC calls. For example, a regular RPC client initiates an RPC call through proxy.SayHello, while a streaming client creates a stream through proxy.ClientStreamSayHello. After the stream is created, `SendMsg`, `RecvMsg`, and `CloseSend` are called to interact with the stream.
 
 ### Client-side
 
@@ -114,6 +111,8 @@ func StreamClientFilter(ctx context.Context, desc *client.ClientStreamDesc, stre
     return &wrappedStream{s}, err // The wrappedStream encapsulates client.ClientStream for intercepting methods like SendMsg, RecvMsg, etc. You must return the err from streamer.
 }
 ```
+
+Note: The above code only intercepts when creating a stream, but does not intercept the stream interaction process (SendMsg, RecvMsg, CloseSend) after the stream is created.
 
 **Step 2**: Wrap `client.ClientStream` and override the corresponding methods:
 
@@ -323,7 +322,7 @@ server:
 
 The execution order is as follows:
 
-```
+```raw
 Request received -> filter1 pre-processing logic -> filter2 pre-processing logic -> filter3 pre-processing logic -> User's business logic -> filter3 post-processing logic -> filter2 post-processing logic -> filter1 post-processing logic -> Response sent
 ```
 

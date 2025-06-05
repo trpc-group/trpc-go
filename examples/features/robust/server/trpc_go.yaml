@@ -1,0 +1,67 @@
+global:
+  namespace: Development
+  env_name: test
+  container_name: "test.test.helloworld.sz0"
+
+server:
+  app: test
+  server: helloworld
+  admin:
+    port: 9028
+  filter:
+    - prometheus
+    - trpc-robust
+  service:
+    - name: trpc.test.helloworld.Greeter
+      port: 8000
+      network: tcp
+      protocol: trpc
+      transport: tnet
+      timeout: 800
+
+plugins:
+  log:
+    default: 
+      - writer: console
+        level: debug 
+      - writer: file 
+        level: debug 
+        writer_config:
+          log_path:
+          filename: ./server.log 
+          roll_type: size
+          max_age: 7 
+          max_size: 10
+          max_backups: 10 
+          compress:  false 
+  overload_control:
+    trpc-robust:
+      server:
+        update_every_requests: 100  # 每次处理这么多请求判断一次服务是否过载
+        update_duration: 10s  # 每经过这么长时间强制判断一次服务是否过载，为了处理请求量较少的情况
+        start_overload_ms: 2  # 认为排队时间超过次数量服务就过载
+        point_per_ms: 30  # 超过排队时间阈值 (start_overload_ms) 后每一毫秒对应的负载点数，一般不需要更改
+        overload_recover_fail_count: 3  # 从过载状态恢复时，假如排队时间的增加次数超过这个配置，则判断为仍处于过载状态，一般不需要更改
+        start_overload_cpu_usage: 0.75  # CPU 利用率高于此值服务才过载，防止 GC STW 导致排队时间错误误判服务过载，取值区间 (0,1)
+        cpu_usage_interval: 1s  # CPU 利用率采集的时间范围，一般不需要更改
+        report_enabled: true  # 是否上报数据到柔性治理平台
+      client:
+        overload_error_codes: [22,23]  # 判断下游是否过载的错误码
+        start_overload_success_rate: 0.5  # 开始过载的成功率，低于此值认为下游过载，取值区间 (0,1)
+        window: 1s  # 统计时间窗口大小
+        max_reject_rate: 0.99  # 最大拒绝概率，取值范围 [0,1]，一般不需要更改
+        start_working_request: 300  # 在窗口期，请求量少于此值主调过载保护不生效
+        report_enabled: true  # 是否上报数据到柔性治理平台
+      rank:
+        max_rank: 256  # 最大的请求重要程度，一般取默认值即可
+  metrics:
+    prometheus:
+      ip: 0.0.0.0 
+      port: 8090 
+      path: /metrics 
+      namespace: Development 
+      subsystem: trpc 
+      rawmode: false 
+      enablepush: false
+      job: job 
+      pushinterval: 1 

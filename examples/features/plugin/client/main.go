@@ -15,9 +15,9 @@
 package main
 
 import (
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/log"
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
+	pb "trpc.group/trpc-go/trpc-go/testdata"
 )
 
 func main() {
@@ -34,5 +34,5 @@ func main() {
 		log.Fatal(err)
 	}
 	// print response
-	log.Infof("recv rsp:%s", hello.Msg)
+	log.Infof("recv rsp: %s", hello.Msg)
 }
