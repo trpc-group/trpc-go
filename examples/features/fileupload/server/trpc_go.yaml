@@ -1,0 +1,26 @@
+global: # global config.
+  namespace: Development            # environment type, two types: production and development.
+  env_name: test                    # environment name, names of multiple environments in informal settings.
+
+server: # server configuration.
+  app: examples                                    # business application name.
+  server: stream                                   # service process name.
+  bin_path: /usr/local/trpc/bin/                   # paths to binary executables and framework configuration files.
+  conf_path: /usr/local/trpc/conf/                 # paths to business configuration files.
+  data_path: /usr/local/trpc/data/                 # paths to business data files.
+  #  admin:
+  #    ip: 127.0.0.1         # ip.
+  #    port: 9528            # default: 9028.
+  #    read_timeout: 3000    # ms. the timeout setting for the request is accepted and the request information is completely read to prevent slow clients.
+  #    write_timeout: 60000  # ms. the timeout setting for processing.
+  #    enable_tls: false     # whether to enable TLS, currently not supported.
+  service: # business service configuration，can have multiple.
+    - name: trpc.examples.stream.TestStream        # the route name of the service.
+      ip: 127.0.0.1                                # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
+      #      nic: eth0                                    # the service listening network card address, if configures ip, you don't need to configure it.
+      port: 8010                                   # the service listening port, can use the placeholder ${port}.
+      network: tcp                                 # the service listening network type,  tcp or udp.
+      protocol: trpc                               # application layer protocol, trpc or http.
+      timeout: 1000                                # maximum request processing time in milliseconds.
+#      idletime: 300000                             # connection idle time in milliseconds.
+#      registry: polaris                            # The service registration method used when the service starts.
