@@ -60,3 +60,7 @@ If you're interested in contributing, please take a look at the [contribution gu
 [ecosystem]: https://github.com/orgs/trpc-ecosystem/repositories
 [helloworld]: /examples/helloworld/
 [features]: /examples/features/
+
+## Copyright
+
+The copyright notice pertaining to the Tencent code in this repo was previously in the name of “THL A29 Limited.”  That entity has now been de-registered.  You should treat all previously distributed copies of the code as if the copyright notice was in the name of “Tencent.”
