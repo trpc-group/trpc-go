@@ -605,7 +605,14 @@ func Test_init(t *testing.T) {
 		l, err := net.Listen("tcp", "127.0.0.1:0")
 		require.Nil(t, err)
 		go func() {
-			if err := http.Serve(l, nil); err != nil {
+			server := &http.Server{
+				Handler:      nil,
+				ReadTimeout:  15 * time.Second,
+				WriteTimeout: 15 * time.Second,
+				IdleTimeout:  60 * time.Second,
+			}
+
+			if err := server.Serve(l); err != nil && err != http.ErrServerClosed {
 				t.Logf("http serving: %v", err)
 			}
 		}()
@@ -643,7 +650,13 @@ func Test_init(t *testing.T) {
 		l, err := net.Listen("tcp", "127.0.0.1:0")
 		require.Nil(t, err)
 		go func() {
-			if err := http.Serve(l, nil); err != nil {
+			server := &http.Server{
+				Handler:      nil,
+				ReadTimeout:  15 * time.Second,
+				WriteTimeout: 15 * time.Second,
+				IdleTimeout:  60 * time.Second,
+			}
+			if err := server.Serve(l); err != nil && err != http.ErrServerClosed {
 				t.Logf("http serving: %v", err)
 			}
 		}()
