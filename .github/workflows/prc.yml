@@ -51,6 +51,9 @@ jobs:
   go-apidiff:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # Required for commenting on PRs
     steps:
     - uses: actions/checkout@v4
       with:
@@ -58,4 +61,4 @@ jobs:
     - uses: actions/setup-go@v5
       with:
         go-version: 'stable'
-    - uses: joelanford/go-apidiff@v1
+    - uses: imjasonh/apidiff-action@v1
