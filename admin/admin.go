@@ -39,6 +39,29 @@ import (
 	"trpc.group/trpc-go/trpc-go/transport"
 )
 
+func init() {
+	// The pprof functionality supported by the admin package relies on the imported net/http/pprof package.
+	// However, the imported net/http/pprof package implicitly registers HTTP handlers for
+	// "/debug/pprof/", "/debug/pprof/cmdline", "/debug/pprof/profile", "/debug/pprof/symbol", "/debug/pprof/trace"
+	// in http.DefaultServeMux in its init function. This implicit behavior is too subtle and may contribute to people
+	// inadvertently leaving such endpoints open, and may cause security problems：https://github.com/golang/go/issues/22085
+	// if people use http.DefaultServeMux. So we decide to reset default serve mux to remove pprof registration.
+	// This requires making sure that people are not using http.DefaultServeMux before we reset it.
+	// In most cases, this works, which is guaranteed by the execution order of the init function.
+	// If you need to enable pprof on http.DefaultServeMux you need to
+	// register it explicitly after importing the admin package:
+	//
+	// http.DefaultServeMux.HandleFunc("/debug/pprof/", pprof.Index)
+	// http.DefaultServeMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	// http.DefaultServeMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	// http.DefaultServeMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	// http.DefaultServeMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	//
+	// Simply importing the net/http/pprof package anonymously will not work.
+	// More details see: https://git.woa.com/trpc-go/trpc-go/issues/912, and https://github.com/golang/go/issues/42834.
+	http.DefaultServeMux = http.NewServeMux()
+}
+
 // ServiceName is the service name of admin service.
 const ServiceName = "admin"
 
@@ -122,21 +145,6 @@ func (s *Server) configRouter(r *router) *router {
 	for pattern, handler := range pattern2Handler {
 		r.add(pattern, handler)
 	}
-
-	// Delete the router registered with http.DefaultServeMux.
-	// Avoid causing security problems: https://github.com/golang/go/issues/22085.
-	err := unregisterHandlers(
-		[]string{
-			pprofPprof,
-			pprofCmdline,
-			pprofProfile,
-			pprofSymbol,
-			pprofTrace,
-		},
-	)
-	if err != nil {
-		log.Errorf("failed to unregister pprof handlers from http.DefaultServeMux, err: %+v", err)
-	}
 	return r
 }
 
@@ -173,13 +181,18 @@ func (s *Server) Serve() error {
 		return err
 	}
 
+	log.Infof("admin service launch success, %s:%s, serving ...", ln.Addr().Network(), ln.Addr().String())
+
 	s.server = &http.Server{
 		Addr:         ln.Addr().String(),
 		ReadTimeout:  cfg.readTimeout,
 		WriteTimeout: cfg.writeTimeout,
 		Handler:      s.router,
 	}
-	if err := s.server.Serve(ln); err != nil && err != http.ErrServerClosed {
+	// Restricted access to the internal/poll.ErrNetClosing type necessitates comparing a string literal.
+	const closeError = "use of closed network connection"
+	if err := s.server.Serve(ln); err != nil &&
+		err != http.ErrServerClosed && !strings.Contains(err.Error(), closeError) {
 		return err
 	}
 	return nil
