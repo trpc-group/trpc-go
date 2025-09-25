@@ -1,0 +1,33 @@
+//
+//
+// Tencent is pleased to support the open source community by making tRPC available.
+//
+// Copyright (C) 2023 THL A29 Limited, a Tencent company.
+// All rights reserved.
+//
+// If you have downloaded a copy of the tRPC source code from Tencent,
+// please note that tRPC source code is licensed under the  Apache 2.0 License,
+// A copy of the Apache 2.0 License is included in this file.
+//
+//
+
+syntax = "proto3";
+package   trpc.examples.stream;
+
+// option go_package is required.
+option  go_package = "trpc.group/trpc-go/trpc-go/examples/features/stream";
+
+// The stream service definition.
+service TestStream {
+  rpc UploadFileStream(stream UploadFileReq) returns (UploadFileResp);
+}
+
+message UploadFileReq {
+  bytes content = 1; // file content
+  string filename = 2; // file name
+}
+
+message UploadFileResp {
+  bool success = 1; // upload success status
+  string message = 2; // status message
+}
