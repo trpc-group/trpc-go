@@ -678,10 +678,6 @@ end.End()
 - [8] https://github.com/grpc/proposal/blob/master/A14-channelz.md
 - [9] Dapper, a Large-Scale Distributed Systems Tracing Infrastructure: http://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36356.pdf
 - [10] brpc-rpcz: https://github.com/apache/incubator-brpc/blob/master/docs/cn/rpcz.md
-- [11] tRPC-Cpp rpcz wiki. todo
-- [12] tRPC-Cpp rpcz proposal. https://git.woa.com/trpc/trpc-proposal/blob/master/L17-cpp-rpcz.md
-- [13] opentracing: https://opentracing.io/
-- [14] opentelemetry: https://opentelemetry.io/
-- [15] https://tpstelemetry.pages.woa.com/
-- [16] 天机阁 2.0-sdk-go：https://git.woa.com/opentelemetry/opentelemetry-go-ecosystem/blob/master/sdk/trace/dyeing_sampler.go
-- [17] open-telemetry-sdk-go- traceIDRatioSampler: https://github.com/open-telemetry/opentelemetry-go/blob/main/sdk/trace/sampling.go
+- [11] opentracing: https://opentracing.io/
+- [12] opentelemetry: https://opentelemetry.io/
+- [13] open-telemetry-sdk-go-traceIDRatioSampler: https://github.com/open-telemetry/opentelemetry-go/blob/main/sdk/trace/sampling.go

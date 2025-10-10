@@ -88,7 +88,6 @@ type GlobalCfg struct {
 	// PluginSetupTimeout is the setup timeout for each plugin, default 3 seconds.
 	PluginSetupTimeout *time.Duration `yaml:"plugin_setup_timeout,omitempty"`
 	// UpdateDataGOMAXPROCSInterval periodically update GOMAXPROCS.
-	// For more details, see https://git.woa.com/trpc-go/trpc-go/issues/891.
 	UpdateGOMAXPROCSInterval *time.Duration `yaml:"update_gomaxprocs_interval,omitempty"`
 	// RoundUpCPUQuota provides the option to enable rounding up the CPU quota. Default is false.
 	// 'go.uber.org/automaxprocs/maxprocs' library introduces round up option
@@ -96,7 +95,6 @@ type GlobalCfg struct {
 	// For more details, see https://github.com/uber-go/automaxprocs/issues/78.
 	RoundUpCPUQuota bool `yaml:"round_up_cpu_quota,omitempty"`
 	// DisableGracefulRestart determines whether to disable graceful restart.
-	// For more details, see https://git.woa.com/trpc-go/trpc-go/issues/1015.
 	DisableGracefulRestart bool `yaml:"disable_graceful_restart,omitempty"`
 }
 

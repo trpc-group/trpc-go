@@ -18,9 +18,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/valyala/fasthttp"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/filter"
-	"github.com/valyala/fasthttp"
 )
 
 // Options are restful router options.

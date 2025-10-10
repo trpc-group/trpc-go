@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/panjf2000/ants/v2"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	icontext "trpc.group/trpc-go/trpc-go/internal/context"
@@ -30,7 +31,6 @@ import (
 	"trpc.group/trpc-go/trpc-go/internal/packetbuffer"
 	"trpc.group/trpc-go/trpc-go/internal/report"
 	"trpc.group/trpc-go/trpc-go/log"
-	"github.com/panjf2000/ants/v2"
 )
 
 type handleUDPParam struct {

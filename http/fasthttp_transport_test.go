@@ -32,6 +32,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"github.com/valyala/fasthttp"
 	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
@@ -43,8 +45,6 @@ import (
 	"trpc.group/trpc-go/trpc-go/server"
 	helloworld "trpc.group/trpc-go/trpc-go/testdata/restful/helloworld"
 	"trpc.group/trpc-go/trpc-go/transport"
-	"github.com/stretchr/testify/require"
-	"github.com/valyala/fasthttp"
 )
 
 func TestFastHTTPServerTransport(t *testing.T) {

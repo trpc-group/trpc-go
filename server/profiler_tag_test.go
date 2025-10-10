@@ -16,8 +16,8 @@ package server_test
 import (
 	"testing"
 
-	"trpc.group/trpc-go/trpc-go/server"
 	"github.com/stretchr/testify/require"
+	"trpc.group/trpc-go/trpc-go/server"
 )
 
 func TestProfileLabel(t *testing.T) {

@@ -16,8 +16,8 @@ package overloadctrl_test
 import (
 	"testing"
 
-	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"github.com/stretchr/testify/require"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 )
 
 func TestRegister(t *testing.T) {

@@ -18,9 +18,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/internal/keeporder"
-	"github.com/stretchr/testify/require"
 )
 
 func TestKeepOrderClient(t *testing.T) {

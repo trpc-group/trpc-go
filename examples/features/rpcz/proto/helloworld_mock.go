@@ -21,8 +21,8 @@ import (
 	context "context"
 	reflect "reflect"
 
-	client "trpc.group/trpc-go/trpc-go/client"
 	gomock "github.com/golang/mock/gomock"
+	client "trpc.group/trpc-go/trpc-go/client"
 )
 
 // MockRPCZService is a mock of RPCZService interface.

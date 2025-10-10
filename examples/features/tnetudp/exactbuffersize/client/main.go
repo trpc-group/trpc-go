@@ -15,7 +15,7 @@
 package main
 
 import (
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/log"
 	pb "trpc.group/trpc-go/trpc-go/testdata"

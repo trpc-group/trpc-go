@@ -668,20 +668,16 @@ end.End()
 
 ## Reference
 
-- [1] <https://en.wikipedia.org/wiki/Event_(UML)>
-- [2] <https://en.wikipedia.org/wiki/Event_(computing)>
-- [3] <https://opentelemetry.io/docs/instrumentation/go/manual/#events>
-- [4] <https://opentelemetry.io/docs/instrumentation/go/api/tracing/#starting-and-ending-a-span>
-- [5] <https://opentelemetry.io/docs/concepts/observability-primer/#spans>
-- [6] span-id represented as an 8-byte array, satisfying the w3c trace-context specification. <https://www.w3.org/TR/trace-context/#parent-id>
-- [7] <https://en.wiktionary.org/wiki/-z#English>
-- [8] <https://github.com/grpc/proposal/blob/master/A14-channelz.md>
-- [9] Dapper, a Large-Scale Distributed Systems Tracing Infrastructure: <http://static.googleusercontent.com/media/research.google.com/en//> pubs/archive/36356.pdf
-- [10] brpc-rpcz: <https://github.com/apache/incubator-brpc/blob/master/docs/cn/rpcz.md>
-- [11] tRPC-Cpp rpcz wiki. todo
-- [12] tRPC-Cpp rpcz proposal. <https://git.woa.com/trpc/trpc-proposal/blob/master/L17-cpp-rpcz.md>
-- [13] opentracing: <https://opentracing.io/>
-- [14] opentelemetry: <https://opentelemetry.io/>
-- [15] <https://tpstelemetry.pages.woa.com/>
-- [16] open-telemetry 2.0-sdk-go: <https://git.woa.com/opentelemetry/opentelemetry-go-ecosystem/blob/master/sdk/trace/dyeing_sampler.go>
-- [17] open-telemetry-sdk-go- traceIDRatioSampler: <https://github.com/open-telemetry/opentelemetry-go/blob/main/sdk/trace/sampling.go>
+- [1] https://en.wikipedia.org/wiki/Event_(UML)
+- [2] https://en.wikipedia.org/wiki/Event_(computing)
+- [3] https://opentelemetry.io/docs/instrumentation/go/manual/#events
+- [4] https://opentelemetry.io/docs/instrumentation/go/api/tracing/#starting-and-ending-a-span
+- [5] https://opentelemetry.io/docs/concepts/observability-primer/#spans
+- [6] span-id represented as an 8-byte array, satisfying the w3c trace-context specification. https://www.w3.org/TR/trace-context/#parent-id
+- [7] https://en.wiktionary.org/wiki/-z#English
+- [8] https://github.com/grpc/proposal/blob/master/A14-channelz.md
+- [9] Dapper, a Large-Scale Distributed Systems Tracing Infrastructure: http://static.googleusercontent.com/media/research.google.com/en// pubs/archive/36356.pdf
+- [10] brpc-rpcz: https://github.com/apache/incubator-brpc/blob/master/docs/cn/rpcz.md
+- [11] opentracing: https://opentracing.io/
+- [12] opentelemetry: https://opentelemetry.io/
+- [13] open-telemetry-sdk-go-traceIDRatioSampler: https://github.com/open-telemetry/opentelemetry-go/blob/main/sdk/trace/sampling.go

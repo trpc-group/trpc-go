@@ -17,8 +17,8 @@ import (
 	"net"
 	"testing"
 
-	"trpc.group/trpc-go/trpc-go/internal/addrutil"
 	"github.com/stretchr/testify/require"
+	"trpc.group/trpc-go/trpc-go/internal/addrutil"
 )
 
 func TestAddrToKey(t *testing.T) {

@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/valyala/fasthttp"
 	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
@@ -34,7 +35,6 @@ import (
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/rpcz"
 	"trpc.group/trpc-go/trpc-go/transport"
-	"github.com/valyala/fasthttp"
 )
 
 func init() {

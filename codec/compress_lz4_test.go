@@ -16,8 +16,8 @@ package codec_test
 import (
 	"testing"
 
-	"trpc.group/trpc-go/trpc-go/codec"
 	"github.com/stretchr/testify/require"
+	"trpc.group/trpc-go/trpc-go/codec"
 )
 
 func TestLZ4Compression(t *testing.T) {

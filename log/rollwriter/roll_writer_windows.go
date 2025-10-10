@@ -122,14 +122,15 @@ func (w *RollWriter) tryResume(newLink, oldLink string) bool {
 	}
 	if !isSymlink(st.Mode()) { // `trpc.log` exists, but it is not a link.
 		// Rename it to backup.
-		// This fixes the question 2 of
-		// https://git.woa.com/trpc-go/trpc-go/issues/789#note_88221093.
+		// If the directory contains trpc.log, the log cannot be written correctly.
+		// Because it is not possible to create a link with the same name.
 		w.os.Rename(newLink, path.Join(w.currDir, time.Now().Format(bkTimeFormat)+"."+filepath.Base(newLink)))
 		return false
 	}
 
-	// The following fixes the question 1 of
-	// https://git.woa.com/trpc-go/trpc-go/issues/789#note_88221093.
+	// The following fixes the problem:
+	// When the service stops, the tmp log is not processed. After restarting, a new tmp file is generated
+	// and rolling continues, which can make it difficult to view the log properly.
 	fileName, err := os.Readlink(newLink)
 	if err != nil {
 		fmt.Printf("os.Readlink %s err: %+v\n", newLink, err)

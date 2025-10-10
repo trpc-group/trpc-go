@@ -32,7 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/valyala/fasthttp"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
 	thttp "trpc.group/trpc-go/trpc-go/http"
 	itls "trpc.group/trpc-go/trpc-go/internal/tls"

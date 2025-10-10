@@ -19,9 +19,8 @@ import (
 	"fmt"
 	"io"
 
-	"trpc.group/trpc-go/trpc-go"
-
 	"github.com/r3labs/sse/v2"
+	"trpc.group/trpc-go/trpc-go"
 )
 
 func handleSSE(body io.Reader, handle SSEHandler) error {

@@ -16,11 +16,11 @@ package main
 import (
 	"context"
 
+	"github.com/valyala/fasthttp"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	thttp "trpc.group/trpc-go/trpc-go/http"
 	"trpc.group/trpc-go/trpc-go/log"
-	"github.com/valyala/fasthttp"
 )
 
 func main() {

@@ -33,7 +33,6 @@ import (
 	"github.com/valyala/fasthttp"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
-
 	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"

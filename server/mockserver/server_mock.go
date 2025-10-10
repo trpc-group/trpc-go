@@ -18,8 +18,9 @@
 package mockserver
 
 import (
-	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
+
+	gomock "github.com/golang/mock/gomock"
 )
 
 // MockService is a mock of Service interface

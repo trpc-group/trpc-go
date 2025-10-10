@@ -22,13 +22,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"github.com/valyala/fasthttp"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	thttp "trpc.group/trpc-go/trpc-go/http"
 	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/server"
-	"github.com/stretchr/testify/require"
-	"github.com/valyala/fasthttp"
 )
 
 func TestFastHTTPRegisterDefaultService(t *testing.T) {

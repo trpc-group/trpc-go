@@ -22,7 +22,7 @@ import (
 
 	"go.uber.org/atomic"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/addrutil"

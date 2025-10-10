@@ -20,10 +20,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/pool/connpool"
 	"trpc.group/trpc-go/trpc-go/transport/internal/dialer"
-	"github.com/stretchr/testify/require"
 )
 
 type conn struct{}

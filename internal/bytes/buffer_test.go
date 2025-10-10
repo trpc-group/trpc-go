@@ -16,8 +16,8 @@ package bytes_test
 import (
 	"testing"
 
-	ibytes "trpc.group/trpc-go/trpc-go/internal/bytes"
 	"github.com/stretchr/testify/require"
+	ibytes "trpc.group/trpc-go/trpc-go/internal/bytes"
 )
 
 func TestNopCloserBuffer(t *testing.T) {

@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/keeporder"
@@ -35,8 +36,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"trpc.group/trpc-go/trpc-go"
 )
 
 func TestTcpRoundTripPoolNIl(t *testing.T) {

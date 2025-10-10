@@ -19,7 +19,7 @@ package main
 import (
 	"context"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
 	pb "trpc.group/trpc-go/trpc-go/examples/features/httprpc/proto/echo"
 	"trpc.group/trpc-go/trpc-go/log"

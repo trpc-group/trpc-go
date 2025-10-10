@@ -17,11 +17,11 @@ import (
 	"context"
 	"strings"
 
+	"github.com/valyala/fasthttp"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/protocol"
-	"github.com/valyala/fasthttp"
 )
 
 // FastHTTPCli is the struct for invoking service based on http.

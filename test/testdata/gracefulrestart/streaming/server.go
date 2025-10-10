@@ -19,7 +19,6 @@ import (
 	"os"
 	"strconv"
 
-	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/test"
 	testpb "trpc.group/trpc-go/trpc-go/test/protocols"
 )

@@ -20,7 +20,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/errs"
 	pb "trpc.group/trpc-go/trpc-go/testdata"
 )

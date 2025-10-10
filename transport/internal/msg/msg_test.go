@@ -17,7 +17,7 @@ import (
 	"context"
 	"testing"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	imsg "trpc.group/trpc-go/trpc-go/transport/internal/msg"
 
 	"github.com/stretchr/testify/require"

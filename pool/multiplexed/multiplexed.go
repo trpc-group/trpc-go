@@ -393,8 +393,7 @@ func (c *Connection) reader() {
 		c.mu.RUnlock()
 		if !ok {
 			log.Tracef("multiplex connection %s->%s received invalid streamID(virtualConnID) %d, "+
-				"if it is 0, please read https://git.woa.com/trpc-go/trpc-go/issues/920 "+
-				"and upgrade your stream server's trpc-go version",
+				"if it is 0, please upgrade your stream server's trpc-go version",
 				c.conn.LocalAddr(), c.conn.RemoteAddr(), virtualConnID)
 			continue
 		}

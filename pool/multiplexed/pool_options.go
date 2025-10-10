@@ -118,7 +118,6 @@ func WithInitialBackoff(d time.Duration) PoolOption {
 
 // WithReconnectCountResetInterval sets the reconnectCountResetInterval for reconnection.
 // Due to the presence of dialTimeout, users need to set reconnectCountResetInterval to a larger value.
-// details: https://git.woa.com/trpc-go/trpc-go/issues/990.
 func WithReconnectCountResetInterval(d time.Duration) PoolOption {
 	return func(opts *PoolOptions) {
 		opts.reconnectCountResetInterval = d
@@ -152,7 +151,6 @@ func (o *PoolOptions) checkReconnectParams() error {
 	minReconnectCountResetInterval := o.initialBackoff * time.Duration((1+o.maxReconnectCount)*o.maxReconnectCount) / 2
 	// To avoid the impact of the last dial during retries,
 	// reconnectCountResetInterval needs to include the dialTimeout duration.
-	// Details: https://git.woa.com/trpc-go/trpc-go/issues/990.
 	dt := defaultDialTimeout
 	if o.dialTimeout != 0 {
 		dt = o.dialTimeout

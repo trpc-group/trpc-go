@@ -31,9 +31,3 @@ The client log will be displayed as follows:
 2024-08-19 15:40:08.450 INFO    client/main.go:151      Msg is "Hello, fc-post[POST]", response head is "response head"
 2024-08-19 15:40:08.450 INFO    client/main.go:131      Msg is "Hello, fc-get", response head is "response head"
 ```
-
-## Explanation
-
-For more Information, please refer to:
-
-* [Building a Generic HTTP Standard Service with tRPC-Go](https://iwiki.woa.com/pages/viewpage.action?pageId=490796278)

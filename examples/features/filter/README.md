@@ -27,7 +27,7 @@ functionality to the program without modifying the source code.
 
 ### Server-side
 
-[`ServerFilter`](https://git.woa.com/trpc-go/trpc-go/blob/master/filter/filter.go#L42) is the type for server-side
+[`ServerFilter`](https://github.com/trpc-group/trpc-go/blob/main/filter/filter.go#L29) is the type for server-side
 filter.It is essentially a function type with signature:
 `func(ctx context.Context, req interface{}, next ServerHandleFunc) (rsp interface{}, err error)`. An implementation of a
 filter can usually be divided into the breakpoints.
@@ -38,3 +38,5 @@ configure `trpc_go.yaml` with sever filter.
 ### Client-side
 
 Client side is similar to server side.
+
+

@@ -19,8 +19,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	. "trpc.group/trpc-go/trpc-go/internal/graceful/internal"
 	"github.com/stretchr/testify/require"
+	. "trpc.group/trpc-go/trpc-go/internal/graceful/internal"
 )
 
 func TestListener(t *testing.T) {

@@ -24,11 +24,11 @@ import (
 	"testing"
 	"time"
 
-	"trpc.group/trpc-go/trpc-go/codec"
-	"trpc.group/trpc-go/trpc-go/log"
 	"github.com/panjf2000/ants/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"trpc.group/trpc-go/trpc-go/codec"
+	"trpc.group/trpc-go/trpc-go/log"
 )
 
 // TestUDPServerTransportJobQueueFullFail tests the UDP server transport when the job queue is full.

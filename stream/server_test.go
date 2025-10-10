@@ -29,10 +29,10 @@ import (
 	"testing"
 	"time"
 
-	"trpc.group/trpc-go/trpc-go/client"
-	"trpc.group/trpc-go/trpc-go/errs"
 	"github.com/google/pprof/profile"
 	"github.com/stretchr/testify/require"
+	"trpc.group/trpc-go/trpc-go/client"
+	"trpc.group/trpc-go/trpc-go/errs"
 
 	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/stream"
@@ -365,19 +365,6 @@ func TestServerStreamSendMsg(t *testing.T) {
 	assert.Equal(t, err, errs.ErrServerNoResponse)
 	time.Sleep(100 * time.Millisecond)
 
-	opts.CurrentCompressType = codec.CompressTypeNoop
-	opts.CurrentSerializationType = codec.SerializationTypeJCE
-	sh = func(ss server.Stream) error {
-		ctx = ss.Context()
-		assert.NotNil(t, ctx)
-		err := ss.SendMsg(&codec.Body{Data: []byte("init")})
-		assert.NotNil(t, err)
-		// assert.Contains(t, err.Error(), "server codec Marshal")
-		return err
-	}
-	dispatcher.StreamHandleFunc(ctx, sh, si, []byte("init"))
-	time.Sleep(200 * time.Millisecond)
-
 	opts.CurrentCompressType = 5
 	opts.CurrentSerializationType = codec.SerializationTypeNoop
 	sh = func(ss server.Stream) error {
@@ -533,14 +520,6 @@ func TestServerStreamRecvMsgFail(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	opts.CurrentCompressType = codec.CompressTypeNoop
-	opts.CurrentSerializationType = codec.SerializationTypeJCE
-	fh.StreamFrameType = uint8(trpc.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
-	msg.WithFrameHead(fh)
-	rsp, err = dispatcher.StreamHandleFunc(ctx, sh, si, []byte("data"))
-	assert.Nil(t, rsp)
-	assert.Equal(t, err, errs.ErrServerNoResponse)
-	time.Sleep(300 * time.Millisecond)
 }
 
 // TesthandleError test server error condition

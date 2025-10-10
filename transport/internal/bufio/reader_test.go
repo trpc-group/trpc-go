@@ -17,8 +17,8 @@ import (
 	"io"
 	"testing"
 
-	. "trpc.group/trpc-go/trpc-go/transport/internal/bufio"
 	"github.com/stretchr/testify/require"
+	. "trpc.group/trpc-go/trpc-go/transport/internal/bufio"
 )
 
 func TestReader(t *testing.T) {

@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"io"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	pb "trpc.group/trpc-go/trpc-go/examples/features/attachment/proto/echo"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/server"

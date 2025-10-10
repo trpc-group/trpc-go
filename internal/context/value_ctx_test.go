@@ -17,8 +17,8 @@ import (
 	"context"
 	"testing"
 
-	icontext "trpc.group/trpc-go/trpc-go/internal/context"
 	"github.com/stretchr/testify/require"
+	icontext "trpc.group/trpc-go/trpc-go/internal/context"
 )
 
 func TestWithValues(t *testing.T) {

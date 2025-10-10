@@ -28,7 +28,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/config"
 	"trpc.group/trpc-go/trpc-go/errs"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 )
 
 type mockResponse struct {

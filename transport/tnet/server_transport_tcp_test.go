@@ -35,7 +35,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 	"trpc.group/trpc-go/tnet"
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/internal/keeporder"
 	"trpc.group/trpc-go/trpc-go/pool/multiplexed"

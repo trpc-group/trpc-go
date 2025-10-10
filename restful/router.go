@@ -203,8 +203,6 @@ func (r *Router) newTranscoder(binding *Binding, serviceImpl interface{}) (*tran
 	}
 
 	if binding.Output == nil {
-		// This may happen on v2 trpc cmdline:
-		//   https://git.woa.com/trpc-go/trpc-go-cmdline/merge_requests/436
 		binding.Output = func() ProtoMessage { return &emptypb.Empty{} }
 	}
 

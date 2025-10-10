@@ -87,7 +87,7 @@ const (
 )
 
 // trpc protocol codec
-// protocol design doc: https://git.woa.com/trpc/trpc-protocol/blob/master/docs/protocol_design.md
+// protocol design doc: https://github.com/trpc-group/trpc/blob/main/docs/en/trpc_protocol_design.md
 const (
 	// frame head format:
 	// v0:

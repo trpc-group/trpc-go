@@ -1,17 +1,14 @@
 module trpc.group/trpc-go/trpc-go
 
-go 1.22
-
-toolchain go1.23.8
+go 1.18
 
 require (
-	git.woa.com/jce/jce v1.2.0
 	github.com/BurntSushi/toml v0.3.1
 	github.com/cespare/xxhash v1.1.0
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-playground/form/v4 v4.2.1
 	github.com/golang/mock v1.6.0
-	github.com/golang/protobuf v1.5.4
+	github.com/golang/protobuf v1.5.3
 	github.com/golang/snappy v0.0.4
 	github.com/google/flatbuffers v24.3.25+incompatible
 	github.com/google/go-cmp v0.6.0
@@ -29,10 +26,9 @@ require (
 	golang.org/x/net v0.23.0
 	golang.org/x/sync v0.7.0
 	golang.org/x/sys v0.22.0
-	google.golang.org/protobuf v1.36.6
+	google.golang.org/protobuf v1.34.2
 	gopkg.in/yaml.v3 v3.0.1
 	trpc.group/trpc-go/tnet v1.0.2-0.20250605025854-7d3ff1be9972
-	trpc.group/trpc/trpc-protocol/pb/go/trpc/reflection v1.0.1
 )
 
 require (
@@ -43,6 +39,7 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.21
 	github.com/r3labs/sse/v2 v2.10.0
 	go.uber.org/atomic v1.11.0
+	trpc.group/trpc/trpc-protocol/pb/go/trpc v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -83,8 +80,7 @@ retract [v0.17.0, v0.17.2]
 // The reconstruction of the YAML nodes used for loop variables, resulting in
 // plugins of the same type all sharing the configuration corresponding to the
 // last name. This caused the issue of the default log output file being
-// incorrect, as reported in https://mk.woa.com/q/294169, and also fostered
 // #937.
 retract v0.18.0
 
-replace trpc.group/trpc/trpc-protocol/pb/go/trpc/reflection => github.com/trpc-group/trpc/pb/go/trpc/reflection v0.0.0-20250605034232-27ae519c47c4
+replace trpc.group/trpc/trpc-protocol/pb/go/trpc => github.com/hyprh/trpc/pb/go/trpc v1.0.1-0.20251010083826-35ec3b4cd2b3

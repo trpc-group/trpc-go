@@ -44,9 +44,3 @@ no routing:
 curl http://127.0.0.1:8080/123
 no routing
 ```
-
-## Explanation
-
-For more Information, please refer to:
-
-* [Building a Generic HTTP Standard Service with tRPC-Go](https://iwiki.woa.com/pages/viewpage.action?pageId=490796278)

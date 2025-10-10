@@ -1,4 +1,4 @@
-[English](https://git.woa.com/trpc-go/trpc-go/tree/master/pool/connpool/README.md) | 中文
+[English](README.md) | 中文
 
 ## 背景
 
@@ -19,7 +19,7 @@ pool 维护一个 sync.Map 作为连接池，key 为`<network, address, protocol
 ## 设计实现
 
 连接池的整体代码结构如下图所示：
-![design_implementation](../../.resources/pool/connpool/design_implementation.png)
+![design_implementation](/.resources-without-git-lfs/pool/connpool/design_implementation.png)
 
 ### 初始化连接池
 

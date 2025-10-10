@@ -17,9 +17,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	irpcz "trpc.group/trpc-go/trpc-go/internal/rpcz"
 	"trpc.group/trpc-go/trpc-go/rpcz"
-	"github.com/stretchr/testify/require"
 )
 
 func TestFilterNames(t *testing.T) {

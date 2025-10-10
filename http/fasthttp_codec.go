@@ -25,12 +25,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/valyala/fasthttp"
 	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	icodec "trpc.group/trpc-go/trpc-go/internal/codec"
 	"trpc.group/trpc-go/trpc-go/internal/protocol"
-	"github.com/valyala/fasthttp"
 )
 
 func init() {

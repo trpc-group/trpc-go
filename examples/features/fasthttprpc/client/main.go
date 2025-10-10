@@ -19,13 +19,13 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/valyala/fasthttp"
 	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	pb "trpc.group/trpc-go/trpc-go/examples/features/httprpc/proto/echo"
 	thttp "trpc.group/trpc-go/trpc-go/http"
 	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/log"
-	"github.com/valyala/fasthttp"
 )
 
 func main() {

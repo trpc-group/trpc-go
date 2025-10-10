@@ -73,9 +73,3 @@ func main() {
     }
 }
 ```
-
-## Explanation
-
-For more Information, please refer to:
-
-* [Building a Generic HTTP Standard Service with tRPC-Go](https://iwiki.woa.com/pages/viewpage.action?pageId=490796278)

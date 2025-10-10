@@ -19,9 +19,10 @@ package mockhttp
 
 import (
 	context "context"
-	client "trpc.group/trpc-go/trpc-go/client"
-	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
+
+	gomock "github.com/golang/mock/gomock"
+	client "trpc.group/trpc-go/trpc-go/client"
 )
 
 // MockClient is a mock of Client interface

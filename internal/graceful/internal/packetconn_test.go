@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
-	. "trpc.group/trpc-go/trpc-go/internal/graceful/internal"
 	"github.com/stretchr/testify/assert"
+	. "trpc.group/trpc-go/trpc-go/internal/graceful/internal"
 )
 
 func TestListenPacket(t *testing.T) {

@@ -32,7 +32,7 @@ const (
 // Codec defines the interface of business communication protocol,
 // which contains head and body. It only parses the body in binary,
 // and then the business body struct will be handled by serializer.
-// In common, the body's protocol is pb, json, jce, etc. Specially,
+// In common, the body's protocol is pb, json, etc. Specially,
 // we can register our own serializer to handle other body types.
 type Codec interface {
 	// Encode pack the body into binary buffer.

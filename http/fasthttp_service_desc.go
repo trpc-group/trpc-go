@@ -17,8 +17,8 @@ import (
 	"context"
 	"errors"
 
-	"trpc.group/trpc-go/trpc-go/server"
 	"github.com/valyala/fasthttp"
+	"trpc.group/trpc-go/trpc-go/server"
 )
 
 // CtxKey is used to store context.Context in requestCtx.

@@ -18,9 +18,9 @@ import (
 	"testing"
 	"time"
 
-	"trpc.group/trpc-go/trpc-go/transport"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+	"trpc.group/trpc-go/trpc-go/transport"
 )
 
 func TestConnTypeConnPool(t *testing.T) {

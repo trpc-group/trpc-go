@@ -18,9 +18,9 @@ import (
 	"strings"
 	"testing"
 
-	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 )
 
 func TestImpl(t *testing.T) {

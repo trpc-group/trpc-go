@@ -17,8 +17,8 @@ import (
 	"reflect"
 	"testing"
 
-	"trpc.group/trpc-go/trpc-go/restful"
 	"github.com/stretchr/testify/require"
+	"trpc.group/trpc-go/trpc-go/restful"
 )
 
 // TestJSONSerializer_Marshal tests the Marshal function of JSONSerializer.

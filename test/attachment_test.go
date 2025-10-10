@@ -189,14 +189,14 @@ func (s *TestSuite) TestAttachment() {
 }
 
 // 这里通过测试用例来展示其他可行方法，并讨论各种方法的优点和缺点，包括以下方法：
-// 1. trans_info 字段透传 https://iwiki.woa.com/pages/viewpage.action?pageId=284269846
+// 1. trans_info 字段透传
 // 2. client 指定空序列化方式
-// 3. server 自定义桩代码透传数据 https://iwiki.woa.com/pages/viewpage.action?pageId=253291617
+// 3. server 自定义桩代码透传数据
 // 4. pb3 中 byte 定义字段加上相关减少拷贝的函数 https://learn.microsoft.com/en-us/aspnet/core/grpc/performance?view=aspnetcore-7.0#binary-payloads
-// 5. streaming https://iwiki.woa.com/pages/viewpage.action?pageId=284289215
+// 5. streaming
 
 // 1. trans_info 字段透传。
-// 框架支持在 client 和 server 之间透传字段，并在整个调用链路自动透传下去。https://iwiki.woa.com/pages/viewpage.action?pageId=284269846
+// 框架支持在 client 和 server 之间透传字段，并在整个调用链路自动透传下去。
 // 因为 trans_info 声明为 pb 中的 map<string, bytes> 类型，所以二进制文件不可避免的需要被序列化/反序列化。
 //
 // 请求协议头

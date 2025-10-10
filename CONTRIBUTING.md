@@ -1,167 +1,160 @@
-# 为 tRPC-Go 作出贡献
+English | [中文](CONTRIBUTING.zh_CN.md)
 
-欢迎您 [提出问题](issues) 或 [merge requests](merge_requests)，建议您在为 tRPC-Go 作出贡献前先阅读以下 tRPC-Go 贡献指南。
+# How to Contribute
 
-### 代码规范
- 
-必须遵循 [腾讯 Golang 代码规范](https://git.woa.com/standards/go)。
+Thank you for your interest and support in tRPC!
 
-### 提交日志编写规范
+We welcome and appreciate any form of contribution, including but not limited to submitting issues, providing improvement suggestions, improving documentation, fixing bugs, and adding features.
+This document aims to provide you with a detailed contribution guide to help you better participate in the project.
+Please read this guide carefully before contributing and make sure to follow the rules here.
+We look forward to working with you to make this project better together!
 
-术语对照：
+## Before contributing code
 
-* 合并请求：Merge Request，简称 MR
+The project welcomes code patches, but to make sure things are well coordinated you should discuss any significant change before starting the work.
+It's recommended that you signal your intention to contribute in the issue tracker, either by claiming an [existing one](https://github.com/trpc-group/trpc-go/issues) or by [opening a new issue](https://github.com/trpc-group/trpc-go/issues/new).
 
-当用户提交合并请求之后，提交日志实际上有两种：
+### Checking the issue tracker
 
-1. 点入工蜂合并请求页面左上角显示的标题（title）以及描述（description）
-2. 在一个合并请求下后续不断追加的各个 commit
+Whether you already know what contribution to make, or you are searching for an idea, the [issue tracker](https://github.com/trpc-group/trpc-go/issues) is always the first place to go.
+Issues are triaged to categorize them and manage the workflow.
 
-目前 tRPC-Go 的开发采取压缩合并（Squash and Merge）的方式，因此上述第一种日志会作为最终的提交信息在主干上保留下来，这一种日志也是本规范所重点讨论的。
+Most issues will be marked with one of the following workflow labels:
+- **NeedsInvestigation**: The issue is not fully understood and requires analysis to understand the root cause.
+- **NeedsDecision**: The issue is relatively well understood, but the tRPC-Go team hasn't yet decided the best way to address it.
+  It would be better to wait for a decision before writing code.
+  If you are interested in working on an issue in this state, feel free to "ping" maintainers in the issue's comments if some time has passed without a decision.
+- **NeedsFix**: The issue is fully understood and code can be written to fix it.
 
-而对于第二种日志，建议贡献者只在每次提交时书写一行简要信息即可（无需加句号）。
+### Opening an issue for any new problem
 
-对于第一种提交日志，用户需要在工蜂合并请求页面上点击编辑（edit）按钮进行修改，分为以下几个部分：
+Excluding very trivial changes, all contributions should be connected to an existing issue.
+Feel free to open one and discuss your plans.
+This process gives everyone a chance to validate the design, helps prevent duplication of effort, and ensures that the idea fits inside the goals for the language and tools.
+It also checks that the design is sound before code is written; the code review tool is not the place for high-level discussions.
 
-1. 标题（title）
-2. 描述（description）
+When opening an issue, make sure to answer these five questions:
+1. What version of tRPC-Go are you using ?
+2. What operating system and processor architecture are you using(`go env`)?
+3. What did you do?
+4. What did you expect to see?
+5. What did you see instead?
 
-#### 标题规范
+For change proposals, see Proposing Changes To [tRPC-Proposals](https://github.com/trpc-group/trpc/tree/main/proposal).
 
-* 简要描述合并请求修改内容，尽量不超过 76 个半角字符
-* 格式：`软件包：变更结果` 比如 `admin: check error before setting header in test`
-  * 软件包：以主要受影响的软件包为前缀，跟随一个半角冒号和空格 `:␣`
-    * 参考同目录内相似提交的标题
-    * 多个包的协同修改可以使用 Shell 风格的表达式展开 `{pkgA,pkgB,pkgC}:␣`
-    * 大规模修改（如批量格式化）可以使用“all”或使用“lsc”（Large-scale change）
-  * 变更结果：内容应可将这句话填空使其通顺：“这个变更修改软件包以_________”
-    * 使用一般现在时动词开头，中文不使用“了”字，同时由于不是完整句，第一个词无需大写，末尾不需要有句号/句点
-    * 使用范围准确的动词，如尽量描述具体执行的动作，如“添加”、“修改”、“删除”等，同时避免使用“修复”、“解决”等表示愿望的动词
-    * 当空间允许，并且目的简单时，可以在标题内包括对应内容。如：“降低 CPU 请求量以减少资源浪费”
+## Contributing code
 
-**注意**：
-* 如果你无法用一句话概括这次变更，这可能意味着你需要将提交拆分为更小单位
-* 当 MR 还没有开发好，可以在开头加上 `[WIP]` 以告知 reviewer 不要 review，开发完成后及时移除该标志
+Follow the [GitHub flow](https://docs.github.com/en/get-started/quickstart/github-flow) to [create a GitHub pull request](https://docs.github.com/en/get-started/quickstart/github-flow#create-a-pull-request).
+If this is your first time submitting a PR to the tRPC-Go project, you will be reminded in the "Conversation" tab of the PR to sign and submit the [Contributor License Agreement](https://github.com/trpc-group/cla-database/blob/main/Tencent-Contributor-License-Agreement.md).
+Only when you have signed the Contributor License Agreement, your submitted PR has the possibility of being accepted.
 
-标题示例：
+Some things to keep in mind:
+- Ensure that your code conforms to the project's code specifications.
+  This includes but is not limited to code style, comment specifications, etc. This helps us to maintain the cleanliness and consistency of the project.
+- Before submitting a PR, please make sure that you have tested your code locally(`go test ./...`).
+  Ensure that the code has no obvious errors and can run normally.
+- To update the pull request with new code, just push it to the branch;
+  you can either add more commits, or rebase and force-push (both styles are accepted).
+- If the request is accepted, all commits will be squashed, and the final commit description will be composed by concatenating the pull request's title and description.
+  The individual commits' descriptions will be discarded.
+  See following "Write good commit messages" for some suggestions.
 
-```markdown
-internal: define and internalize protocol name constants
-admin: check error before setting header in test
-robust: reject probability should be reverted
-client: support setting of caller metadata through client config
-test: assert additional error code for e2e test
-plugin: avoid using reference to loop iterator variable
-codec: message should be put back to pool
-docs: specify that version is trpc framework version
-lsc: cherry-pick to opensource
-{rpcz, server}: add docs about how to inject root span for custom transport
+### Writing good commit messages
+
+Commit messages in tRPC-Go follow a specific set of conventions, which we discuss in this section.
+
+Here is an example of a good one:
+
+
+> math: improve Sin, Cos and Tan precision for very large arguments
+>
+> The existing implementation has poor numerical properties for
+> large arguments, so use the McGillicutty algorithm to improve
+> accuracy above 1e10.
+>
+> The algorithm is described at https://wikipedia.org/wiki/McGillicutty_Algorithm
+>
+> Fixes #159
+>
+> RELEASE NOTES: Improved precision of Sin, Cos, and Tan for very large arguments (>1e10) 
+
+#### First line
+
+The first line of the change description is conventionally a short one-line summary of the change, prefixed by the primary affected package.
+
+A rule of thumb is that it should be written so to complete the sentence "This change modifies tRPC-Go to _____."
+That means it does not start with a capital letter, is not a complete sentence, and actually summarizes the result of the change.
+
+Follow the first line by a blank line.
+
+#### Main content
+
+The rest of the description elaborates and should provide context for the change and explain what it does.
+Write in complete sentences with correct punctuation, just like for your comments in tRPC-Go.
+Don't use HTML, Markdown, or any other markup language.
+Add any relevant information, such as benchmark data if the change affects performance.
+The [benchstat](https://godoc.org/golang.org/x/perf/cmd/benchstat) tool is conventionally used to format benchmark data for change descriptions.
+
+#### Referencing issues
+
+The special notation "Fixes #12345" associates the change with issue 12345 in the tRPC-Go issue tracker.
+When this change is eventually applied, the issue tracker will automatically mark the issue as fixed.
+
+- If there is a corresponding issue, add either `Fixes #12345` or `Updates #12345` (the latter if this is not a complete fix) to this comment
+- If referring to a repo other than `trpc-go` you can use the `owner/repo#issue_number` syntax: `Fixes trpc-group/tnet#12345`
+
+#### PR type label
+
+The PR type label is used to help identify the types of changes going into the release over time. This may allow the Release Team to develop a better understanding of what sorts of issues we would miss with a faster release cadence.
+
+For all pull requests, one of the following PR type labels must be set:
+
+- type/bug: Fixes a newly discovered bug.
+- type/enhancement: Adding tests, refactoring.
+- type/feature: New functionality.
+- type/documentation: Adds documentation.
+- type/api-change: Adds, removes, or changes an API.
+- type/failing-test: CI test case is showing intermittent failures.
+- type/performance: Changes that improves performance.
+- type/ci: Changes the CI configuration files and scripts.
+
+#### Release notes
+
+Release notes are required for any pull request with user-visible changes, this could mean:
+
+- User facing, critical bug-fixes
+- Notable feature additions
+- Deprecations or removals
+- API changes
+- Documents additions
+
+If the current PR doesn't have user-visible changes, such as internal code refactoring or adding test cases, the release notes should be filled with 'NONE' and the changes in this PR will not be recorded in the next version's CHANGELOG. If the current PR has user-visible changes, the release notes should be filled out according to the actual situation, avoiding technical details and describing the impact of the current changes from a user's perspective as much as possible.
+
+Release notes are one of the most important reference points for users about to import or upgrade to a particular release of tRPC-Go.
+
+## Miscellaneous topics
+
+### Copyright headers
+
+Files in the tRPC-Go repository don't list author names, both to avoid clutter and to avoid having to keep the lists up to date.
+Instead, your name will appear in the change log.
+
+New files that you contribute should use the standard copyright header:
+
+```go
+//
+//
+// Tencent is pleased to support the open source community by making tRPC available.
+//
+// Copyright (C) 2023 THL A29 Limited, a Tencent company.
+// All rights reserved.
+//
+// If you have downloaded a copy of the tRPC source code from Tencent,
+// please note that tRPC source code is licensed under the  Apache 2.0 License,
+// A copy of the Apache 2.0 License is included in this file.
+//
+//
 ```
 
-#### 描述规范
-
-描述大致可以分为正文和脚注：
-
-##### 正文
-
-正文可以分为三部分：
-
-1. 背景：
-  * 说明本次合并请求的背景和目的，应允许任意 Reviewer 在不依赖其他信息的情况下，理解变更并进行 CR
-    * 举例来说，如果一次变更涉及性能改进，则应该提供变更前后的对比数据和测试方法，便于 Reviewer 判断和检验
-  * 如有必要，提供相关文档，bug 等链接。注意链接对读者（而非仅 Reviewer）应长期可见
-2. 变更目标：
-  * 本合并请求期望解决的问题是什么
-3. 变更内容：
-  * 详细列出代码变更内容，和标题进行呼应
-  * 设计到用户接口的变更或者重要变更，需要重点强调说明
-
-**注意**：
-
-* 正文开头不要逐字句地把标题完全重复一遍
-* 长段落需要在中间换行，每行尽量不超过 76 个半角字符
-* 正文内部完整句子的结尾要有句号/句点，段落结尾添加一个空行
-* 如果你在编写正文时发现内容在逻辑上无法被标题覆盖，这可能意味着你的修改文不对题，应当拆分成更多的合并请求进行提交
-* 在变更本身非常简单的情况下，以上正文可以进行缩减，只使用单一段落的几句话来完成
-
-正文示例：
-
-```markdown
-Currently, if you want to include caller metadata information during selection,
-you can only use client.WithCallerMetadata, as there is no way to append this
-information through configuration. However, callee metadata can be modified
-through configuration.
-
-To align with callee metadata, this MR now supports setting caller metadata
-through the configuration file.
-
-Detailed changes: added CallerMetadata configuration and updated the README.
-```
-
-##### 脚注
-
-目前工蜂在合入时会自动追加关联的 TAPD 单的脚注，因此贡献者不需要在脚注中手动填写相关信息，贡献者需要注意添加的脚注只有一条：
-
-* 对本合并请求所解决的 issue 进行关闭：`close #xxx`
-  * 注意 `close` 保持全小写状态
-  * `close` 后面有一个空格
-  * `#xxx` 中的 `xxx` 是相关 issue 的编号
-
-脚注示例：
-
-```markdown
-close #947
-```
-
-如果没有关联的 issue，脚注留空即可。
-
-### 分支管理
-
-tRPC-Go 主仓库一共包含一个 master 分支和多个 release 分支：
-
-release 分支
-
-请勿在 release 分支上提交任何 MR。
-
-master 分支
-
-master 分支作为长期稳定的开发分支，经过测试后会在下一个版本合并到 release 分支。
-MR 的目标分支应该是 master 分支。
-
-```html
-trpc-go/trpc-go/r0.1
- ↑ 经过测试之后，Create a merge commit 合并进入 release 分支，发布版本
-trpc-go/trpc-go/master
- ↑ 开发者提出 MR，Squash and merge 合并进入主仓库 master 分支
-your_repo/trpc-go/feature
- ↑ 创建临时特性开发分支
-your_repo/trpc-go/master
- ↑ 主仓库 fork 到私人仓库
-trpc-go/trpc-go/master
-```
-
-### MR 流程规范
-
-对于所有的 MR，我们会运行一些代码检查和测试，一经测试通过，会接受这次 MR，但不会立即将代码合并到 release 分支上，会有一些延迟。
-
-当您准备 MR 时，请确保已经完成以下几个步骤：
-
-1. 将主仓库代码 Fork 到自己名下。
-2. 基于您名下的 master 分支创建您的临时开发分支，并在该开发分支上开始编码。
-3. 检查您的代码语法及格式，确保完全符合腾讯 Golang 代码规范。
-4. 提 MR 之前，首先从主仓库 master 分支 MR 到您的个人开发分支上，保证代码是最新的。
-5. 从您的开发分支提一个 MR 到主仓库的 master 分支上。
-6. 参考上面提到的规范写好 MR 的标题和描述，MR 创建时可以忽略 TAPD（除非是确定已知的 TAPD 任务），MR 提交后，PMC 成员会辅助 TAPD 的创建/关联。
-7. 经过 CR 完成后，Squash 合并进入主仓库 master 分支，此时开发分支已完成任务可以删除了。
-8. 从主仓库 master 分支 Rebase 合并更新到您名下的 master 分支。
-9. 重复以上 2~8 步骤，进入下一个特性开发周期。
-
-## 试用 MR
-
-提交 MR 后需要经过评审以及验证才能够合入，为了降低风险，推荐用户先用 replace 的方法对分支引入的特性/修复的 bug 进行验证，流程如下：
-
-1. 将以下内容加入到用户自己仓库的 `go.mod` 中（假设提交 MR 的 fork 仓库为 `git.woa.com/somename/trpc-go`（通过 URL 链接提取出来类似的部分），分支名为 `somebranch`，这两个信息可以从工蜂 MR 界面里大标题的下方拿到）：
-```shell
-replace git.code.oa.com/trpc-go/trpc-go => git.woa.com/somename/trpc-go somebranch
-```
-2. 执行 `go mod tidy`，上述 `somebranch` 会自动更新为对应的 commit id
+Files in the repository are copyrighted the year they are added.
+Do not update the copyright year on files that you change.

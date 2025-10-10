@@ -18,7 +18,7 @@ import (
 	"bytes"
 	"io"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	pb "trpc.group/trpc-go/trpc-go/examples/features/attachment/proto/echo"
 	"trpc.group/trpc-go/trpc-go/log"

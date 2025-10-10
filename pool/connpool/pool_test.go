@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
-	"trpc.group/trpc-go/trpc-go/codec"
 	"github.com/stretchr/testify/assert"
+	"trpc.group/trpc-go/trpc-go/codec"
 )
 
 func TestWithGetOptions(t *testing.T) {

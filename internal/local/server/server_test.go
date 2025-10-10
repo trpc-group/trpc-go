@@ -17,10 +17,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/filter"
 	"trpc.group/trpc-go/trpc-go/internal/local/server"
-	"github.com/stretchr/testify/require"
 )
 
 // TestRegisterAndGetService tests the registration and retrieval of a service.

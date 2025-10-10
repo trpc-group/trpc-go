@@ -56,7 +56,6 @@ func init() {
 	// http.DefaultServeMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 	//
 	// Simply importing the net/http/pprof package anonymously will not work.
-	// More details see: https://git.woa.com/trpc-go/trpc-go/issues/912, and https://github.com/golang/go/issues/42834.
 	http.DefaultServeMux = http.NewServeMux()
 }
 

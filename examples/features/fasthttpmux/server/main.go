@@ -17,10 +17,10 @@ package main
 import (
 	"fmt"
 
-	"trpc.group/trpc-go/trpc-go"
 	routing "github.com/qiangxue/fasthttp-routing"
 	"github.com/valyala/fasthttp"
 
+	"trpc.group/trpc-go/trpc-go"
 	thttp "trpc.group/trpc-go/trpc-go/http"
 )
 

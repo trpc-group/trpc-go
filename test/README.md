@@ -255,8 +255,6 @@ func (s *TestSuite) newTRPCClient(opts ...client.Option) testpb.TestTRPCClientPr
 }
 ```
 
-代码的第 5 行会发起一个普通 RPC `UnaryCall`, 请求参数 `s.defaultSimpleRequest` 为 `*testpb.SimpleRequest` 类型，可以从 pb 生成的桩代码包 `testpb "git.code.oa.com/trpc-go/trpc-go/test/protocols"` 中自行构建请求参数。
-
 ### 第四步：根据返回结果验证
 
 代码的第 6 行根据返回的错误码，使用 require 包验证错误码的的类型是否符合预期的 `errs.RetClientTimeout`。

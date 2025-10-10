@@ -53,10 +53,3 @@ The client log will be displayed as follows:
 {"cmds":["/cmds","/version","/cmds/rpcz/spans","/cmds/rpcz/spans/","/debug/pprof/profile","/debug/pprof/symbol","/testCmds","/cmds/loglevel","/cmds/config","/is_healthy/","/debug/pprof/","/debug/pprof/cmdline","/debug/pprof/trace"],"errorcode":0,"message":""}
 test cmds%
 ```
-
-## Explanation
-
-The admin has already integrated the pprof capability by default:
-
-* If admin is enabled, the framework has integrated the http/pprof functionality by default. Do not register again using admin.
-* If admin is enabled on the PCG 123 platform, you can view the flame graph on the platform. For more information, please refer to the [tRPC-Go admin commands](https://iwiki.woa.com/pages/viewpage.action?pageId=99485663).

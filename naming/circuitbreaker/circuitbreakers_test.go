@@ -20,8 +20,8 @@ import (
 	"testing"
 	"time"
 
-	. "trpc.group/trpc-go/trpc-go/naming/circuitbreaker"
 	"github.com/stretchr/testify/require"
+	. "trpc.group/trpc-go/trpc-go/naming/circuitbreaker"
 )
 
 func TestCircuitBreakers_ErrRateToOpen(t *testing.T) {

@@ -21,13 +21,13 @@ import (
 	"errors"
 	"fmt"
 
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	_ "trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	_ "trpc.group/trpc-go/trpc-go/http"
 	"trpc.group/trpc-go/trpc-go/restful"
 	"trpc.group/trpc-go/trpc-go/server"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // START ======================================= Server Service Definition ======================================= START

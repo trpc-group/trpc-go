@@ -8,7 +8,7 @@ Plugins are the bridge that connects the framework core and external service gov
 
     ```go
     import (
-        _ "git.code.oa.com/trpc-go/trpc-go/examples/features/plugin"
+    	_ "trpc.group/trpc-go/trpc-go/examples/features/plugin"
     )
     ```
 

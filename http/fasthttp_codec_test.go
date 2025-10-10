@@ -22,6 +22,9 @@ import (
 	"net"
 	"testing"
 
+	"github.com/r3labs/sse/v2"
+	"github.com/stretchr/testify/require"
+	"github.com/valyala/fasthttp"
 	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
@@ -30,9 +33,6 @@ import (
 	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/server"
 	helloworld "trpc.group/trpc-go/trpc-go/testdata/restful/helloworld"
-	"github.com/r3labs/sse/v2"
-	"github.com/stretchr/testify/require"
-	"github.com/valyala/fasthttp"
 )
 
 func TestFastHTTPServerEncode(t *testing.T) {

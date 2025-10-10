@@ -1763,7 +1763,6 @@ func TestPOSTOnlyForHTTPRPC(t *testing.T) {
 }
 
 func TestDecorateRequest(t *testing.T) {
-	// Reference: http://mk.woa.com/q/292458.
 	// Start server.
 	ln := mustListen(t)
 	defer ln.Close()

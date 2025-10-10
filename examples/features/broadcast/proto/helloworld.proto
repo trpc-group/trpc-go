@@ -14,7 +14,7 @@
 syntax = "proto3";
 
 package trpc.test.helloworld;
-option go_package="git.code.oa.com/trpcprotocol/test/helloworld";
+option go_package="trpc.group/trpcprotocol/test/helloworld";
 
 service Greeter {
   rpc SayHello (HelloRequest) returns (HelloReply) {}

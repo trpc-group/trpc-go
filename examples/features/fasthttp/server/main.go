@@ -17,9 +17,9 @@ package main
 import (
 	"fmt"
 
+	"github.com/valyala/fasthttp"
 	"trpc.group/trpc-go/trpc-go"
 	thttp "trpc.group/trpc-go/trpc-go/http"
-	"github.com/valyala/fasthttp"
 )
 
 func main() {

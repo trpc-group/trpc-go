@@ -17,10 +17,10 @@ import (
 	"errors"
 	"testing"
 
-	_ "trpc.group/trpc-go/trpc-go/naming/selector"
-	"trpc.group/trpc-go/trpc-go/plugin"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+	_ "trpc.group/trpc-go/trpc-go/naming/selector"
+	"trpc.group/trpc-go/trpc-go/plugin"
 )
 
 func TestIPSelectorPlugin(t *testing.T) {

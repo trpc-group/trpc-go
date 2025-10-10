@@ -19,9 +19,9 @@ package client
 import (
 	"testing"
 
-	"trpc.group/trpc-go/trpc-go/transport"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+	"trpc.group/trpc-go/trpc-go/transport"
 )
 
 func TestConnTypeShortWithTNet(t *testing.T) {

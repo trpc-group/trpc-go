@@ -4,13 +4,13 @@ English | [中文](README.zh_CN.md)
 
 Package `naming` can register nodes under the corresponding service name. In addition to `ip:port`, the registration information will also include the running environment, container and other customized metadata information. After the caller obtains all nodes based on the service name, the routing module filters the nodes based on metadata information. Finally, the load balancing algorithm selects a node from the nodes that meet the requirements to make the final request. The name provides a unified abstraction for service management and avoids the operation and maintenance difficulties caused by directly using `ip:port`.
 
-In tRPC-Go, the `register` package defines the registration specification of the server, and `discovery`, `servicerouter`, `loadbalance`, and `circuitebreaker` together form the `selector` package and define the client's service discovery specification.
+In tRPC-Go, the `register` package defines the registration specification of the server, and `discovery`, `servicerouter`, `loadbalance`, and `circuitebreaker` together form the `slector` package and define the client's service discovery specification.
 
 ## Principle
 
 Let's first look at the design of the `naming`:
 
-![naming design](https://git.woa.com/trpc-go/trpc-go/raw/master/.resources/naming/naming.png)
+![naming design](/.resources-without-git-lfs/naming/naming.png)
 
 Based on the above diagram, let's briefly introduce the approximate design and implementation.
 
@@ -58,7 +58,7 @@ CircuitBreaker provides a common interface for determining whether a service nod
 
 ### How to use
 
-tRPC-Go supports [polaris mesh](https://git.woa.com/trpc-go/trpc-naming-polaris), which can discovery nodes by service name. If the business sets the target when calling, the endpoint of the target will be used to discovery.
+tRPC-Go supports [polaris mesh](https://github.com/trpc-ecosystem/go-naming-polarismesh), which can discovery nodes by service name. If the business sets the target when calling, the endpoint of the target will be used to discovery.
 
 ```go
 client.WithTarget(fmt.Sprintf("%s://%s", exampleScheme, exampleServiceName)),

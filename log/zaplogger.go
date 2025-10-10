@@ -251,7 +251,6 @@ func defaultTimeFormat(t time.Time) []byte {
 }
 
 // ZapLogWrapper delegates zapLogger which was introduced in this
-// [issue](https://git.woa.com/trpc-go/trpc-go/issues/260).
 // By ZapLogWrapper proxy, we can add a layer to the debug series function calls, so that the caller
 // information can be set correctly.
 type ZapLogWrapper struct {

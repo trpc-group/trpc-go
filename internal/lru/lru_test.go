@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	. "trpc.group/trpc-go/trpc-go/internal/lru"
 	"github.com/stretchr/testify/require"
+	. "trpc.group/trpc-go/trpc-go/internal/lru"
 )
 
 func TestLRU(t *testing.T) {

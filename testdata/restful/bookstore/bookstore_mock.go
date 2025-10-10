@@ -21,9 +21,9 @@ import (
 	context "context"
 	reflect "reflect"
 
-	client "trpc.group/trpc-go/trpc-go/client"
 	gomock "github.com/golang/mock/gomock"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
+	client "trpc.group/trpc-go/trpc-go/client"
 )
 
 // MockBookstoreService is a mock of BookstoreService interface.

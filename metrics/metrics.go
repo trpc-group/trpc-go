@@ -46,10 +46,6 @@ import (
 	"time"
 )
 
-// Do not assume that these mutexes are always available for the following global maps.
-// Avoid any concurrent modifications to these maps after initialization/setup.
-// Even during setup, refrain from directly or indirectly modifying them through a newly created goroutine.
-// For more information, please refer to https://git.woa.com/trpc-go/trpc-go/issues/822.
 var (
 	// metricsSinks emits same metrics information to multi external system at the same time.
 	metricsSinksMutex = sync.RWMutex{}

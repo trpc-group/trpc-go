@@ -18,8 +18,8 @@ import (
 	"os"
 	"testing"
 
-	. "trpc.group/trpc-go/trpc-go/internal/expandenv"
 	"github.com/stretchr/testify/require"
+	. "trpc.group/trpc-go/trpc-go/internal/expandenv"
 )
 
 func TestExpandEnv(t *testing.T) {

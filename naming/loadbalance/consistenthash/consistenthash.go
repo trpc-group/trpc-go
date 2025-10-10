@@ -22,9 +22,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cespare/xxhash"
 	"trpc.group/trpc-go/trpc-go/naming/loadbalance"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
-	"github.com/cespare/xxhash"
 )
 
 // defaultReplicas is the default virtual node coefficient.

@@ -260,16 +260,10 @@ func (m *msg) WithClientRPCName(s string) {
 }
 
 func (m *msg) updateMethodNameUsingRPCName(s string) {
-	// If rpc name is of trpc format, retrieve method name from rpc name
-	// according to https://git.woa.com/trpc/trpc-proposal/blob/master/A15-metrics-rules.md.
 	if rpcNameIsTRPCForm(s) {
 		m.WithCalleeMethod(methodFromRPCName(s))
 		return
 	}
-	// Otherwise set method name as rpc name if the original value is empty.
-	// Reference:
-	//  https://git.woa.com/trpc/trpc-proposal/blob/master/A15-metrics-rules.md
-	//  https://git.woa.com/trpc/trpc-proposal/merge_requests/90
 	if m.CalleeMethod() == "" {
 		m.WithCalleeMethod(s)
 	}
@@ -764,9 +758,6 @@ func getAppServerService(s string) (app, server, service string) {
 	return
 }
 
-// methodFromRPCName returns the method parsed from rpc string.
-// Reference:
-// https://git.woa.com/trpc/trpc-proposal/blob/master/A15-metrics-rules.md
 func methodFromRPCName(s string) string {
 	return s[strings.LastIndex(s, "/")+1:]
 }

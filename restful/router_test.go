@@ -26,6 +26,9 @@ import (
 	"testing"
 	"time"
 
+	frouter "github.com/fasthttp/router"
+	"github.com/stretchr/testify/require"
+	"github.com/valyala/fasthttp"
 	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
@@ -36,9 +39,6 @@ import (
 	"trpc.group/trpc-go/trpc-go/server"
 	"trpc.group/trpc-go/trpc-go/testdata/restful/helloworld"
 	"trpc.group/trpc-go/trpc-go/transport"
-	frouter "github.com/fasthttp/router"
-	"github.com/stretchr/testify/require"
-	"github.com/valyala/fasthttp"
 )
 
 // ------------------------------------- old stub -----------------------------------------//

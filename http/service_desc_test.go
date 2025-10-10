@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	thttp "trpc.group/trpc-go/trpc-go/http"
 	"trpc.group/trpc-go/trpc-go/server"
-	"github.com/stretchr/testify/require"
 )
 
 func TestRegisterDefaultService(t *testing.T) {

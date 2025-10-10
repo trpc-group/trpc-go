@@ -77,7 +77,7 @@ import (
     "strings"
     
     "trpc.group/trpc-go/trpc-go/log"
-    trpc "trpc.group/trpc-go/trpc-go"
+    "trpc.group/trpc-go/trpc-go"
     _ "trpc.group/trpc-go/trpc-go/stream"
     pb "github.com/some-repo/examples/helloworld"
 )

@@ -19,8 +19,8 @@ import (
 	"io"
 	"time"
 
-	"trpc.group/trpc-go/trpc-go/internal/report"
 	"github.com/hashicorp/go-multierror"
+	"trpc.group/trpc-go/trpc-go/internal/report"
 )
 
 // AsyncRollWriter is the asynchronous rolling log writer which implements zapcore.WriteSyncer.

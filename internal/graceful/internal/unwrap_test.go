@@ -16,8 +16,8 @@ package graceful_test
 import (
 	"testing"
 
-	. "trpc.group/trpc-go/trpc-go/internal/graceful/internal"
 	"github.com/stretchr/testify/require"
+	. "trpc.group/trpc-go/trpc-go/internal/graceful/internal"
 )
 
 func TestUnwrap(t *testing.T) {

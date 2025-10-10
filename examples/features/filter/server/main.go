@@ -17,9 +17,9 @@ package main
 import (
 	"context"
 
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/examples/features/filter/shared"
 
-	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/examples/features/common"
 	"trpc.group/trpc-go/trpc-go/filter"

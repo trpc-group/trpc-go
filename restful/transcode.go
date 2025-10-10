@@ -171,8 +171,6 @@ func (tr *transcoder) handle(ctx context.Context, reqBody interface{}) (proto.Me
 	}
 
 	if rsp == nil {
-		// this may happen when cors filter fires preflight logic:
-		//   https://git.woa.com/trpc-go/trpc-filter/blob/cors/v0.1.4/cors/cors.go#L217
 		return tr.output(), nil
 	}
 	r, ok := rsp.(proto.Message)

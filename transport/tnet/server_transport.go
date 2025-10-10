@@ -10,11 +10,11 @@
 // A copy of the Apache 2.0 License is included in this file.
 //
 //
-// Package tnet provides tRPC-Go transport implementation for tnet networking framework.
 
 //go:build linux || freebsd || dragonfly || darwin
 // +build linux freebsd dragonfly darwin
 
+// Package tnet provides tRPC-Go transport implementation for tnet networking framework.
 package tnet
 
 import (

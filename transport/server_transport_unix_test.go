@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
-	"trpc.group/trpc-go/trpc-go/transport"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"trpc.group/trpc-go/trpc-go/transport"
 )
 
 func TestST_UnixDomain(t *testing.T) {

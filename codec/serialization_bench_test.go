@@ -51,7 +51,6 @@ func BenchmarkSerializationSliceAndMap(b *testing.B) {
 
 func init() {
 	oldRegisterSerializer(SerializationTypeFlatBuffer, &FBSerialization{})
-	oldRegisterSerializer(SerializationTypeJCE, &JCESerialization{})
 	oldRegisterSerializer(SerializationTypeJSON, &JSONPBSerialization{})
 	oldRegisterSerializer(SerializationTypeNoop, &NoopSerialization{})
 	oldRegisterSerializer(SerializationTypePB, &PBSerialization{})

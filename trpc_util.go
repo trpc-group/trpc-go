@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
-	"trpc.group/trpc-go/trpc-go/internal/expandenv"
 	"github.com/panjf2000/ants/v2"
+	"trpc.group/trpc-go/trpc-go/internal/expandenv"
 
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"

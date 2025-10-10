@@ -23,9 +23,9 @@ import (
 	reflect "reflect"
 	sync "sync"
 
-	_ "git.code.oa.com/trpc-go/trpc"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	_ "trpc.group/trpc-go/trpc-go"
 )
 
 const (
