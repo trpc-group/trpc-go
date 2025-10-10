@@ -305,14 +305,17 @@ func TestGetConnection(t *testing.T) {
 		conn.Close()
 	})
 	t.Run("Get Multiple Succeed", func(t *testing.T) {
+		// Use a pool with only 1 connection per host to ensure connection reuse
+		singleConnPool := tnetmultiplexed.NewPool(tnet.Dial, tnetmultiplexed.WithConnectNumber(1))
+
 		ctx, opts := getOpts()
-		conn, err := pool.GetVirtualConn(ctx, addr.Network(), addr.String(), opts)
+		conn, err := singleConnPool.GetVirtualConn(ctx, addr.Network(), addr.String(), opts)
 		require.Nil(t, err)
 		conn.Close()
 		localAddr := conn.LocalAddr()
 		for i := 0; i < 9; i++ {
 			ctx, opts := getOpts()
-			conn, err := pool.GetVirtualConn(ctx, addr.Network(), addr.String(), opts)
+			conn, err := singleConnPool.GetVirtualConn(ctx, addr.Network(), addr.String(), opts)
 			require.Nil(t, err)
 			require.Equal(t, localAddr, conn.LocalAddr())
 			conn.Close()
@@ -333,12 +336,28 @@ func TestGetConnection(t *testing.T) {
 		defer c2.Close()
 	})
 	t.Run("Request ID Already Exist", func(t *testing.T) {
-		ctx, opts := getOpts()
-		c1, err := pool.GetVirtualConn(ctx, addr.Network(), addr.String(), opts)
+		// Use a pool with only 1 connection per host to ensure same physical connection
+		singleConnPool := tnetmultiplexed.NewPool(tnet.Dial, tnetmultiplexed.WithConnectNumber(1))
+
+		ctx, msg := codec.EnsureMessage(context.Background())
+		reqID := getReqID()
+		msg.WithRequestID(reqID)
+		opts := multiplexed.NewGetOptions()
+		opts.WithFramerBuilder(&simpleFramer{})
+		opts.WithMsg(msg)
+
+		c1, err := singleConnPool.GetVirtualConn(ctx, addr.Network(), addr.String(), opts)
 		require.Nil(t, err)
 		defer c1.Close()
 
-		_, err = pool.GetVirtualConn(ctx, addr.Network(), addr.String(), opts)
+		// Create a new message with the same Request ID for the second call
+		ctx2, msg2 := codec.EnsureMessage(context.Background())
+		msg2.WithRequestID(reqID) // Same Request ID as first call
+		opts2 := multiplexed.NewGetOptions()
+		opts2.WithFramerBuilder(&simpleFramer{})
+		opts2.WithMsg(msg2)
+
+		_, err = singleConnPool.GetVirtualConn(ctx2, addr.Network(), addr.String(), opts2)
 		require.Equal(t, tnetmultiplexed.ErrDuplicateID, err)
 	})
 	t.Run("Empty FramerBuilder", func(t *testing.T) {

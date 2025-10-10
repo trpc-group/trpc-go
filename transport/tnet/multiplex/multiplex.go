@@ -30,7 +30,7 @@ import (
 
 const (
 	defaultDialTimeout          = 200 * time.Millisecond
-	defaultConnNumberPerHost    = 2
+	defaultConnNumberPerHost    = 1
 	defaultMaxPickConnRetries   = 100
 	defaultConcurrentDialGroups = 1 // Default to 1 for backward compatibility.
 )

@@ -36,6 +36,10 @@ func (x *X) ptr() frame {
 }
 
 func TestFrameFormat(t *testing.T) {
+	// Get the actual line number of initpc dynamically
+	initLine := fmt.Sprintf("%d", frame(initpc).line())
+	initLocation := fmt.Sprintf("stack_test.go:%s", initLine)
+
 	var tests = []struct {
 		frame
 		format string
@@ -60,7 +64,7 @@ func TestFrameFormat(t *testing.T) {
 	}, {
 		initpc,
 		"%d",
-		"11",
+		initLine,
 	}, {
 		0,
 		"%d",
@@ -90,7 +94,7 @@ func TestFrameFormat(t *testing.T) {
 	}, {
 		initpc,
 		"%v",
-		"stack_test.go:11",
+		initLocation,
 	}, {
 		initpc,
 		"%+v",
@@ -142,6 +146,25 @@ func getStackTrace() stackTrace {
 }
 
 func TestStackTraceFormat(t *testing.T) {
+	// Get stack trace and extract actual line numbers dynamically
+	st := getStackTrace()[:2]
+	if len(st) < 2 {
+		t.Fatal("Need at least 2 frames for testing")
+	}
+
+	// Get actual line numbers from the stack trace
+	line1 := fmt.Sprintf("%d", st[0].line())
+	line2 := fmt.Sprintf("%d", st[1].line())
+
+	// Build expected strings with actual line numbers
+	expectedV := fmt.Sprintf(`\[stack_test.go:%s stack_test.go:%s\]`, line1, line2)
+	expectedPlusV := "\n" +
+		"trpc.group/trpc-go/trpc-go/errs.getStackTrace\n" +
+		fmt.Sprintf("\t.+errs/stack_test.go:%s\n", line1) +
+		"trpc.group/trpc-go/trpc-go/errs.TestStackTraceFormat\n" +
+		fmt.Sprintf("\t.+errs/stack_test.go:%s", line2)
+	expectedSharpV := fmt.Sprintf(`\[\]errs\.frame{stack_test.go:%s, stack_test.go:%s}`, line1, line2)
+
 	tests := []struct {
 		stackTrace
 		format string
@@ -179,25 +202,21 @@ func TestStackTraceFormat(t *testing.T) {
 		"%#v",
 		`\[\]errs\.frame{}`,
 	}, {
-		getStackTrace()[:2],
+		st,
 		"%s",
 		`\[stack_test.go stack_test.go\]`,
 	}, {
-		getStackTrace()[:2],
+		st,
 		"%v",
-		`\[stack_test.go:121 stack_test.go:173\]`,
+		expectedV,
 	}, {
-		getStackTrace()[:2],
+		st,
 		"%+v",
-		"\n" +
-			"trpc.group/trpc-go/trpc-go/errs.getStackTrace\n" +
-			"\t.+errs/stack_test.go:121\n" +
-			"trpc.group/trpc-go/trpc-go/errs.TestStackTraceFormat\n" +
-			"\t.+errs/stack_test.go:177",
+		expectedPlusV,
 	}, {
-		getStackTrace()[:2],
+		st,
 		"%#v",
-		`\[\]errs\.frame{stack_test.go:121, stack_test.go:185}`,
+		expectedSharpV,
 	}}
 
 	for i, tt := range tests {

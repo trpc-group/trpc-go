@@ -26,7 +26,6 @@ import (
 	"syscall"
 	"time"
 
-	reuseport "github.com/kavu/go_reuseport"
 	igr "trpc.group/trpc-go/trpc-go/internal/graceful"
 	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	itls "trpc.group/trpc-go/trpc-go/internal/tls"
@@ -227,7 +226,7 @@ func (s *serverTransport) listenAndServePacket(ctx context.Context, opts *Listen
 	listenerNum := 1
 	// Reuse port. To speed up IO, the kernel dispatches IO ReadReady events to threads.
 	if s.opts.ReusePort {
-		reuseport.ListenerBacklogMaxSize = 4096
+		// reuseport.ListenerBacklogMaxSize = 4096
 		// Use runtime.GOMAXPROCS(0) to get the actual number of available CPUs instead of runtime.NumCPU().
 		// This helps avoid creating too many listeners in containerized environments.
 		listenerNum = runtime.GOMAXPROCS(0)

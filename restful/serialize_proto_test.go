@@ -15,17 +15,18 @@ package restful_test
 
 import (
 	"context"
+	"fmt"
 	"io"
-	"log"
+	"net"
 	"net/http"
 	"testing"
 	"time"
 
-	"trpc.group/trpc-go/trpc-go/restful"
-	"trpc.group/trpc-go/trpc-go/testdata/restful/helloworld"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"trpc.group/trpc-go/trpc-go/restful"
+	"trpc.group/trpc-go/trpc-go/testdata/restful/helloworld"
 )
 
 func TestPBSerializer(t *testing.T) {
@@ -48,7 +49,7 @@ func TestPBSerializer(t *testing.T) {
 		},
 	}
 
-	// Create a new HTTP server.
+	// Create a new HTTP server with dynamic port allocation.
 	mux := http.NewServeMux()
 	mux.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
 		accept := r.Header.Get("Accept")
@@ -57,15 +58,22 @@ func TestPBSerializer(t *testing.T) {
 		data, _ := serializer.Marshal(sampleData)
 		w.Write(data)
 	})
+
+	// Get a free port
+	listener, err := net.Listen("tcp", ":0")
+	require.NoError(t, err)
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+
 	server := &http.Server{
-		Addr:    ":8080",
+		Addr:    fmt.Sprintf(":%d", port),
 		Handler: mux,
 	}
 
 	// Start the server in a goroutine.
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("ListenAndServe(): %v", err)
+			t.Logf("ListenAndServe(): %v", err)
 		}
 	}()
 	defer server.Shutdown(context.Background())
@@ -88,7 +96,7 @@ func TestPBSerializer(t *testing.T) {
 	// Iterate over the test cases.
 	for _, testContentType := range testContentTypes {
 		t.Run(testContentType, func(t *testing.T) {
-			req, err := http.NewRequest("GET", "http://localhost:8080/hello", nil)
+			req, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/hello", port), nil)
 			require.NoError(t, err)
 			req.Header.Set("Accept", testContentType)
 

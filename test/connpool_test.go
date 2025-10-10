@@ -48,6 +48,7 @@ func (s *TestSuite) TestConnectionPool_ClientTimeoutDueToSeverOverload() {
 	// When sending many request to the server, we expect to receive timeout error
 	// But the client will be blocked, because internal token resources may be repeatedly released
 	// due to incorrect connection management.
+	// Note: above bug is fixed by internal merge_requests/1695 ^_^
 	require.Eventually(s.T(), func() bool {
 		var wg sync.WaitGroup
 		for i := 0; i < 10; i++ {
