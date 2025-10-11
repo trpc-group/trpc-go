@@ -115,7 +115,7 @@ import (
     "trpc.group/trpc-go/trpc-go/client"
     pb "github.com/trpcprotocol/app/server"
     pselector "trpc.group/trpc-go/trpc-naming-polarismesh/selector" // You need to import the required naming service plugin code yourself
-    trpc "trpc.group/trpc-go/trpc-go"
+    "trpc.group/trpc-go/trpc-go"
 )
 
 // Generally, small tools start from the main function

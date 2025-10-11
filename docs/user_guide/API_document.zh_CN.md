@@ -1,1 +1,0 @@
-# [GoDoc](https://godoc.woa.com/git.woa.com/trpc-go/trpc-go)

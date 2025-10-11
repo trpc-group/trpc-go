@@ -1,99 +1,216 @@
-# 前言
+[English](metrics.md) | 中文
 
-本文介绍如何开发监控插件，具体细节可参考 [m007](https://git.woa.com/trpc-go/trpc-metrics-m007/tree/master)代码，模调监控使用的是框架的拦截器能力，需要先了解框架的[filter](https://git.woa.com/trpc-go/trpc-go/tree/master/filter)和[metrics](https://git.woa.com/trpc-go/trpc-go/tree/master/metrics) 。
+# 怎么开发一个 metric 类型的插件
 
-阅读本篇文章之前，需要先阅读[开发拦截器插件](https://git.woa.com/trpc-go/trpc-go/tree/master/filter/README.zh_CN.md)。
+本指南将介绍如何开发一个依赖配置进行加载的 metric 类型的插件。
+该插件将上报发起 RPC 时，client 端发送请求到 server 端收到回复的耗时， 以及 server 端收到请求到回复 client 的耗时。
+开发该插件需要实现以下三个子功能：
 
-# 原理
+- 实现插件依赖配置进行加载，详细说明请参考 [plugin](/plugin/README.zh_CN.md)
+- 实现让监控指标上报到外部平台，详细说明请参考 [metrics](/metrics/README.zh_CN.md)
+- 实现在拦截器中上报监控指标，详细说明请参考 [filter](/filter/README.zh_CN.md)
 
-利用 trpc-go 的插件能力，整体功能包含：
+下面以 [trpc-metrics-prometheus](https://github.com/trpc-ecosystem/go-metrics-prometheus) 为例，来介绍相关开发步骤。
 
-- 模调上报：在请求后上报接口的详细情况，一般包含主调（client 上报）、被调（被调 server 上报）；
-- 属性上报：包含累积量、时刻量、多维度的监控项。
+## 实现插件依赖配置进行加载
 
-具体细节依赖监控平台的支持，插件是用来适配框架和监控 SDK 接口。
+### 1. 确定插件的配置
 
-# 具体实现
+```yaml
+plugins:                                          # 插件配置
+  metrics:                                        # 引用metrics
+    prometheus:                                   # 启动prometheus
+      ip: 0.0.0.0                                 # prometheus绑定地址
+      port: 8090                                  # prometheus绑定端口
+      path: /metrics                              # metrics路径
+      namespace: Development                      # 命名空间
+      subsystem: trpc                             # 子系统
+      rawmode:   false                            # 原始模式，不会对metrics的特殊字符进行转换 
+      enablepush: true                            # 启用push模式，默认不启用
+      gateway: http://localhost:9091              # prometheus gateway地址
+      password: username:MyPassword               # 设置账号密码， 以冒号分割
+      job: job                                    # job名称
+      pushinterval: 1                             # push间隔，默认1s上报一次
+```
 
-## 主调与被调
-
-注册插件，pluginName 自定义，m007Plugin 要满足接口的定义。
-
-``` go
+```go
 const (
-    pluginName = "m007"
+    pluginType = "metrics"
+    pluginName = "prometheus"
 )
-func init() {
-    plugin.Register(pluginName, &m007Plugin{})
+
+type Config struct {
+    IP           string `yaml:"ip"`           // metrics monitoring address.
+    Port         int32  `yaml:"port"`         // metrics listens to the port.
+    Path         string `yaml:"path"`         // metrics path.
+    Namespace    string `yaml:"namespace"`    // formal or test.
+    Subsystem    string `yaml:"subsystem"`    // default trpc.
+    RawMode      bool   `yaml:"rawmode"`      // by default, the special character in metrics will be converted.
+    EnablePush   bool   `yaml:"enablepush"`   // push is not enabled by default.
+    Password     string `yaml:"password"`     // account Password.
+    Gateway      string `yaml:"gateway"`      // push gateway address.
+    PushInterval uint32 `yaml:"pushinterval"` // push interval,default 1s.
+    Job          string `yaml:"job"`          // reported task name.
 }
 ```
 
-插件初始化，若配置文件配置 pluginName 值，框架会在初始化时调用注册插件的`Setup`方法。
-主要做一些初始化逻辑，比如：依赖监控 SDK 的初始化、filter 的注册等等。
+### 2. 实现 `plugin.Factory` 接口
 
-``` go
-// 解析配置，SDK初始化
-...
-// 注册主调、被调
-filter.Register(name, PassiveModuleCallServerFilter, ActiveModuleCallClientFilter)
-```
-
-实现对应的 filter，具体细节可看代码，
-不过要注意，插件从接口返回的 err 读取错误码，非框架的 errs，类型转换失败，此时统一上报固定值。
-其他字段具体看特定监控平台要求，插件统一从`msg := trpc.Message(ctx)`里去取，如遇到某些字段没有值，检查自定义协议的 codec 有没有设置对应值，插件本身不理解。
-
-``` go
-// ActiveModuleCallClientFilter  主调模调上报拦截器:自身调用下游，下游回包时上报
-func ActiveModuleCallClientFilter(ctx context.Context, req, rsp interface{}, handler filter.HandleFunc) error {
-    begin := time.Now()
-    err := handler(ctx, req, rsp)
-    msg := trpc.Message(ctx)
-    activeMsg := new(pcgmonitor.ActiveMsg)
-    // 自身服务
-    activeMsg.AService = msg.CallerService() 
-    ...
-    // 下游服务
-    activeMsg.PApp = msg.CalleeApp()
-    ...
-    // 错误码
-    ...
-    // 耗时ms
-    activeMsg.Time = float64(time.Now().Sub(begin) / time.Millisecond)
-    // 调用监控SDK上报
-    pcgmonitor.ReportActive(activeMsg)
-    return err
+```go
+type Plugin struct {
 }
-```
 
-## metrics 属性上报
+func (p *Plugin) Type() string {
+    return pluginType
+}
 
-定义具体的 sink，然后注册 metrics，放到插件的 setup 内部执行。
-
-``` go
-// 注册metrics
-metrics.RegisterMetricsSink(&M007Sink{})
-```
-
-适配框架接口，使用框架接口上报的监控项会循环调用所有注册的 sink 的`Report`方法，具体实现依赖监控平台本身的支持。比如：007 的属性上报是全策略上报，这里就不区框架具体的策略。
-
-``` go
-func (m *M007Sink) Report(rec metrics.Record, opts ...metrics.Option) error {
-    if len(rec.GetDimensions()) <= 0 {
-       // 属性上报
-       for _, metric := range rec.GetMetrics() {
-          pcgmonitor.ReportAttr(metric.Name(), metric.Value()) // 007属性全策略上报
-       }
-       return nil
+func (p *Plugin) Setup(name string, decoder plugin.Decoder) error {
+    cfg := Config{}.Default()
+    
+    err := decoder.Decode(cfg)
+    if err != nil {
+        log.Errorf("trpc-metrics-prometheus:conf Decode error:%v", err)
+        return err
     }
-    // 多维度上报
-    var dimesions []string
-    var statValues []*nmnt.StatValue
-    ...
-    pcgmonitor.ReportCustom(rec.Name, dimesions, statValues)
+    go func() {
+        err := initMetrics(cfg.IP, cfg.Port, cfg.Path)
+        if err != nil {
+            log.Errorf("trpc-metrics-prometheus:running:%v", err)
+        }
+    }()
+    
+    initSink(cfg)
+    
     return nil
 }
 ```
 
-## 更多问题
+### 3. 调用 `plugin.Register` 把插件自己注册到 `plugin` 包
 
-请参考 [tRPC 技术咨询](https://iwiki.woa.com/p/491739953) 以寻求帮助
+```go
+func init() {
+    plugin.Register(pluginName, &Plugin{})
+}
+```
+
+## 让监控指标上报到外部平台
+
+### 1. 实现 `metrics.Sink` 接口
+
+```go
+const (
+    sinkName = "prometheus"
+)
+
+func (s *Sink) Name() string {
+    return sinkName
+}
+
+func (s *Sink) Report(rec metrics.Record, opts ...metrics.Option) error {
+    if len(rec.GetDimensions()) <= 0 {
+        return s.ReportSingleLabel(rec, opts...)
+}
+    labels := make([]string, 0)
+    values := make([]string, 0)
+    prefix := rec.GetName()
+    
+    if len(labels) != len(values) {
+        return errLength
+    }
+
+    for _, dimension := range rec.GetDimensions() {
+        labels = append(labels, dimension.Name)
+        values = append(values, dimension.Value)
+    }
+    for _, m := range rec.GetMetrics() {
+        name := s.GetMetricsName(m)
+        if prefix != "" {
+            name = prefix + "_" + name
+        }
+        if !checkMetricsValid(name) {
+            log.Errorf("metrics %s(%s) is invalid", name, m.Name())
+            continue
+        }
+        s.reportVec(name, m, labels, values)
+    }
+    return nil
+}
+```
+
+### 2. 将实现的 Sink 注册到 metrics 包。
+
+```go
+func initSink(cfg *Config) {
+    defaultPrometheusPusher = push.New(cfg.Gateway, cfg.Job) 
+    // set basic auth if set. 
+    if len(cfg.Password) > 0 { 
+        defaultPrometheusPusher.BasicAuth(basicAuthForPasswordOption(cfg.Password))
+    }
+    defaultPrometheusSink = &Sink{
+        ns:         cfg.Namespace,
+        subsystem:  cfg.Subsystem,
+        rawMode:    cfg.RawMode,
+        enablePush: cfg.EnablePush,
+        pusher:     defaultPrometheusPusher
+    }
+    metrics.RegisterMetricsSink(defaultPrometheusSink)
+    // start up pusher if needed.
+    if cfg.EnablePush {
+    defaultPrometheusPusher.Gatherer(prometheus.DefaultGatherer)
+        go pusherRun(cfg, defaultPrometheusPusher)
+    }
+}
+```
+
+## 在拦截器中上报监控指标
+
+### 1. 确定拦截器的配置
+
+```yaml
+  filter:
+    - prometheus                                   # Add prometheus filter
+```
+
+### 2. 实现 `filter.ServerFilter` 和 `filter.ServerFilter` 
+
+```go
+func ClientFilter(ctx context.Context, req, rsp interface{}, handler filter.ClientHandleFunc) error {
+	begin := time.Now()
+	hErr := handler(ctx, req, rsp)
+	msg := trpc.Message(ctx)
+	labels := getLabels(msg, hErr)
+	ms := make([]*metrics.Metrics, 0)
+	t := float64(time.Since(begin)) / float64(time.Millisecond)
+	ms = append(ms,
+		metrics.NewMetrics("time", t, metrics.PolicyHistogram),
+		metrics.NewMetrics("requests", 1.0, metrics.PolicySUM))
+	metrics.Histogram("ClientFilter_time", clientBounds)
+	r := metrics.NewMultiDimensionMetricsX("ClientFilter", labels, ms)
+	_ = GetDefaultPrometheusSink().Report(r)
+	return hErr
+}
+
+func ServerFilter(ctx context.Context, req interface{}, handler filter.ServerHandleFunc) (rsp interface{}, err error) {
+	begin := time.Now()
+	rsp, err = handler(ctx, req)
+	msg := trpc.Message(ctx)
+	labels := getLabels(msg, err)
+	ms := make([]*metrics.Metrics, 0)
+	t := float64(time.Since(begin)) / float64(time.Millisecond)
+	ms = append(ms,
+		metrics.NewMetrics("time", t, metrics.PolicyHistogram),
+		metrics.NewMetrics("requests", 1.0, metrics.PolicySUM))
+	metrics.Histogram("ServerFilter_time", serverBounds)
+	r := metrics.NewMultiDimensionMetricsX("ServerFilter", labels, ms)
+	_ = GetDefaultPrometheusSink().Report(r)
+	return rsp, err
+}
+```
+
+### 3. 将拦截器注册到 `filter` 包
+
+```go
+func init() {
+    filter.Register(pluginName, ServerFilter, ClientFilter)
+}
+```

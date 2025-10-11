@@ -1,1 +1,0 @@
-参考 [tRPC-Go 搭建流式服务（tRPC 知识库）](https://iwiki.woa.com/p/284289215) 中关于客户端调用的部分

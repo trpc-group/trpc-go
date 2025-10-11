@@ -36,7 +36,7 @@ import (
 
 	flatbuffers "github.com/google/flatbuffers/go"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/log"
 	fb "github.com/trpcprotocol/testapp/greeter"

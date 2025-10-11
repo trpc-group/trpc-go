@@ -115,7 +115,7 @@ import (
     
     _ "trpc.group/trpc-go/trpc-filter/debuglog"
     _ "trpc.group/trpc-go/trpc-filter/recovery"
-    trpc "trpc.group/trpc-go/trpc-go"
+    "trpc.group/trpc-go/trpc-go"
     "trpc.group/trpc-go/trpc-go/log"
     fb "github.com/trpcprotocol/testapp/greeter"
 )

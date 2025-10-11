@@ -1,196 +1,104 @@
-# 前言
-框架支持可插拔设置，用户可以根据自己的需要使用不同的名字服务插件，也可以根据自己的需求自行开发名字服务插件。
+[English](naming.md) | 中文
 
-# 插件化设计
-tRPC-Go 框架名字服务采用插件化设计，框架只有标准接口不涉及具体实现，用户可以根据自己的需要把对应的实现注册到框架。本文将会介绍如何实现一个名字服务插件。
+## 前言
 
-名字服务包括服务发现、负载均衡、服务路由、熔断器等部分，服务发现的流程可以简化为：
-- 1，Discovery 通过 service name 获取对应的节点列表
-- 2，ServiceRouter 通过路由规则过滤调不符合要求的节点。
-- 3，LoadBalance 通过负载均衡算法选取节点。
-- 4，CircuitBreaker 根据熔断条件，判断选取出的节点是否符合要求，并进行上报。
+像 tRPC-Go 大部分其他模块一样，名字服务模块也支持插件化。本文假定你已经阅读了 naming 包的 [README](/naming/README.zh_CN.md)。
 
-# 名字服务插件实现
+## 插件化设计
 
-框架暴露的接口分为两种。
+tRPC-Go 提供了 [`Selector`](/naming/selector) interface 作为名字服务的入口，并提供了一个默认实现 [`TrpcSelector`](/naming/selector/trpc_selector.go)。`TrpcSelector` 把 [`Discovery`](/naming/discovery)、[`ServiceRouter`](/naming/servicerouter)、[`Loadbalance`](/naming/loadbalance) 和 [`CircuitBreaker`](/naming/circuitbreaker) 组合起来。对每一个小模块，框架都提供了其对应的默认实现。
 
-- 整体接口：名字服务作为整体注册到框架，整体接口的优势在于注册到框架比较简单，框架不关心名字服务流程中各个模块的具体实现，插件可以整体控制名字服务寻址的整个流程，方便做性能优化和逻辑控制。
+通过[插件化](/plugin)方式，用户可以对 `Selector` 或它的各个小模块单独进行自定义。下面我们依次看看这是如何做到的。
 
-- 分模块接口：服务发现、负载均衡、服务路由、熔断器等分别注册到框架，框架组合这些模块。分模块优势在于更加的灵活，用户可以根据自己的需要对不同模块进行选择然后自由组合，但同时会增加插件的实现复杂度。
+## `Selector` 插件
 
-两种实现都可以实现自定义的名字服务插件。
-
-## 整体接口
-整体接口不关心名字服务的具体实现，只是通过接口传入对应的名字服务 id，返回对应的被选中的被调服务一个节点。通过 `client.WithTarget` 就可以指定具体使用的服务发现插件。
-
-tRPC-Go 框架的接口如下：
-
+`Selector` interface 的定义如下：
 ```go
-// Selector 路由组件接口
 type Selector interface {
-    // Select 通过 service name 获取一个后端节点
-    Select(serviceName string, opt ...Option) (*registry.Node, error)
-    // Report 上报当前请求成功或失败
-    Report(node *registry.Node, cost time.Duration, success error) error
+	Select(serviceName string, opts ...Option) (*registry.Node, error)
+	Report(node *registry.Node, cost time.Duration, err error) error
 }
 ```
 
-根据框架的接口，如何实现自定义的名字服务插件？请看下面简单的名字服务插件实现。
+`Select` 方法通过 service name 返回对应的节点信息，可以通过 `opts` 传入一些选项。`Report` 上报调用情况，这些信息可能会影响之后 `Selector` 的结果，比如，对错误率太高的节点进行熔断。
 
+下面是一个简单的固定节点的 `Selector` 实现：
 ```go
-
-// 存储名字服务对应的节点信息
-var store = map[string][]*registry.Node{} {
-  "service1": []*registry.Node{
-        &registry.Node{
-            Address: "127.0.0.1:8080",
-        }, 
-        &registry.Node{
-            Address: "127.0.0.1:8081",
-        },
-    },
-}
-
-// 把实现注册到框架
 func init() {
-    selector.Register("example", &exampleSelector{})
-} 
-
-type exampleSelector struct{} 
-// Select 通过 service name 获取一个后端节点
-func (s *exampleSelector) Select(serviceName string, opt ...selector.Option) (*registry.Node, error) {
-    list, ok := store[serviceName]
-    if !ok || len(list) == 0 {
-        return nil, errors.New("no available node")
-    }
-    
-    return list[rand.Intn(len(list))]
+    plugin.Register("my_selector", &Plugin{Nodes: make(map[string]string)})
 }
 
-// Report 上报当前请求成功或失败
-func (s *exampleSelector) Report(node *registry.Node, cost time.Duration, success error) error {
+type Plugin struct {
+    Nodes map[string]string `yaml:"nodes"`
+}
+
+func (p *Plugin) Type() string { return "selector" }
+func (p *Plugin) Setup(name string, dec plugin.Decoder) error {
+    if err := dec.Decode(p); err != nil {
+        return err
+    }
+    selector.Register(name, p)
+    return nil
+}
+
+func (p *Plugin) Select(serviceName string, opts ...selector.Option) (*registry.Node, error) {
+    if node, ok := p.Nodes[serviceName]; ok {
+        return &registry.Node{Address: node, ServiceName: serviceName}, nil
+    }
+    return nil, fmt.Errorf("unknown service %s", serviceName)
+}
+
+func (p *Plugin) Report(*registry.Node, time.Duration, error) error {
     return nil
 }
 ```
+使用时，需要匿名 import 上面的 plugin 包保证 `init` 函数成功注册 `Plugin`，并在 `trpc_go.yaml` 中加入下面的配置项：
+```yaml
+client:
+  service:
+    - name: xxx
+      target: "my_selector://service1"
+      # ... 忽略其他配置
+    - name: yyy
+      target: "my_selector://service2"
+      # ... 忽略其他配置
 
-根据上面能实现，可以通过 `client.WithTarget("example://service1")` 来进行寻址。
-
-### 使用示例
-假设我们已经实现了上面的 `exampleSelector` 名字服务插件，并且引入的路径为 `github.com/naming-plugin/example-selector` 则我们可以如下使用：
-
-```go
-package main
-
-import (
-    _ "github.com/naming-plugin/example-selector"
-)
-
-func main() {
-    proxy := pb.NewGreeterClientProxy()
-
-    req := &pb.HelloRequest{
-        Msg: "trpc-go-client",
-    }
-    rsp, err := proxy.SayHello(
-        ctx, 
-        req,
-        client.WithTarget("example://my-service-id"),
-    )
-    
-    fmt.Println(rsp, err)
-}
+plugins:
+  selector:
+    my_selector:
+      nodes:
+        service1: 127.0.0.1:8000
+        service2: 127.0.0.1:8001
 ```
+这样，client `xxx` 就会访问到 `127.0.0.1:8000`，client `yyy` 则会访问到 `127.0.0.1:8001`。
 
-## 分模块接口
+## `Discovery` 插件
 
-这种方式提供了更多的灵活性，能够让使用者指定各个模块的配置参数，例如负载均衡方式，服务路由规则等。通过 `client.WithServiceName("trpc.app.server.service")` 就可以使用这种方式。
-如果用户不指定对应的模块，则会采用默认实现。
-
-- 服务发现默认实现，把 service name 当做 ip:port 处理。
-- 服务路由默认实现，不做任何过滤操作。
-- 负载均衡默认实现，随机负载均衡算法。
-- 熔断器默认实现，不熔断处理。
-
-下面看下以自定义实现 Discovery 为例：
-
-服务发现的接口如下：
-
+`Discovery` 的接口定义如下：
 ```go
-// Discovery 服务发现接口，通过 service name 返回 node 数组
 type Discovery interface {
     List(serviceName string, opt ...Option) (nodes []*registry.Node, err error)
 }
 ```
+`List` 根据 service name 列出一组 nodes 供后续 ServiceRouter 和 LoadBalance 选择。
 
-```go
-func init() {
-    discovery.Register("my_discovery", &MyDiscovery{})
-}
+`Discovery` 插件的代码实现与 `Selector` 类似，这里不再赘述。
 
-// MyDiscovery  ip 列表服务发现
-type MyDiscovery struct{}
+为了让 Discovery 生效，你还需要在下面两项选择其一：
+- 如果你使用默认的 `TrpcSelector`，需要在 yaml 中加入下面配置：
+  ```yaml
+  client:
+    service:
+      - name: service1  # 注意，这里 name 直接填了 service1，而不是 xxx，我们将直接用该字段进行寻址
+        # target: ...  # 注意，这里不能使用 target，而是要用上面的 name 字段去寻址
+        discovery: my_discovery
+  ```
+- 如果默认的 `TrpcSelector` 不满足你的需求，可以像上节一样自定义 Selector，但是，你必须正确处理 `Select` 方法的 `Option`，即 `selector.WithDiscovery`。
 
-// List 返回原始 ip:port
-func (*MyDiscovery) List(serviceName string, opt ...Option) ([]*registry.Node, error) {
-    node := registry.Node{ServiceName: serviceName, Address: "127.0.0.1:8080"}
+## `ServiceRouter` `LoadBalance` 和 `CircuitBreaker` 插件
 
-    return []*registry.Node{node}, nil
-}
-```
+其他这些插件的实现方式与 `Discovery` 类似。要么使用 `TrpcSelector` 并在 `yaml.client.service[i]` 中设置对应的字段；要么在你自己实现的 `Selector` 中处理 `selector.WithXxx`。
 
-使用时只需要指定对应的 Discovery 即可。
+## Polaris Mesh 插件
 
-```go
-opts := []client.Option{
-    client.ServiceName("myservice"),
-    client.WithDiscoveryName("my_discovery")
-}
-```
-
-如果把实现设置为默认的 Discovery 则不需要指定使用的 DiscoveryName。
-
-```go
-discovery.DefaultDiscovery = &MyDiscovery{}
-```
-
-使用时只需要指定 ServiceName 即可：
-
-```go
-opts := []client.Option{
-    client.WithServiceName("myservice"),
-}
-```
-
-负载均衡、服务路由、熔断器模块也是同样的处理方式，都可以参考框架的默认实现。
-
-### 使用示例
-
-假设我们已经实现了上面的 `MyDiscovery` 插件，并且引入的路径为 `github.com/naming-plugin/my-discovery` 则我们可以如下使用：
-
-```go
-package main
-
-import (
-    _ "github.com/naming-plugin/my-discovery"
-)
-
-func main() {
-    proxy := pb.NewGreeterClientProxy()
-
-    req := &pb.HelloRequest{
-        Msg: "trpc-go-client",
-    }
-    rsp, err := proxy.SayHello(
-        ctx, 
-        req,
-        client.WithServiceName("myservice"),
-        client.WithDiscoveryName("my_discovery")
-    )
-    
-    fmt.Println(rsp, err)
-}
-```
-
-## 更多问题
-
-请参考 [tRPC 技术咨询](https://iwiki.woa.com/p/491739953) 以寻求帮助
+tRPC-Go 支持 Polaris Mesh 插件，你可以在[这里](https://github.com/trpc-ecosystem/go-naming-polarismesh)了解更多。
