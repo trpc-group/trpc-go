@@ -20,8 +20,8 @@ import (
 	"net"
 	"sync"
 
-	reuseport "github.com/kavu/go_reuseport"
 	iprotocol "trpc.group/trpc-go/trpc-go/internal/protocol"
+	"trpc.group/trpc-go/trpc-go/internal/reuseport"
 )
 
 var inheritListeners = NewSafe[map[string]map[string]net.Listener](nil)

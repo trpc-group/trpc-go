@@ -27,7 +27,6 @@ import (
 	"sync"
 	"time"
 
-	reuseport "github.com/kavu/go_reuseport"
 	"github.com/panjf2000/ants/v2"
 	"trpc.group/trpc-go/tnet"
 	"trpc.group/trpc-go/tnet/tls"
@@ -36,6 +35,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/internal/addrutil"
 	ikeeporder "trpc.group/trpc-go/trpc-go/internal/keeporder"
 	"trpc.group/trpc-go/trpc-go/internal/report"
+	"trpc.group/trpc-go/trpc-go/internal/reuseport"
 	"trpc.group/trpc-go/trpc-go/internal/rpczenable"
 	intertls "trpc.group/trpc-go/trpc-go/internal/tls"
 	"trpc.group/trpc-go/trpc-go/log"

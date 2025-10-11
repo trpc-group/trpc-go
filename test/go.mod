@@ -7,7 +7,6 @@ toolchain go1.23.8
 replace trpc.group/trpc-go/trpc-go => ../
 
 require (
-	github.com/kavu/go_reuseport v1.5.0
 	github.com/stretchr/testify v1.9.0
 	github.com/valyala/fasthttp v1.52.0
 	go.uber.org/mock v0.4.0
@@ -32,6 +31,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/jinzhu/copier v0.4.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/kavu/go_reuseport v1.5.0 // indirect
 	github.com/klauspost/compress v1.17.6 // indirect
 	github.com/lestrrat-go/strftime v1.0.6 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect

@@ -17,10 +17,10 @@ import (
 	"testing"
 	"time"
 
-	reuseport "github.com/kavu/go_reuseport"
 	"github.com/stretchr/testify/require"
 	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/client"
+	"trpc.group/trpc-go/trpc-go/internal/reuseport"
 	"trpc.group/trpc-go/trpc-go/server"
 	testpb "trpc.group/trpc-go/trpc-go/test/protocols"
 	"trpc.group/trpc-go/trpc-go/transport"

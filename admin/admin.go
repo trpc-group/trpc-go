@@ -27,11 +27,11 @@ import (
 	"sync"
 
 	jsoniter "github.com/json-iterator/go"
-	reuseport "github.com/kavu/go_reuseport"
 	"trpc.group/trpc-go/trpc-go/config"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/healthcheck"
 	"trpc.group/trpc-go/trpc-go/internal/protocol"
+	"trpc.group/trpc-go/trpc-go/internal/reuseport"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/rpcz"
 	"trpc.group/trpc-go/trpc-go/transport"

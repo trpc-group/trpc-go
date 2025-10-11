@@ -35,17 +35,16 @@ require (
 	github.com/fasthttp/router v1.5.0
 	github.com/google/pprof v0.0.0-20240722153945-304e4f0156b8
 	github.com/jinzhu/copier v0.4.0
-	github.com/kavu/go_reuseport v1.5.0
 	github.com/pierrec/lz4/v4 v4.1.21
 	github.com/r3labs/sse/v2 v2.10.0
 	go.uber.org/atomic v1.11.0
-	trpc.group/trpc/trpc-protocol/pb/go/trpc v0.0.0-00010101000000-000000000000
 )
 
 require (
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
+	github.com/kavu/go_reuseport v1.5.0 // indirect
 	github.com/klauspost/compress v1.17.6 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect

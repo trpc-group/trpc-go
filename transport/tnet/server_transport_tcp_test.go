@@ -30,7 +30,6 @@ import (
 	"testing"
 	"time"
 
-	reuseport "github.com/kavu/go_reuseport"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -38,6 +37,7 @@ import (
 	"trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/internal/keeporder"
+	"trpc.group/trpc-go/trpc-go/internal/reuseport"
 	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
 	"trpc.group/trpc-go/trpc-go/transport"
 	tnettrans "trpc.group/trpc-go/trpc-go/transport/tnet"

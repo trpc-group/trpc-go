@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"net"
 
-	reuseport "github.com/kavu/go_reuseport"
+	"trpc.group/trpc-go/trpc-go/internal/reuseport"
 )
 
 // [network][address] -> net.PacketConn
