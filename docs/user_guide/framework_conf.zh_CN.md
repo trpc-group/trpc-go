@@ -208,7 +208,7 @@ client:
       # 选填，协议类型，为空时，使用 client.protocol
       protocol: String(trpc, grpc, http, etc.)
       # 选填，序列化协议，默认为 -1，即不设置
-      serialization: Integer(0=pb, 1=JCE, 2=json, 3=flat_buffer, 4=bytes_flow)
+      serialization: Integer(0=pb, 1=废弃, 2=json, 3=flat_buffer, 4=bytes_flow)
       # 选填，压缩协议，默认为 0，即不压缩
       compression: Integer(0=no_compression, 1=gzip, 2=snappy, 3=zlib)
       # 选填，client 私钥，必须与 tls_cert 配合使用

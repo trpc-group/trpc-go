@@ -211,7 +211,7 @@ client:
       # Optional, protocol type, when it is empty, use client.protocol
       protocol: String(trpc, grpc, http, etc.)
       # Optional, serialization protocol, the default is -1, which is without setting
-      serialization: Integer(0=pb, 1=JCE, 2=json, 3=flat_buffer, 4=bytes_flow)
+      serialization: Integer(0=pb, 1=废弃, 2=json, 3=flat_buffer, 4=bytes_flow)
       # Optional, compression protocol, the default is 0, which is no compression
       compression: Integer(0=no_compression, 1=gzip, 2=snappy, 3=zlib)
       # Optional, client private key, must be used with tls_cert

@@ -11,6 +11,8 @@
 //
 //
 
+// trpc create -p helloworld.proto --rpconly --nogomod --mock=false
+
 syntax = "proto3";
 
 package trpc.test.helloworld;

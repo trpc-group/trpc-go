@@ -308,7 +308,7 @@ client:                                    # Client-side backend configuration
       network: tcp                         # The network type of the backend service, tcp udp, default tcp
       protocol: trpc                       # Application layer protocol trpc http..., default trpc
       timeout: 800                         # The longest processing time for the current request, default 0 is not timed out
-      serialization: 0                     # Serialization method 0-pb 1-jce 2-json 3-flatbuffer, do not configure by default
+      serialization: 0                     # Serialization method 0-pb 1-baned 2-json 3-flatbuffer, do not configure by default
       compression: 1                       # Compression method 1-gzip 2-snappy 3-zlib, do not configure by default
       filter:                              # An array of interceptor configurations for a single backend
         - debug                            # Only use debuglog for the current backend
