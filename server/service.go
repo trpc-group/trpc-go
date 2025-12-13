@@ -209,7 +209,7 @@ func (s *service) Handle(ctx context.Context, reqBuf []byte) (rspBuf []byte, err
 	rspbody, err := s.handle(ctx, msg, reqBodyBuf)
 	if err != nil {
 		// no response
-		if err == errs.ErrServerNoResponse {
+		if errors.Is(err, errs.ErrServerNoResponse) {
 			return nil, err
 		}
 		// failed to handle, should respond to client with error code,

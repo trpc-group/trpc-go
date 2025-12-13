@@ -17,6 +17,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -244,7 +245,7 @@ func callFunc(ctx context.Context, reqBody interface{}, rspBody interface{}) (er
 	}
 	rspBuf, err := opts.Transport.RoundTrip(ctx, reqBuf, opts.CallOptions...)
 	if err != nil {
-		if err == errs.ErrClientNoResponse { // Sendonly mode, no response, just return nil.
+		if errors.Is(err, errs.ErrClientNoResponse) { // Sendonly mode, no response, just return nil.
 			return nil
 		}
 		return err
