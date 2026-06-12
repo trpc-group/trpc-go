@@ -14,6 +14,7 @@
 package http
 
 import (
+	"math"
 	"net/http"
 	"testing"
 
@@ -30,4 +31,15 @@ func TestOptServerTransport(t *testing.T) {
 	require.True(t, st.reusePort)
 	require.True(t, st.enableH2C)
 	require.Equal(t, 1, st.http2Config.MaxConcurrentStreams)
+}
+
+func TestNewHTTP2ServerConfigBounds(t *testing.T) {
+	s := newHTTP2Server(&transport.HTTP2Config{
+		MaxConcurrentStreams:          -1,
+		MaxDecoderHeaderTableSize:     math.MaxInt,
+		MaxReceiveBufferPerConnection: math.MaxInt,
+	})
+	require.Equal(t, uint32(0), s.MaxConcurrentStreams)
+	require.Equal(t, uint32(math.MaxUint32), s.MaxDecoderHeaderTableSize)
+	require.Equal(t, int32(math.MaxInt32), s.MaxUploadBufferPerConnection)
 }

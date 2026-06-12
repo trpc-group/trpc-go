@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	stdhttp "net/http"
@@ -280,16 +281,36 @@ func newHTTP2Server(config *transport.HTTP2Config) *http2.Server {
 	if config == nil {
 		return s
 	}
-	s.MaxConcurrentStreams = uint32(config.MaxConcurrentStreams)
-	s.MaxDecoderHeaderTableSize = uint32(config.MaxDecoderHeaderTableSize)
-	s.MaxEncoderHeaderTableSize = uint32(config.MaxEncoderHeaderTableSize)
-	s.MaxReadFrameSize = uint32(config.MaxReadFrameSize)
+	s.MaxConcurrentStreams = http2Uint32(config.MaxConcurrentStreams)
+	s.MaxDecoderHeaderTableSize = http2Uint32(config.MaxDecoderHeaderTableSize)
+	s.MaxEncoderHeaderTableSize = http2Uint32(config.MaxEncoderHeaderTableSize)
+	s.MaxReadFrameSize = http2Uint32(config.MaxReadFrameSize)
 	s.PermitProhibitedCipherSuites = config.PermitProhibitedCipherSuites
 	s.IdleTimeout = config.IdleTimeout
-	s.MaxUploadBufferPerConnection = int32(config.MaxReceiveBufferPerConnection)
-	s.MaxUploadBufferPerStream = int32(config.MaxReceiveBufferPerStream)
+	s.MaxUploadBufferPerConnection = http2Int32(config.MaxReceiveBufferPerConnection)
+	s.MaxUploadBufferPerStream = http2Int32(config.MaxReceiveBufferPerStream)
 	s.CountError = config.CountError
 	return s
+}
+
+func http2Uint32(v int) uint32 {
+	if v <= 0 {
+		return 0
+	}
+	if int64(v) > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	return uint32(v)
+}
+
+func http2Int32(v int) int32 {
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if v < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(v)
 }
 
 // tcpKeepAliveListener sets TCP keep-alive timeouts on accepted
