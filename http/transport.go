@@ -300,7 +300,7 @@ func http2Uint32(v int) uint32 {
 	if int64(v) > math.MaxUint32 {
 		return math.MaxUint32
 	}
-	return uint32(v)
+	return uint32(v) // #nosec G115 -- v is checked to be in the uint32 range above.
 }
 
 func http2Int32(v int) int32 {
