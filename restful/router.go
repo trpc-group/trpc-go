@@ -35,6 +35,7 @@ import (
 type Router struct {
 	opts        *Options
 	transcoders map[string][]*transcoder
+	routerTrie  *RouterTrie
 }
 
 // NewRouter creates a Router.
@@ -55,6 +56,7 @@ func NewRouter(opts ...Option) *Router {
 	return &Router{
 		opts:        &o,
 		transcoders: make(map[string][]*transcoder),
+		routerTrie:  newRouterTrie(),
 	}
 }
 
@@ -124,7 +126,10 @@ func (r *Router) AddImplBinding(binding *Binding, serviceImpl interface{}) error
 	}
 	// add transcoder
 	r.transcoders[binding.HTTPMethod] = append(r.transcoders[binding.HTTPMethod], tr)
-	return nil
+	if r.routerTrie == nil {
+		r.routerTrie = newRouterTrie()
+	}
+	return r.routerTrie.insert(binding.HTTPMethod, tr)
 }
 
 func (r *Router) newTranscoder(binding *Binding, serviceImpl interface{}) (*transcoder, error) {
@@ -292,14 +297,30 @@ func putBackCtxMessage(ctx context.Context) {
 // TODO: better routing handling.
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx := ctxForCompatibility(req.Context(), w, req)
-	for _, tr := range r.transcoders[req.Method] {
-		fieldValues, err := tr.pat.Match(req.URL.Path)
-		if err == nil {
-			r.handle(ctx, w, req, tr, fieldValues)
-			return
-		}
+	tr, fieldValues := r.findTranscoder(req.Method, req.URL.Path)
+	if tr != nil {
+		r.handle(ctx, w, req, tr, fieldValues)
+		return
 	}
 	r.opts.ErrorHandler(ctx, w, req, errs.New(errs.RetServerNoFunc, "failed to match any pattern"))
+}
+
+func (r *Router) findTranscoder(method, path string) (*transcoder, map[string]string) {
+	if r.routerTrie != nil {
+		if tr := r.routerTrie.search(method, path); tr != nil {
+			fieldValues, err := tr.pat.Match(path)
+			if err == nil {
+				return tr, fieldValues
+			}
+		}
+	}
+	for _, tr := range r.transcoders[method] {
+		fieldValues, err := tr.pat.Match(path)
+		if err == nil {
+			return tr, fieldValues
+		}
+	}
+	return nil, nil
 }
 
 func (r *Router) handle(
