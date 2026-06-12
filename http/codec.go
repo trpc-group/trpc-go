@@ -199,6 +199,9 @@ type Header struct {
 	ReqBody  []byte
 	Request  *http.Request
 	Response http.ResponseWriter
+	// reqContentType caches the request Content-Type at Decode time so Encode
+	// does not read req.Header after user code may have observed the request.
+	reqContentType string
 }
 
 // ClientReqHeader encapsulates http client context.
@@ -442,6 +445,7 @@ func (sc *ServerCodec) Decode(msg codec.Msg, _ []byte) ([]byte, error) {
 	if head == nil {
 		return nil, errors.New("server decode missing http header in context")
 	}
+	head.reqContentType = head.Request.Header.Get("Content-Type")
 
 	reqBody, err := sc.getReqbody(head, msg)
 	if err != nil {
@@ -506,7 +510,7 @@ func (sc *ServerCodec) Encode(msg codec.Msg, rspBody []byte) (b []byte, err erro
 	rsp.Header().Add("X-Content-Type-Options", "nosniff")
 	ct := rsp.Header().Get(ctKey)
 	if ct == "" {
-		ct = req.Header.Get(ctKey)
+		ct = head.reqContentType
 		if req.Method == http.MethodGet || ct == "" {
 			ct = "application/json"
 		}

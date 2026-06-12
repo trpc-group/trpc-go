@@ -279,6 +279,24 @@ func TestServerDecodeHTTPHeader(t *testing.T) {
 	require.NotNil(t, err)
 }
 
+func TestServerCodecEncodeUsesDecodedContentType(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPost, "http://www.qq.com/trpc.http.test.helloworld/SayHello",
+		bytes.NewReader([]byte("{}")))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	header := &thttp.Header{Request: r, Response: w}
+	ctx := thttp.WithHeader(context.Background(), header)
+	msg := codec.Message(ctx)
+
+	_, err := thttp.DefaultServerCodec.Decode(msg, nil)
+	require.Nil(t, err)
+
+	r.Header.Set("Content-Type", "application/proto")
+	_, err = thttp.DefaultServerCodec.Encode(msg, []byte("{}"))
+	require.Nil(t, err)
+	require.Equal(t, "application/json", w.Header().Get("Content-Type"))
+}
+
 func TestServerDecode(t *testing.T) {
 	r, _ := http.NewRequest("GET", "www.qq.com/xyz=abc", bytes.NewReader([]byte("")))
 	w := &httptest.ResponseRecorder{}

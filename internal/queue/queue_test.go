@@ -54,6 +54,54 @@ func TestQueue(t *testing.T) {
 	assert.Nil(t, e)
 }
 
+func TestQueueGetDrainsQueuedElementWhenDoneUnblocks(t *testing.T) {
+	done := make(chan struct{})
+	q := New[int](done)
+
+	result := make(chan struct {
+		value int
+		ok    bool
+	}, 1)
+	go func() {
+		value, ok := q.Get()
+		result <- struct {
+			value int
+			ok    bool
+		}{value: value, ok: ok}
+	}()
+
+	deadline := time.Now().Add(time.Second)
+	for {
+		q.mu.Lock()
+		waiting := q.waiting
+		q.mu.Unlock()
+		if waiting {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for Get to block")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	q.mu.Lock()
+	q.list.PushBack(7)
+	q.mu.Unlock()
+	close(done)
+
+	select {
+	case got := <-result:
+		assert.True(t, got.ok)
+		assert.Equal(t, 7, got.value)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for Get to return")
+	}
+
+	value, ok := q.Get()
+	assert.False(t, ok)
+	assert.Zero(t, value)
+}
+
 // TestConcurrentQueue test queue concurrency
 func TestConcurrentQueue(t *testing.T) {
 	done := make(chan struct{})

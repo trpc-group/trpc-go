@@ -59,7 +59,7 @@ func (q *Queue[T]) Put(v T) {
 
 // Get gets an element from the queue, blocking if there is no content.
 // Put and Get can be concurrent, but not concurrent Get.
-// If done channel notify it from blocking, it will return false.
+// If done unblocks Get, it returns false only when there is no queued element.
 func (q *Queue[T]) Get() (T, bool) {
 	for {
 		q.mu.Lock()
@@ -74,6 +74,14 @@ func (q *Queue[T]) Get() (T, bool) {
 		case <-q.notify:
 			continue
 		case <-q.done:
+			q.mu.Lock()
+			if e := q.list.Front(); e != nil {
+				q.list.Remove(e)
+				q.mu.Unlock()
+				return e.Value.(T), true
+			}
+			q.waiting = false
+			q.mu.Unlock()
 			var zero T
 			return zero, false
 		}
