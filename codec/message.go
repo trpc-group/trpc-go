@@ -166,7 +166,7 @@ type Msg interface {
 	// but for client, is its own service.
 	WithCallerService(string)
 
-	// WithCallerMethod sets caller method, For server this mothod is upstream mothod,
+	// WithCallerMethod sets caller method, For server this method is upstream method,
 	// but for client, is its own method.
 	WithCallerMethod(string)
 

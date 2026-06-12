@@ -114,7 +114,7 @@ func (c *clientStreamTransport) Init(ctx context.Context, roundTripOpts ...Round
 	conn, err := opts.Multiplexed.GetMuxConn(ctx, opts.Network, opts.Address, getOpts)
 	if err != nil {
 		return errs.NewFrameError(errs.RetClientConnectFail,
-			"tcp client transport multiplexd pool: "+err.Error())
+			"tcp client transport multiplexed pool: "+err.Error())
 	}
 	msg.WithRemoteAddr(conn.RemoteAddr())
 	msg.WithLocalAddr(conn.LocalAddr())
@@ -189,7 +189,7 @@ func (c *clientStreamTransport) getOptions(ctx context.Context,
 
 	if opts.Multiplexed == nil {
 		return nil, errs.NewFrameError(errs.RetClientConnectFail,
-			"tcp client transport: multiplexd pool empty")
+			"tcp client transport: multiplexed pool empty")
 	}
 
 	if opts.FramerBuilder == nil {

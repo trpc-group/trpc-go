@@ -43,7 +43,7 @@ When the server responds to the client, it can set the metadata through `ctx` to
 
 ```go
 // Note: Use the ctx passed by the framework. 
-// Set the value of the metadat key1 to []byte("val1") through this API.
+// Set the value of the metadata key1 to []byte("val1") through this API.
 trpc.SetMetaData(ctx, "key1", []byte("val1")) 
 ```
 

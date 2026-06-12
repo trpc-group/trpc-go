@@ -4,7 +4,7 @@
 
 名字服务模块可以将节点注册到对应的服务名下。注册信息除了 `ip:port` 外，还会包含运行环境、容器以及其他自定义的元数据信息。调用方根据服务名获取到所有节点后，路由模块再根据元数据信息对节点进行筛选，最后，负载均衡算法从满足要求的节点中选出一个节点来进行最终请求。名字提供了服务管理的统一抽象，避免了直接使用 `ip:port` 带来的运维困难。
 
-在 tRPC-Go 中，`register` 包定义了服务端的注册规范，`discovery`、`servicerouter`、`loadbalance`、`circuitebreaker` 则一起组成 `slector` 包并定义了客户端的服务发现规范。
+在 tRPC-Go 中，`register` 包定义了服务端的注册规范，`discovery`、`servicerouter`、`loadbalance`、`circuitbreaker` 则一起组成 `selector` 包并定义了客户端的服务发现规范。
 
 ## 原理
 

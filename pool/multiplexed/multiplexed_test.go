@@ -674,7 +674,7 @@ func (s *msuite) TestTCPReconnectMaxReconnectCount() {
 	assert.False(s.T(), ok)
 }
 
-func (s *msuite) TestStreamMultiplexd() {
+func (s *msuite) TestStreamMultiplexed() {
 	id := atomic.AddUint32(&s.requestID, 1)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -702,7 +702,7 @@ func (s *msuite) TestStreamMultiplexd() {
 	assert.Equal(s.T(), buf, rsp)
 }
 
-func (s *msuite) TestStreamMultiplexd_Addr() {
+func (s *msuite) TestStreamMultiplexed_Addr() {
 	streamID := atomic.AddUint32(&s.requestID, 1)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -725,7 +725,7 @@ func (s *msuite) TestStreamMultiplexd_Addr() {
 	assert.Equal(s.T(), s.address, ra.String())
 }
 
-func (s *msuite) TestStreamMultiplexd_MaxVirConnPerConn() {
+func (s *msuite) TestStreamMultiplexed_MaxVirConnPerConn() {
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
@@ -760,7 +760,7 @@ func (s *msuite) TestStreamMultiplexd_MaxVirConnPerConn() {
 	assert.Equal(s.T(), 3, len(cs.conns))
 }
 
-func (s *msuite) TestStreamMultiplexd_MaxIdleConnPerHost() {
+func (s *msuite) TestStreamMultiplexed_MaxIdleConnPerHost() {
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 

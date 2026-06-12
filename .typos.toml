@@ -12,3 +12,8 @@ extend-exclude = ["LICENSE"]
 [default.extend-identifiers]
 # Don't correct the identifiers "O_WRONLY"
 O_WRONLY = "O_WRONLY"
+StreamHandlerWapper = "StreamHandlerWapper"
+
+[default.extend-words]
+# Keep the existing exported API spelling for compatibility.
+Wapper = "Wapper"
