@@ -137,7 +137,13 @@ func Dial(opts *connpool.DialOptions) (net.Conn, error) {
 	if opts.TLSServerName == "" {
 		opts.TLSServerName = opts.Address
 	}
-	tlsConf, err := intertls.GetClientConfig(opts.TLSServerName, opts.CACertFile, opts.TLSCertFile, opts.TLSKeyFile)
+	tlsConf, err := intertls.GetClientConfig(
+		opts.TLSServerName,
+		opts.CACertFile,
+		opts.TLSCertFile,
+		opts.TLSKeyFile,
+		opts.TLSCertProvider,
+	)
 	if err != nil {
 		return nil, errs.WrapFrameError(err, errs.RetClientDecodeFail, "client dial tnet tls fail")
 	}

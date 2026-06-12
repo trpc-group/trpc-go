@@ -169,6 +169,9 @@ func newServiceWithConfig(cfg *Config, serviceCfg *ServiceConfig, opt ...server.
 		server.WithMaxRoutines(serviceCfg.MaxRoutines),
 		server.WithWritev(*serviceCfg.Writev),
 	}
+	if serviceCfg.TLSCertProvider != "" {
+		opts = append(opts, server.WithCertProvider(serviceCfg.TLSCertProvider))
+	}
 	for i := range filters {
 		opts = append(opts, server.WithNamedFilter(filterNames[i], filters[i]))
 	}

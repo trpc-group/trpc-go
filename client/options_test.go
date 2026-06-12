@@ -107,6 +107,11 @@ func TestSelectOptions(t *testing.T) {
 	o(opts)
 	require.Equal(t, callOptionNum, len(opts.CallOptions))
 
+	o = client.WithCertProvider("provider")
+	callOptionNum++
+	o(opts)
+	require.Equal(t, callOptionNum, len(opts.CallOptions))
+
 	o = client.WithDisableConnectionPool()
 	callOptionNum++
 	o(opts)

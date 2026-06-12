@@ -206,14 +206,15 @@ func (cs *Connections) newConn(opts *GetOptions) *Connection {
 
 func dialTCP(timeout time.Duration, opts *GetOptions) (net.Conn, *connpool.DialOptions, error) {
 	dialOpts := &connpool.DialOptions{
-		Network:       opts.network,
-		Address:       opts.address,
-		Timeout:       timeout,
-		CACertFile:    opts.CACertFile,
-		TLSCertFile:   opts.TLSCertFile,
-		TLSKeyFile:    opts.TLSKeyFile,
-		TLSServerName: opts.TLSServerName,
-		LocalAddr:     opts.LocalAddr,
+		Network:         opts.network,
+		Address:         opts.address,
+		Timeout:         timeout,
+		CACertFile:      opts.CACertFile,
+		TLSCertFile:     opts.TLSCertFile,
+		TLSKeyFile:      opts.TLSKeyFile,
+		TLSCertProvider: opts.TLSCertProvider,
+		TLSServerName:   opts.TLSServerName,
+		LocalAddr:       opts.LocalAddr,
 	}
 	conn, err := tryConnect(dialOpts)
 	return conn, dialOpts, err

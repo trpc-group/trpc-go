@@ -193,13 +193,14 @@ func (p *pool) getHost(network string, address string, opts multiplexed.GetOptio
 		address:  address,
 		hostName: hostName,
 		dialOpts: dialOption{
-			fp:            opts.FP,
-			localAddr:     opts.LocalAddr,
-			caCertFile:    opts.CACertFile,
-			tlsCertFile:   opts.TLSCertFile,
-			tlsKeyFile:    opts.TLSKeyFile,
-			tlsServerName: opts.TLSServerName,
-			dialTimeout:   p.dialTimeout,
+			fp:              opts.FP,
+			localAddr:       opts.LocalAddr,
+			caCertFile:      opts.CACertFile,
+			tlsCertFile:     opts.TLSCertFile,
+			tlsKeyFile:      opts.TLSKeyFile,
+			tlsCertProvider: opts.TLSCertProvider,
+			tlsServerName:   opts.TLSServerName,
+			dialTimeout:     p.dialTimeout,
 		},
 		dialFunc:                     p.dialFunc,
 		maxConcurrentVirConnsPerConn: p.maxConcurrentVirConnsPerConn,
@@ -233,13 +234,14 @@ func (p *pool) metrics() {
 }
 
 type dialOption struct {
-	fp            multiplexed.FrameParser
-	localAddr     string
-	dialTimeout   time.Duration
-	caCertFile    string
-	tlsCertFile   string
-	tlsKeyFile    string
-	tlsServerName string
+	fp              multiplexed.FrameParser
+	localAddr       string
+	dialTimeout     time.Duration
+	caCertFile      string
+	tlsCertFile     string
+	tlsKeyFile      string
+	tlsCertProvider string
+	tlsServerName   string
 }
 
 // host manages all connections to the same network and address.
@@ -259,14 +261,15 @@ type host struct {
 func (h *host) singleflightDial() <-chan singleflight.Result {
 	ch := h.sfg.DoChan(h.hostName, func() (connection interface{}, err error) {
 		rawConn, err := h.dialFunc(&connpool.DialOptions{
-			Network:       h.network,
-			Address:       h.address,
-			Timeout:       h.dialOpts.dialTimeout,
-			LocalAddr:     h.dialOpts.localAddr,
-			CACertFile:    h.dialOpts.caCertFile,
-			TLSCertFile:   h.dialOpts.tlsCertFile,
-			TLSKeyFile:    h.dialOpts.tlsKeyFile,
-			TLSServerName: h.dialOpts.tlsServerName,
+			Network:         h.network,
+			Address:         h.address,
+			Timeout:         h.dialOpts.dialTimeout,
+			LocalAddr:       h.dialOpts.localAddr,
+			CACertFile:      h.dialOpts.caCertFile,
+			TLSCertFile:     h.dialOpts.tlsCertFile,
+			TLSKeyFile:      h.dialOpts.tlsKeyFile,
+			TLSCertProvider: h.dialOpts.tlsCertProvider,
+			TLSServerName:   h.dialOpts.tlsServerName,
 		})
 		if err != nil {
 			return nil, err

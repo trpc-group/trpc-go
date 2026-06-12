@@ -32,10 +32,11 @@ type GetOptions struct {
 	CustomReader  func(io.Reader) io.Reader
 	Ctx           context.Context
 
-	CACertFile    string // ca certificate.
-	TLSCertFile   string // client certificate.
-	TLSKeyFile    string // client secret key.
-	TLSServerName string // The client verifies the server's service name,
+	CACertFile      string // ca certificate.
+	TLSCertFile     string // client certificate.
+	TLSKeyFile      string // client secret key.
+	TLSCertProvider string // provider used to load TLS certificate files.
+	TLSServerName   string // The client verifies the server's service name,
 	// if not filled in, it defaults to the http hostname.
 
 	LocalAddr   string        // The local address when establishing a connection, which is randomly selected by default.
@@ -97,6 +98,11 @@ func (o *GetOptions) WithDialTLS(certFile, keyFile, caFile, serverName string) {
 	o.TLSServerName = serverName
 }
 
+// WithCertProvider sets the TLS certificate provider.
+func (o *GetOptions) WithCertProvider(providerName string) {
+	o.TLSCertProvider = providerName
+}
+
 // WithContext returns an Option which sets the requested ctx.
 func (o *GetOptions) WithContext(ctx context.Context) {
 	o.Ctx = ctx
@@ -136,14 +142,15 @@ type DialFunc func(opts *DialOptions) (net.Conn, error)
 
 // DialOptions request parameters.
 type DialOptions struct {
-	Network       string
-	Address       string
-	LocalAddr     string
-	Timeout       time.Duration
-	CACertFile    string // ca certificate.
-	TLSCertFile   string // client certificate.
-	TLSKeyFile    string // client secret key.
-	TLSServerName string // The client verifies the server's service name,
+	Network         string
+	Address         string
+	LocalAddr       string
+	Timeout         time.Duration
+	CACertFile      string // ca certificate.
+	TLSCertFile     string // client certificate.
+	TLSKeyFile      string // client secret key.
+	TLSCertProvider string // provider used to load TLS certificate files.
+	TLSServerName   string // The client verifies the server's service name,
 	// if not filled in, it defaults to the http hostname.
 	IdleTimeout time.Duration
 }
@@ -170,7 +177,13 @@ func Dial(opts *DialOptions) (net.Conn, error) {
 		opts.TLSServerName = opts.Address
 	}
 
-	tlsConf, err := intertls.GetClientConfig(opts.TLSServerName, opts.CACertFile, opts.TLSCertFile, opts.TLSKeyFile)
+	tlsConf, err := intertls.GetClientConfig(
+		opts.TLSServerName,
+		opts.CACertFile,
+		opts.TLSCertFile,
+		opts.TLSKeyFile,
+		opts.TLSCertProvider,
+	)
 	if err != nil {
 		return nil, errs.NewFrameError(errs.RetClientDecodeFail, "client dial tls fail: "+err.Error())
 	}

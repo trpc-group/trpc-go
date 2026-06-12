@@ -110,6 +110,7 @@ func (c *clientStreamTransport) Init(ctx context.Context, roundTripOpts ...Round
 	}
 	getOpts.WithFrameParser(fp)
 	getOpts.WithDialTLS(opts.TLSCertFile, opts.TLSKeyFile, opts.CACertFile, opts.TLSServerName)
+	getOpts.WithCertProvider(opts.TLSCertProvider)
 	getOpts.WithLocalAddr(opts.LocalAddr)
 	conn, err := opts.Multiplexed.GetMuxConn(ctx, opts.Network, opts.Address, getOpts)
 	if err != nil {

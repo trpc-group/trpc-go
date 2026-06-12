@@ -38,10 +38,11 @@ type RoundTripOptions struct {
 	Msg                   codec.Msg
 	Protocol              string // protocol type
 
-	CACertFile    string // CA certificate file
-	TLSCertFile   string // client certificate file
-	TLSKeyFile    string // client key file
-	TLSServerName string // the name when client verifies the server, default as HTTP hostname
+	CACertFile      string // CA certificate file
+	TLSCertFile     string // client certificate file
+	TLSKeyFile      string // client key file
+	TLSCertProvider string // provider used to load TLS certificate files
+	TLSServerName   string // the name when client verifies the server, default as HTTP hostname
 }
 
 // ConnectionMode is the connection mode, either Connected or NotConnected.
@@ -121,6 +122,13 @@ func WithDialTLS(certFile, keyFile, caFile, serverName string) RoundTripOption {
 		opts.TLSKeyFile = keyFile
 		opts.CACertFile = caFile
 		opts.TLSServerName = serverName
+	}
+}
+
+// WithCertProvider returns a RoundTripOption which sets the TLS certificate provider.
+func WithCertProvider(providerName string) RoundTripOption {
+	return func(opts *RoundTripOptions) {
+		opts.TLSCertProvider = providerName
 	}
 }
 

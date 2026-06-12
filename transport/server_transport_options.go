@@ -34,6 +34,21 @@ type ServerTransportOptions struct {
 	IdleTimeout             time.Duration
 	KeepAlivePeriod         time.Duration
 	ReusePort               bool
+	EnableH2C               bool
+	HTTP2Config             *HTTP2Config
+}
+
+// HTTP2Config is the server HTTP/2 configuration.
+type HTTP2Config struct {
+	MaxConcurrentStreams          int
+	MaxDecoderHeaderTableSize     int
+	MaxEncoderHeaderTableSize     int
+	MaxReadFrameSize              int
+	MaxReceiveBufferPerConnection int
+	MaxReceiveBufferPerStream     int
+	PermitProhibitedCipherSuites  bool
+	IdleTimeout                   time.Duration
+	CountError                    func(errType string)
 }
 
 // ServerTransportOption modifies the ServerTransportOptions.
@@ -94,6 +109,20 @@ func WithIdleTimeout(timeout time.Duration) ServerTransportOption {
 func WithKeepAlivePeriod(d time.Duration) ServerTransportOption {
 	return func(options *ServerTransportOptions) {
 		options.KeepAlivePeriod = d
+	}
+}
+
+// WithEnableH2C returns a ServerTransportOption which enables H2C.
+func WithEnableH2C(enable bool) ServerTransportOption {
+	return func(options *ServerTransportOptions) {
+		options.EnableH2C = enable
+	}
+}
+
+// WithHTTP2Config returns a ServerTransportOption which sets HTTP/2 config.
+func WithHTTP2Config(config *HTTP2Config) ServerTransportOption {
+	return func(options *ServerTransportOptions) {
+		options.HTTP2Config = config
 	}
 }
 

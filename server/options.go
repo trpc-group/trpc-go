@@ -179,6 +179,13 @@ func WithTLS(certFile, keyFile, caFile string) Option {
 	}
 }
 
+// WithCertProvider returns an Option that sets the TLS certificate provider.
+func WithCertProvider(providerName string) Option {
+	return func(o *Options) {
+		o.ServeOptions = append(o.ServeOptions, transport.WithServeCertProvider(providerName))
+	}
+}
+
 // WithNetwork returns an Option that sets network, tcp by default.
 func WithNetwork(s string) Option {
 	return func(o *Options) {

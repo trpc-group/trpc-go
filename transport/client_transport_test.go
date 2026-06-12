@@ -736,6 +736,10 @@ func TestOptions(t *testing.T) {
 	assert.Equal(t, "ca.pem", opts.CACertFile)
 	assert.Equal(t, "servername", opts.TLSServerName)
 
+	o = transport.WithCertProvider("provider")
+	o(opts)
+	assert.Equal(t, "provider", opts.TLSCertProvider)
+
 	o = transport.WithDisableConnectionPool()
 	o(opts)
 

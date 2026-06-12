@@ -421,6 +421,22 @@ func selectorFilter(ctx context.Context, req interface{}, rsp interface{}, next 
 	return err
 }
 
+// streamSelectorFilter is the selector filter for streaming RPCs.
+// It selects a backend node just before establishing the stream.
+func streamSelectorFilter(ctx context.Context, desc *ClientStreamDesc, streamer Streamer) (ClientStream, error) {
+	msg := codec.Message(ctx)
+	opts := OptionsFromContext(ctx)
+	node, err := selectNode(ctx, msg, opts)
+	if err != nil {
+		report.SelectNodeFail.Incr()
+		return nil, err
+	}
+	ensureMsgRemoteAddr(msg, findFirstNonEmpty(node.Network, opts.Network), node.Address, node.ParseAddr)
+	const invalidCost = -1
+	opts.Node.set(node, node.Address, invalidCost)
+	return streamer(ctx, desc)
+}
+
 // selectNode selects a backend node by selector related options and sets the msg.
 func selectNode(ctx context.Context, msg codec.Msg, opts *Options) (*registry.Node, error) {
 	opts.SelectOptions = append(opts.SelectOptions, selector.WithContext(ctx))

@@ -82,6 +82,10 @@ type Options struct {
 	RControl      RecvControl       // Receiver's flow control.
 	StreamFilters StreamFilterChain // Stream filter chain.
 
+	// EnableStreamSelectInFilter toggles selecting stream nodes inside the stream filter chain
+	// instead of during stream.Init. Disabled by default to preserve legacy behavior.
+	EnableStreamSelectInFilter bool
+
 	fixTimeout func(error) error
 
 	attachment *attachment.Attachment
@@ -447,6 +451,15 @@ func WithStreamFilter(sf StreamFilter) Option {
 	}
 }
 
+// WithEnableStreamSelectInFilter toggles selecting nodes in stream filter chain.
+// When enabled, a selector filter is appended as the last stream filter
+// and selectNode does not run during stream.Init.
+func WithEnableStreamSelectInFilter(enable bool) Option {
+	return func(o *Options) {
+		o.EnableStreamSelectInFilter = enable
+	}
+}
+
 // WithReqHead returns an Option that sets req head.
 // It's default to clone server req head from source request.
 func WithReqHead(h interface{}) Option {
@@ -499,6 +512,13 @@ func WithTLS(certFile, keyFile, caFile, serverName string) Option {
 			return
 		}
 		o.CallOptions = append(o.CallOptions, transport.WithDialTLS(certFile, keyFile, caFile, serverName))
+	}
+}
+
+// WithCertProvider returns an Option that sets the TLS certificate provider.
+func WithCertProvider(providerName string) Option {
+	return func(o *Options) {
+		o.CallOptions = append(o.CallOptions, transport.WithCertProvider(providerName))
 	}
 }
 
@@ -576,6 +596,11 @@ type optionsKey struct{}
 
 func contextWithOptions(ctx context.Context, opts *Options) context.Context {
 	return context.WithValue(ctx, optionsKey{}, opts)
+}
+
+// ContextWithOptions attaches the provided Options into ctx and returns the new context.
+func ContextWithOptions(ctx context.Context, opts *Options) context.Context {
+	return contextWithOptions(ctx, opts)
 }
 
 // OptionsFromContext returns options from context.
