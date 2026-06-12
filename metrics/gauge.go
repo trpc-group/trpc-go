@@ -26,11 +26,12 @@ type gauge struct {
 
 // Set updates the gauge value.
 func (g *gauge) Set(v float64) {
-	if len(metricsSinks) == 0 {
+	sinks := snapshotMetricsSinks()
+	if len(sinks) == 0 {
 		return
 	}
 	r := NewSingleDimensionMetrics(g.name, v, PolicySET)
-	for _, sink := range metricsSinks {
+	for _, sink := range sinks {
 		sink.Report(r)
 	}
 }

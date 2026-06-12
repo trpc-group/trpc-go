@@ -14,6 +14,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -389,8 +390,21 @@ func (c *TrpcConfig) Load() error {
 	if err != nil {
 		return fmt.Errorf("trpc/config failed to load error: %w config id: %s", err, c.id)
 	}
+	if c.sameData(data) {
+		return nil
+	}
 
 	return c.set(data)
+}
+
+func (c *TrpcConfig) sameData(data []byte) bool {
+	if c.value == nil {
+		return false
+	}
+	if c.expandEnv {
+		data = expandenv.ExpandEnv(data)
+	}
+	return bytes.Equal(c.value.raw, data)
 }
 
 // Reload reloads config.

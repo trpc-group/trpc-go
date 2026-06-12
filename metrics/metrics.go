@@ -88,6 +88,19 @@ func GetMetricsSink(name string) (Sink, bool) {
 	return sink, ok
 }
 
+func snapshotMetricsSinks() []Sink {
+	metricsSinksMutex.RLock()
+	defer metricsSinksMutex.RUnlock()
+	if len(metricsSinks) == 0 {
+		return nil
+	}
+	sinks := make([]Sink, 0, len(metricsSinks))
+	for _, sink := range metricsSinks {
+		sinks = append(sinks, sink)
+	}
+	return sinks
+}
+
 // Counter creates a named counter.
 func Counter(name string) ICounter {
 	countersMutex.RLock()
@@ -230,7 +243,7 @@ func AddSample(key string, buckets BucketBounds, value float64) {
 // Report reports a multi-dimension record.
 func Report(rec Record, opts ...Option) (err error) {
 	var errs []error
-	for _, sink := range metricsSinks {
+	for _, sink := range snapshotMetricsSinks() {
 		err = sink.Report(rec, opts...)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("sink-%s error: %v", sink.Name(), err))

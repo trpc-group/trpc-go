@@ -19,6 +19,7 @@ import (
 	"os"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -166,6 +167,31 @@ func TestCodecUnmarshalDstMustBeMap(t *testing.T) {
 	require.Nil(t, err)
 }
 
+func TestLoadSkipsUnmarshalWhenProviderDataUnchanged(t *testing.T) {
+	loader := newTrpcConfigLoad()
+	provider := newCountingDataProvider(t.Name())
+	codec := &countingCodec{name: t.Name()}
+	RegisterProvider(provider)
+	RegisterCodec(codec)
+
+	const path = "key"
+	provider.Set(path, []byte(`key: value`))
+	cfg, err := loader.Load(path, WithProvider(provider.Name()), WithCodec(codec.Name()))
+	require.NoError(t, err)
+	require.Equal(t, "value", cfg.GetString("key", ""))
+
+	require.NoError(t, cfg.Load())
+	require.Equal(t, "value", cfg.GetString("key", ""))
+	require.Equal(t, int64(2), provider.ReadCount())
+	require.Equal(t, int64(1), codec.UnmarshalCount())
+
+	provider.Set(path, []byte(`key: value2`))
+	require.NoError(t, cfg.Load())
+	require.Equal(t, "value2", cfg.GetString("key", ""))
+	require.Equal(t, int64(3), provider.ReadCount())
+	require.Equal(t, int64(2), codec.UnmarshalCount())
+}
+
 func NewEnvProvider(name string, data []byte) *EnvProvider {
 	return &EnvProvider{
 		name: name,
@@ -306,4 +332,54 @@ func (c dstMustBeMapCodec) Unmarshal(bts []byte, dst interface{}) error {
 		return errors.New("the dst of codec.Unmarshal must be a map")
 	}
 	return nil
+}
+
+type countingDataProvider struct {
+	readCount int64
+	name      string
+	values    sync.Map
+}
+
+func newCountingDataProvider(name string) *countingDataProvider {
+	return &countingDataProvider{name: name}
+}
+
+func (p *countingDataProvider) Name() string {
+	return p.name
+}
+
+func (p *countingDataProvider) Read(path string) ([]byte, error) {
+	atomic.AddInt64(&p.readCount, 1)
+	if v, ok := p.values.Load(path); ok {
+		return v.([]byte), nil
+	}
+	return nil, fmt.Errorf("not found config")
+}
+
+func (p *countingDataProvider) Watch(ProviderCallback) {}
+
+func (p *countingDataProvider) Set(path string, data []byte) {
+	p.values.Store(path, data)
+}
+
+func (p *countingDataProvider) ReadCount() int64 {
+	return atomic.LoadInt64(&p.readCount)
+}
+
+type countingCodec struct {
+	unmarshalCount int64
+	name           string
+}
+
+func (c *countingCodec) Name() string {
+	return c.name
+}
+
+func (c *countingCodec) Unmarshal(in []byte, out interface{}) error {
+	atomic.AddInt64(&c.unmarshalCount, 1)
+	return (&YamlCodec{}).Unmarshal(in, out)
+}
+
+func (c *countingCodec) UnmarshalCount() int64 {
+	return atomic.LoadInt64(&c.unmarshalCount)
 }

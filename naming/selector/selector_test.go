@@ -14,6 +14,8 @@
 package selector
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -53,4 +55,31 @@ func TestSelectorGet(t *testing.T) {
 	assert.NotNil(t, s)
 	unregisterForTesting("test-selector")
 	assert.Nil(t, Get("not_exist"))
+}
+
+func TestSelectorRegisterAndGetConcurrent(t *testing.T) {
+	const goroutines = 8
+	const iterations = 100
+
+	var wg sync.WaitGroup
+	for i := 0; i < goroutines; i++ {
+		name := fmt.Sprintf("test-selector-concurrent-%d", i)
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				Register(name, &testSelector{})
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				_ = Get(name)
+			}
+		}()
+	}
+	wg.Wait()
+	for i := 0; i < goroutines; i++ {
+		unregisterForTesting(fmt.Sprintf("test-selector-concurrent-%d", i))
+	}
 }
