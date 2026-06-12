@@ -488,6 +488,19 @@ func (s *msuite) TestReadErrorCleanVirtualConnection() {
 	assert.Len(s.T(), vc.conn.virConns, 0)
 }
 
+func (s *msuite) TestReadDrainsQueuedResponseAfterStoredError() {
+	vc := (&Connection{
+		virConns: make(map[uint32]*VirtualConnection),
+	}).newVirConn(context.Background(), 1)
+	want := []byte("hello")
+	vc.recvQueue.Put(want)
+	vc.storeErr(errors.New("connection closed"))
+
+	got, err := vc.Read()
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), want, got)
+}
+
 func (s *msuite) TestUdpMultiplexedReadTimeout() {
 	ld := &lengthDelimitedFramer{}
 
@@ -674,7 +687,7 @@ func (s *msuite) TestTCPReconnectMaxReconnectCount() {
 	assert.False(s.T(), ok)
 }
 
-func (s *msuite) TestStreamMultiplexd() {
+func (s *msuite) TestStreamMultiplexed() {
 	id := atomic.AddUint32(&s.requestID, 1)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -702,7 +715,7 @@ func (s *msuite) TestStreamMultiplexd() {
 	assert.Equal(s.T(), buf, rsp)
 }
 
-func (s *msuite) TestStreamMultiplexd_Addr() {
+func (s *msuite) TestStreamMultiplexed_Addr() {
 	streamID := atomic.AddUint32(&s.requestID, 1)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -725,7 +738,7 @@ func (s *msuite) TestStreamMultiplexd_Addr() {
 	assert.Equal(s.T(), s.address, ra.String())
 }
 
-func (s *msuite) TestStreamMultiplexd_MaxVirConnPerConn() {
+func (s *msuite) TestStreamMultiplexed_MaxVirConnPerConn() {
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
@@ -760,7 +773,7 @@ func (s *msuite) TestStreamMultiplexd_MaxVirConnPerConn() {
 	assert.Equal(s.T(), 3, len(cs.conns))
 }
 
-func (s *msuite) TestStreamMultiplexd_MaxIdleConnPerHost() {
+func (s *msuite) TestStreamMultiplexed_MaxIdleConnPerHost() {
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
@@ -947,6 +960,19 @@ func (s *msuite) TestMultiplexedReconnectOnWriteError() {
 	require.Nil(s.T(), err)
 	vc, ok := mc.(*VirtualConnection)
 	assert.True(s.T(), ok)
+	var rawConn net.Conn
+	require.Eventually(s.T(), func() bool {
+		rawConn = vc.conn.getRawConn()
+		return rawConn != nil
+	}, time.Second, time.Millisecond)
+	writeDone := make(chan struct{})
+	vc.conn.setRawConn(&writeSignalConn{Conn: rawConn, writeDone: writeDone})
+	require.Nil(s.T(), vc.Write([]byte("hello")))
+	select {
+	case <-writeDone:
+	case <-time.After(time.Second):
+		s.T().Fatal("timed out waiting for the first write")
+	}
 	<-readTrigger                                    // Wait for the first read.
 	require.Nil(s.T(), vc.conn.getRawConn().Close()) // Now close the underlying connection.
 	require.Nil(s.T(), vc.Write([]byte("hello")))    // Then this write will trigger a reconnection on write error.
@@ -954,6 +980,20 @@ func (s *msuite) TestMultiplexedReconnectOnWriteError() {
 	require.Eventually(s.T(),
 		func() bool { return 1 == vc.conn.reconnectCount },
 		time.Second, 10*time.Millisecond)
+}
+
+type writeSignalConn struct {
+	net.Conn
+	writeDone chan struct{}
+	once      sync.Once
+}
+
+func (c *writeSignalConn) Write(b []byte) (int, error) {
+	n, err := c.Conn.Write(b)
+	c.once.Do(func() {
+		close(c.writeDone)
+	})
+	return n, err
 }
 
 func TestMultiplexedDestroyMayCauseGoroutineLeak(t *testing.T) {

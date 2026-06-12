@@ -113,10 +113,7 @@ func (c *clientTransport) dialTCP(ctx context.Context, opts *RoundTripOptions) (
 			return nil, errs.NewFrameError(errs.RetClientConnectFail,
 				"tcp client transport dial: "+err.Error())
 		}
-		if ok {
-			conn.SetDeadline(d)
-		}
-		return conn, nil
+		return c.finishDialTCP(ctx, conn, d, ok)
 	}
 
 	// Connection pool mode, get connection from pool.
@@ -132,8 +129,26 @@ func (c *clientTransport) dialTCP(ctx context.Context, opts *RoundTripOptions) (
 		return nil, errs.NewFrameError(errs.RetClientConnectFail,
 			"tcp client transport connection pool: "+err.Error())
 	}
-	if ok {
-		conn.SetDeadline(d)
+	return c.finishDialTCP(ctx, conn, d, ok)
+}
+
+func (c *clientTransport) finishDialTCP(ctx context.Context, conn net.Conn, deadline time.Time, hasDeadline bool) (net.Conn, error) {
+	if hasDeadline {
+		if err := conn.SetDeadline(deadline); err != nil {
+			_ = conn.Close()
+			return nil, errs.NewFrameError(errs.RetClientConnectFail,
+				"tcp client transport set deadline: "+err.Error())
+		}
+	}
+	if ctx.Err() == context.Canceled {
+		_ = conn.Close()
+		return nil, errs.NewFrameError(errs.RetClientCanceled,
+			"client canceled after tcp dial: "+ctx.Err().Error())
+	}
+	if ctx.Err() == context.DeadlineExceeded {
+		_ = conn.Close()
+		return nil, errs.NewFrameError(errs.RetClientTimeout,
+			"client timeout after tcp dial: "+ctx.Err().Error())
 	}
 	return conn, nil
 }

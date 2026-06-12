@@ -68,7 +68,7 @@ func (t *testRPCZAttributeImpl) Hello(ctx context.Context, req *pb.HelloReq) (*p
 	case "Code":
 		return t.codeResult(ctx, req)
 	default:
-		return nil, errs.New(111, "unknow rpcz type")
+		return nil, errs.New(111, "unknown rpcz type")
 	}
 
 }

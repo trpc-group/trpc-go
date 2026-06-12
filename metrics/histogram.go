@@ -88,12 +88,13 @@ func (h *histogram) AddSample(value float64) {
 	h.Buckets[idx].samples += value
 	h.Buckets[idx].mu.Unlock()
 
-	if len(metricsSinks) == 0 {
+	sinks := snapshotMetricsSinks()
+	if len(sinks) == 0 {
 		return
 	}
 
 	r := NewSingleDimensionMetrics(h.Name, value, PolicyHistogram)
-	for _, sink := range metricsSinks {
+	for _, sink := range sinks {
 		sink.Report(r)
 	}
 }

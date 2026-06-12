@@ -21,6 +21,7 @@ import (
 	"math"
 	"net"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -129,6 +130,44 @@ func (c *fakeConn) SetReadDeadline(t time.Time) error {
 
 func (c *fakeConn) SetWriteDeadline(t time.Time) error {
 	return nil
+}
+
+type setDeadlineErrorConn struct {
+	fakeConn
+	closeCount int32
+}
+
+func (c *setDeadlineErrorConn) Close() error {
+	atomic.AddInt32(&c.closeCount, 1)
+	return nil
+}
+
+func (c *setDeadlineErrorConn) SetDeadline(time.Time) error {
+	return errors.New("set deadline failed")
+}
+
+type fixedConnPool struct {
+	conn net.Conn
+}
+
+func (p *fixedConnPool) Get(network string, address string, opts connpool.GetOptions) (net.Conn, error) {
+	return p.conn, nil
+}
+
+func TestTcpRoundTripClosesConnOnSetDeadlineError(t *testing.T) {
+	st := transport.NewClientTransport()
+	conn := &setDeadlineErrorConn{}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	_, err := st.RoundTrip(ctx, []byte("hello"),
+		transport.WithDialNetwork("tcp"),
+		transport.WithDialPool(&fixedConnPool{conn: conn}),
+		transport.WithClientFramerBuilder(&trpc.FramerBuilder{}),
+		transport.WithDialAddress("127.0.0.1:8888"))
+	require.NotNil(t, err)
+	require.Equal(t, errs.RetClientConnectFail, errs.Code(err))
+	require.Equal(t, int32(1), atomic.LoadInt32(&conn.closeCount))
 }
 
 func TestTcpRoundTripReadFrameNil(t *testing.T) {

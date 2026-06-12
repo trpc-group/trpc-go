@@ -314,7 +314,7 @@ func NewClientTransport(http2Only bool, opt ...transport.ClientTransportOption) 
 	return &ClientTransport{
 		opts: opts,
 		Client: stdhttp.Client{
-			Transport: NewRoundTripper(StdHTTPTransport),
+			Transport: NewRoundTripper(StdHTTPTransport.Clone()),
 		},
 		tlsClients: make(map[string]*stdhttp.Client),
 		http2Only:  http2Only,

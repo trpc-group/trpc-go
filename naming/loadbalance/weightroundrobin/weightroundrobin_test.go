@@ -24,7 +24,7 @@ import (
 func TestWrrSmoothBalancing(t *testing.T) {
 	wrr := NewWeightRoundRobin(0)
 	// weight: a: 5, b: 1, c: 1
-	// list shound be: a, a, b, a, c, a, a
+	// list should be: a, a, b, a, c, a, a
 	tests := []int{0, 0, 1, 0, 2, 0, 0}
 	for i := 0; i < 7; i++ {
 		n, err := wrr.Select("test1", list1)
@@ -73,7 +73,7 @@ func TestWrrInterval(t *testing.T) {
 func TestWrrDifferentService(t *testing.T) {
 	wrr := NewWeightRoundRobin(defaultUpdateRate)
 	// weight: a: 5, b: 1, c: 1
-	// list shound be: a, a, b, a, c, a, a
+	// list should be: a, a, b, a, c, a, a
 	tests := []int{0, 0, 1, 0, 2, 0, 0}
 	for i := 0; i < 7; i++ {
 		n, err := wrr.Select("test1", list1)

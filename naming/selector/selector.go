@@ -16,6 +16,8 @@
 package selector
 
 import (
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"trpc.group/trpc-go/trpc-go/naming/registry"
@@ -30,20 +32,47 @@ type Selector interface {
 }
 
 var (
-	selectors = make(map[string]Selector)
+	selectorsMu sync.Mutex
+	selectors   atomic.Value // stores map[string]Selector
 )
 
 // Register registers a named Selector.
 func Register(name string, s Selector) {
-	selectors[name] = s
+	selectorsMu.Lock()
+	defer selectorsMu.Unlock()
+
+	old := loadSelectors()
+	next := make(map[string]Selector, len(old)+1)
+	for k, v := range old {
+		next[k] = v
+	}
+	next[name] = s
+	selectors.Store(next)
 }
 
 // Get gets a named Selector.
 func Get(name string) Selector {
-	s := selectors[name]
-	return s
+	return loadSelectors()[name]
+}
+
+func loadSelectors() map[string]Selector {
+	m, _ := selectors.Load().(map[string]Selector)
+	if m == nil {
+		return nil
+	}
+	return m
 }
 
 func unregisterForTesting(name string) {
-	delete(selectors, name)
+	selectorsMu.Lock()
+	defer selectorsMu.Unlock()
+
+	old := loadSelectors()
+	next := make(map[string]Selector, len(old))
+	for k, v := range old {
+		if k != name {
+			next[k] = v
+		}
+	}
+	selectors.Store(next)
 }

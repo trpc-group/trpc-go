@@ -806,9 +806,6 @@ func (vc *VirtualConnection) Write(b []byte) error {
 // Read reads back the packet.
 // Write and Read can be concurrent, but not concurrent Read.
 func (vc *VirtualConnection) Read() ([]byte, error) {
-	if err := vc.loadErr(); err != nil {
-		return nil, err
-	}
 	rsp, ok := vc.recvQueue.Get()
 	if !ok {
 		vc.Close()

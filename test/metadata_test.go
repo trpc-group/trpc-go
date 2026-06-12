@@ -46,7 +46,7 @@ func (s *TestSuite) TestClientWithMetaDataOption() {
 			s.Run(e.String(), func() {
 				s.startServer(&TRPCService{}, server.WithFilter(
 					func(ctx context.Context, req interface{}, next filter.ServerHandleFunc) (interface{}, error) {
-						return nil, fmt.Errorf("unknow error")
+						return nil, fmt.Errorf("unknown error")
 					}))
 				defer s.closeServer(nil)
 				require.NotNil(s.T(), s.testClientWithMetaDataOption())
@@ -138,7 +138,7 @@ func (s *TestSuite) TestServerSetMetaData() {
 							if value := trpc.GetMetaData(ctx, "repeat-value"); len(value) != 0 {
 								trpc.SetMetaData(ctx, "repeat-value", append(value, value...))
 							}
-							return nil, fmt.Errorf("unknow error")
+							return nil, fmt.Errorf("unknown error")
 						}),
 				)
 				defer s.closeServer(nil)
@@ -195,7 +195,7 @@ func (s *TestSuite) TestMessageWithServerMetaDataOption() {
 			s.Run(e.String(), func() {
 				s.startServer(&TRPCService{}, server.WithFilter(
 					func(ctx context.Context, req interface{}, next filter.ServerHandleFunc) (interface{}, error) {
-						return nil, fmt.Errorf("unknow error")
+						return nil, fmt.Errorf("unknown error")
 					}))
 				defer s.closeServer(nil)
 				require.NotNil(s.T(), s.testMessageWithServerMetaDataOption())
