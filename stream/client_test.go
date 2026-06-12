@@ -30,6 +30,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/naming/registry"
 	"trpc.group/trpc-go/trpc-go/server"
 	"trpc.group/trpc-go/trpc-go/stream"
 	"trpc.group/trpc-go/trpc-go/transport"
@@ -837,4 +838,34 @@ func TestClientServerCompress(t *testing.T) {
 	err = clientStream.RecvMsg(rsp)
 	assert.Equal(t, rsp.Data, req.Data)
 	assert.Nil(t, err)
+}
+
+func TestStreamSelectInFilterSuccess(t *testing.T) {
+	codec.RegisterSerializer(0, &codec.NoopSerialization{})
+	codec.Register("fake", nil, &fakeCodec{})
+
+	tp := &fakeTransport{expectChan: make(chan recvExpect, 1)}
+	tp.expectChan <- func(fh *trpc.FrameHead, m codec.Msg) ([]byte, error) {
+		fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
+		m.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{InitWindowSize: 0})
+		return nil, nil
+	}
+
+	var node registry.Node
+	cs, err := stream.NewStreamClient().NewStream(ctx, &client.ClientStreamDesc{}, "",
+		client.WithProtocol("fake"),
+		client.WithTarget("ip://127.0.0.1:8000"),
+		client.WithCurrentSerializationType(codec.SerializationTypeNoop),
+		client.WithStreamTransport(tp),
+		client.WithSelectorNode(&node),
+		client.WithEnableStreamSelectInFilter(true),
+	)
+	assert.Nil(t, err)
+	assert.NotNil(t, cs)
+
+	msg := codec.Message(cs.Context())
+	if assert.NotNil(t, msg.RemoteAddr()) {
+		assert.Equal(t, "127.0.0.1:8000", msg.RemoteAddr().String())
+	}
+	assert.Equal(t, "127.0.0.1:8000", node.Address)
 }

@@ -455,6 +455,23 @@ func TestWithKeepAlivePeriod(t *testing.T) {
 	assert.Equal(t, time.Minute, opts.KeepAlivePeriod)
 }
 
+func TestWithHTTP2Config(t *testing.T) {
+	config := &transport.HTTP2Config{MaxConcurrentStreams: 1}
+	opt := transport.WithHTTP2Config(config)
+	assert.NotNil(t, opt)
+	opts := &transport.ServerTransportOptions{}
+	opt(opts)
+	assert.Equal(t, config, opts.HTTP2Config)
+}
+
+func TestWithEnableH2C(t *testing.T) {
+	opt := transport.WithEnableH2C(true)
+	assert.NotNil(t, opt)
+	opts := &transport.ServerTransportOptions{}
+	opt(opts)
+	assert.True(t, opts.EnableH2C)
+}
+
 func TestWithServeTLS(t *testing.T) {
 	opt := transport.WithServeTLS("certfile", "keyfile", "")
 	assert.NotNil(t, opt)
@@ -462,6 +479,10 @@ func TestWithServeTLS(t *testing.T) {
 	opt(opts)
 	assert.Equal(t, "certfile", opts.TLSCertFile)
 	assert.Equal(t, "keyfile", opts.TLSKeyFile)
+
+	opt = transport.WithServeCertProvider("provider")
+	opt(opts)
+	assert.Equal(t, "provider", opts.TLSCertProvider)
 }
 
 // TestWithServeAsync tests setting server async.

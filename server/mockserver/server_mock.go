@@ -60,6 +60,20 @@ func (mr *MockServiceMockRecorder) Register(serviceDesc, serviceImpl interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockService)(nil).Register), serviceDesc, serviceImpl)
 }
 
+// ServiceName mocks base method
+func (m *MockService) ServiceName() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ServiceName")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// ServiceName indicates an expected call of ServiceName
+func (mr *MockServiceMockRecorder) ServiceName() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ServiceName", reflect.TypeOf((*MockService)(nil).ServiceName))
+}
+
 // Serve mocks base method
 func (m *MockService) Serve() error {
 	m.ctrl.T.Helper()

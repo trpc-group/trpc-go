@@ -529,6 +529,7 @@ type ServiceConfig struct {
 	StreamFilter      []string `yaml:"stream_filter"`          // Stream filters for the service.
 	TLSKey            string   `yaml:"tls_key"`                // Server TLS key.
 	TLSCert           string   `yaml:"tls_cert"`               // Server TLS certificate.
+	TLSCertProvider   string   `yaml:"tls_cert_provider"`      // TLS certificate provider.
 	CACert            string   `yaml:"ca_cert"`                // CA certificate to validate client certificate.
 	ServerAsync       *bool    `yaml:"server_async,omitempty"` // Whether to enable server asynchronous mode.
 	// MaxRoutines is the maximum number of goroutines for server asynchronous mode.

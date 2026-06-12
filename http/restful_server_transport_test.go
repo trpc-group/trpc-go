@@ -31,6 +31,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/valyala/fasthttp"
+	"golang.org/x/net/http2"
 
 	trpc "trpc.group/trpc-go/trpc-go"
 	"trpc.group/trpc-go/trpc-go/codec"
@@ -99,7 +100,7 @@ func TestCompatibility(t *testing.T) {
 func TestEnableTLS(t *testing.T) {
 	// Registers service.
 	s := &server.Server{}
-	conf, err := itls.GetServerConfig("../testdata/ca.pem", "../testdata/server.crt", "../testdata/server.key")
+	conf, err := itls.GetServerConfig("../testdata/ca.pem", "../testdata/server.crt", "../testdata/server.key", "")
 	require.Nil(t, err, "%+v", err)
 	ln, err := tls.Listen("tcp", "127.0.0.1:0", conf)
 	require.Nil(t, err)
@@ -157,6 +158,65 @@ func TestEnableTLS(t *testing.T) {
 	respBody := &responseBody{}
 	json.Unmarshal(bodyBytes, respBody)
 	require.Equal(t, respBody.Message, "test restful server transport")
+}
+
+func TestRESTH2C(t *testing.T) {
+	serviceName := "trpc.test.helloworld.Greeter" + t.Name()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	defer ln.Close()
+
+	s := &server.Server{}
+	service := server.New(
+		server.WithListener(ln),
+		server.WithServiceName(serviceName),
+		server.WithProtocol("restful"),
+		server.WithTransport(thttp.NewRESTServerTransport(
+			false,
+			transport.WithEnableH2C(true),
+			transport.WithHTTP2Config(&transport.HTTP2Config{MaxConcurrentStreams: 10}),
+		)),
+	)
+	s.AddService(serviceName, service)
+	helloworld.RegisterGreeterService(s, &greeterServerImpl{})
+
+	go func() { require.Nil(t, s.Serve()) }()
+	defer s.Close(nil)
+	time.Sleep(100 * time.Millisecond)
+
+	cli := &http.Client{
+		Transport: &http2.Transport{
+			AllowHTTP: true,
+			DialTLS: func(network, addr string, _ *tls.Config) (net.Conn, error) {
+				return net.Dial(network, addr)
+			},
+		},
+	}
+	req, err := http.NewRequest("POST", "http://"+ln.Addr().String()+"/v1/foobar",
+		bytes.NewBuffer([]byte(`{"name": "xyz"}`)))
+	require.Nil(t, err)
+	resp, err := cli.Do(req)
+	require.Nil(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, "HTTP/2.0", resp.Proto)
+}
+
+func TestRESTH2CWithTLSReturnsError(t *testing.T) {
+	serviceName := "trpc.test.helloworld.Greeter" + t.Name()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	defer ln.Close()
+	restful.RegisterRouter(serviceName, restful.NewRouter())
+
+	st := thttp.NewRESTServerTransport(false, transport.WithEnableH2C(true))
+	err = st.ListenAndServe(
+		context.Background(),
+		transport.WithListener(ln),
+		transport.WithServiceName(serviceName),
+		transport.WithServeTLS("../testdata/server.crt", "../testdata/server.key", ""),
+	)
+	require.ErrorContains(t, err, "h2c and tls cannot be enabled at the same time")
 }
 
 func TestReplaceRouter(t *testing.T) {

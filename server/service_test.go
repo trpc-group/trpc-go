@@ -193,6 +193,12 @@ func TestService(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestServiceName(t *testing.T) {
+	const serviceName = "trpc.test.helloworld.Greeter"
+	service := server.New(server.WithServiceName(serviceName))
+	assert.Equal(t, serviceName, service.ServiceName())
+}
+
 // TestServiceFail tests failures of request handling.
 func TestServiceFail(t *testing.T) {
 

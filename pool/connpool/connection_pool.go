@@ -87,14 +87,15 @@ type dialFunc = func(ctx context.Context) (net.Conn, error)
 
 func (p *pool) getDialFunc(network string, address string, opts GetOptions) dialFunc {
 	dialOpts := &DialOptions{
-		Network:       network,
-		Address:       address,
-		LocalAddr:     opts.LocalAddr,
-		CACertFile:    opts.CACertFile,
-		TLSCertFile:   opts.TLSCertFile,
-		TLSKeyFile:    opts.TLSKeyFile,
-		TLSServerName: opts.TLSServerName,
-		IdleTimeout:   p.opts.IdleTimeout,
+		Network:         network,
+		Address:         address,
+		LocalAddr:       opts.LocalAddr,
+		CACertFile:      opts.CACertFile,
+		TLSCertFile:     opts.TLSCertFile,
+		TLSKeyFile:      opts.TLSKeyFile,
+		TLSCertProvider: opts.TLSCertProvider,
+		TLSServerName:   opts.TLSServerName,
+		IdleTimeout:     p.opts.IdleTimeout,
 	}
 
 	return func(ctx context.Context) (net.Conn, error) {

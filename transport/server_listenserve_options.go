@@ -29,14 +29,15 @@ type ListenServeOptions struct {
 	FramerBuilder codec.FramerBuilder
 	Listener      net.Listener
 
-	CACertFile  string        // ca certification file
-	TLSCertFile string        // server certification file
-	TLSKeyFile  string        // server key file
-	Routines    int           // size of goroutine pool
-	ServerAsync bool          // whether enable server async
-	Writev      bool          // whether enable writev in server
-	CopyFrame   bool          // whether copy frame
-	IdleTimeout time.Duration // idle timeout of connection
+	CACertFile      string        // ca certification file
+	TLSCertFile     string        // server certification file
+	TLSKeyFile      string        // server key file
+	TLSCertProvider string        // provider used to load TLS certificate files
+	Routines        int           // size of goroutine pool
+	ServerAsync     bool          // whether enable server async
+	Writev          bool          // whether enable writev in server
+	CopyFrame       bool          // whether copy frame
+	IdleTimeout     time.Duration // idle timeout of connection
 
 	// DisableKeepAlives, if true, disables keep-alives and only use the
 	// connection for a single request.
@@ -100,6 +101,13 @@ func WithServeTLS(certFile, keyFile, caFile string) ListenServeOption {
 		opts.TLSCertFile = certFile
 		opts.TLSKeyFile = keyFile
 		opts.CACertFile = caFile
+	}
+}
+
+// WithServeCertProvider returns a ListenServeOption which sets the TLS certificate provider.
+func WithServeCertProvider(providerName string) ListenServeOption {
+	return func(opts *ListenServeOptions) {
+		opts.TLSCertProvider = providerName
 	}
 }
 

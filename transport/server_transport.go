@@ -233,7 +233,7 @@ func mayLiftToTLSListener(ln net.Listener, opts *ListenServeOptions) (net.Listen
 		return ln, nil
 	}
 	// Enable TLS.
-	tlsConf, err := itls.GetServerConfig(opts.CACertFile, opts.TLSCertFile, opts.TLSKeyFile)
+	tlsConf, err := itls.GetServerConfig(opts.CACertFile, opts.TLSCertFile, opts.TLSKeyFile, opts.TLSCertProvider)
 	if err != nil {
 		return nil, fmt.Errorf("tls get server config err: %w", err)
 	}

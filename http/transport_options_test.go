@@ -18,13 +18,16 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"trpc.group/trpc-go/trpc-go/transport"
 )
 
 func TestOptServerTransport(t *testing.T) {
 	st := NewServerTransport(
 		func() *http.Server { return &http.Server{} },
 		WithReusePort(),
-		WithEnableH2C())
+		WithEnableH2C(),
+		WithHTTP2Config(&transport.HTTP2Config{MaxConcurrentStreams: 1}))
 	require.True(t, st.reusePort)
 	require.True(t, st.enableH2C)
+	require.Equal(t, 1, st.http2Config.MaxConcurrentStreams)
 }

@@ -191,7 +191,7 @@ func (s *serverTransport) startTLSService(
 	pool *ants.PoolWithFunc,
 	opts *transport.ListenServeOptions,
 ) error {
-	conf, err := intertls.GetServerConfig(opts.CACertFile, opts.TLSCertFile, opts.TLSKeyFile)
+	conf, err := intertls.GetServerConfig(opts.CACertFile, opts.TLSCertFile, opts.TLSKeyFile, opts.TLSCertProvider)
 	if err != nil {
 		return fmt.Errorf("get tls config fail: %w", err)
 	}

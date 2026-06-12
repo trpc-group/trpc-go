@@ -13,6 +13,8 @@
 
 package http
 
+import "trpc.group/trpc-go/trpc-go/transport"
+
 // OptServerTransport modifies ServerTransport.
 type OptServerTransport func(*ServerTransport)
 
@@ -27,5 +29,12 @@ func WithReusePort() OptServerTransport {
 func WithEnableH2C() OptServerTransport {
 	return func(st *ServerTransport) {
 		st.enableH2C = true
+	}
+}
+
+// WithHTTP2Config returns an OptServerTransport which sets HTTP/2 config.
+func WithHTTP2Config(config *transport.HTTP2Config) OptServerTransport {
+	return func(st *ServerTransport) {
+		st.http2Config = config
 	}
 }

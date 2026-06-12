@@ -187,34 +187,17 @@ func TestErrHeaderHandler(t *testing.T) {
 
 func TestListenAndServeFailedDueToBadCertificationFile(t *testing.T) {
 	ctx := context.Background()
-	oldLogger := log.DefaultLogger
-	defer func() {
-		log.DefaultLogger = oldLogger
-	}()
-	errorCh := make(chan error)
-	log.DefaultLogger = &testLog{Logger: oldLogger, errorCh: errorCh}
-
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.Nil(t, err)
 	defer func() { require.Nil(t, ln.Close()) }()
 	const badCertFile = "bad-file.cert"
-	require.Nil(
-		t,
-		thttp.NewServerTransport(newNoopStdHTTPServer).ListenAndServe(
-			ctx,
-			transport.WithListener(ln),
-			transport.WithHandler(transport.Handler(&h{})),
-			transport.WithServeTLS(badCertFile, "../testdata/server.key", ""),
-		),
-		"failed to new client transport",
+	err = thttp.NewServerTransport(newNoopStdHTTPServer).ListenAndServe(
+		ctx,
+		transport.WithListener(ln),
+		transport.WithHandler(transport.Handler(&h{})),
+		transport.WithServeTLS(badCertFile, "../testdata/server.key", ""),
 	)
-
-	select {
-	case <-time.After(time.Second):
-		t.Fatal("listen on a bad cert should log an error")
-	case err := <-errorCh:
-		require.Contains(t, err.Error(), badCertFile)
-	}
+	require.ErrorContains(t, err, badCertFile)
 }
 
 func TestStartTLSServerAndNoCheckServer(t *testing.T) {
@@ -1530,6 +1513,11 @@ type mockService struct {
 func (m *mockService) Register(serviceDesc interface{}, serviceImpl interface{}) error {
 	m.desc = serviceDesc
 	return nil
+}
+
+// ServiceName returns mock service name.
+func (m *mockService) ServiceName() string {
+	return "mock"
 }
 
 // Serve runs service.
