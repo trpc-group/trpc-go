@@ -31,6 +31,8 @@ const (
 	CompressTypeZlib
 	CompressTypeStreamSnappy
 	CompressTypeBlockSnappy
+	CompressTypeStreamLZ4
+	CompressTypeBlockLZ4
 )
 
 var compressors = make(map[int]Compressor)
