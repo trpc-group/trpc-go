@@ -18,6 +18,15 @@ import "trpc.group/trpc-go/trpc-go/internal/httprule"
 // Pattern makes *httprule.PathTemplate accessible.
 type Pattern struct {
 	*httprule.PathTemplate
+	rawURLPath string
+}
+
+// RawURLPath returns the raw URL path defined in the proto file.
+func (p *Pattern) RawURLPath() string {
+	if p == nil {
+		return ""
+	}
+	return p.rawURLPath
 }
 
 // Parse parses the url path into a *Pattern. It should only be used by trpc-cmdline.
@@ -26,7 +35,7 @@ func Parse(urlPath string) (*Pattern, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Pattern{tpl}, nil
+	return &Pattern{PathTemplate: tpl, rawURLPath: urlPath}, nil
 }
 
 // Enforce ensures the url path is legal (will panic if illegal) and parses it into a *Pattern.
