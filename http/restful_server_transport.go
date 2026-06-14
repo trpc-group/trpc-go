@@ -16,7 +16,6 @@ package http
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
@@ -26,7 +25,10 @@ import (
 	"time"
 
 	"github.com/valyala/fasthttp"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 	"trpc.group/trpc-go/trpc-go/internal/reuseport"
+	itls "trpc.group/trpc-go/trpc-go/internal/tls"
 	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	"trpc.group/trpc-go/trpc-go/codec"
@@ -133,6 +135,9 @@ func (st *RESTServerTransport) ListenAndServe(ctx context.Context, opt ...transp
 	for _, o := range opt {
 		o(opts)
 	}
+	if !st.basedOnFastHTTP && st.opts.EnableH2C && (len(opts.TLSKeyFile) != 0 || len(opts.TLSCertFile) != 0) {
+		return errors.New("restful server transport h2c and tls cannot be enabled at the same time")
+	}
 	// Get listener.
 	ln := opts.Listener
 	if ln == nil {
@@ -198,6 +203,17 @@ func (st *RESTServerTransport) serve(
 	}
 	// Based on net/http.
 	server := &http.Server{Addr: opts.Address, Handler: router}
+	if st.opts.EnableH2C && (len(opts.TLSKeyFile) != 0 || len(opts.TLSCertFile) != 0) {
+		return errors.New("restful server transport h2c and tls cannot be enabled at the same time")
+	}
+	if st.opts.EnableH2C {
+		server.Handler = h2c.NewHandler(router, newHTTP2Server(st.opts.HTTP2Config))
+	}
+	if st.opts.HTTP2Config != nil {
+		if err := http2.ConfigureServer(server, newHTTP2Server(st.opts.HTTP2Config)); err != nil {
+			return fmt.Errorf("restful server configure http2 error:%w", err)
+		}
+	}
 	go func() {
 		_ = server.Serve(ln)
 	}()
@@ -249,30 +265,5 @@ func (st *RESTServerTransport) getListener(opts *transport.ListenServeOptions) (
 
 // generateTLSConfig generates config of tls.
 func generateTLSConfig(opts *transport.ListenServeOptions) (*tls.Config, error) {
-	tlsConf := &tls.Config{}
-
-	cert, err := tls.LoadX509KeyPair(opts.TLSCertFile, opts.TLSKeyFile)
-	if err != nil {
-		return nil, err
-	}
-	tlsConf.Certificates = []tls.Certificate{cert}
-
-	// Two-way authentication.
-	if opts.CACertFile != "" {
-		tlsConf.ClientAuth = tls.RequireAndVerifyClientCert
-		if opts.CACertFile != "root" {
-			ca, err := os.ReadFile(opts.CACertFile)
-			if err != nil {
-				return nil, err
-			}
-			pool := x509.NewCertPool()
-			ok := pool.AppendCertsFromPEM(ca)
-			if !ok {
-				return nil, errors.New("failed to append certs from pem")
-			}
-			tlsConf.ClientCAs = pool
-		}
-	}
-
-	return tlsConf, nil
+	return itls.GetServerConfig(opts.CACertFile, opts.TLSCertFile, opts.TLSKeyFile, opts.TLSCertProvider)
 }

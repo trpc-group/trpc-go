@@ -61,6 +61,11 @@ func (s *Server) Service(serviceName string) Service {
 	return s.services[serviceName]
 }
 
+// ServiceName implements Service.
+func (s *Server) ServiceName() string {
+	return ""
+}
+
 // Register implements Service interface, registering a proto service.
 // Normally, a server contains only one service, so the registration is straightforward.
 // When it comes to server with multiple services, remember to use Service("servicename") to specify

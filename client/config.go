@@ -70,6 +70,8 @@ type BackendConfig struct {
 
 	TLSKey  string `yaml:"tls_key"`  // Client TLS key.
 	TLSCert string `yaml:"tls_cert"` // Client TLS certificate.
+	// TLS certificate provider used to load certificate material.
+	TLSCertProvider string `yaml:"tls_cert_provider"`
 	// CA certificate used to validate the server cert when calling a TLS service (e.g., an HTTPS server).
 	CACert string `yaml:"ca_cert"`
 	// Server name used to validate the server (default: hostname) when calling an HTTPS server.
@@ -108,6 +110,9 @@ func (cfg *BackendConfig) genOptions() (*Options, error) {
 	opts.Transport = attemptSwitchingTransport(opts)
 	WithPassword(cfg.Password)(opts)
 	WithTLS(cfg.TLSCert, cfg.TLSKey, cfg.CACert, cfg.TLSServerName)(opts)
+	if cfg.TLSCertProvider != "" {
+		WithCertProvider(cfg.TLSCertProvider)(opts)
+	}
 	if cfg.Protocol != "" && opts.Codec == nil {
 		return nil, fmt.Errorf("codec %s not exists", cfg.Protocol)
 	}

@@ -100,14 +100,15 @@ func (c *clientTransport) dialTCP(ctx context.Context, opts *RoundTripOptions) (
 			timeout = opts.DialTimeout
 		}
 		conn, err = connpool.Dial(&connpool.DialOptions{
-			Network:       opts.Network,
-			Address:       opts.Address,
-			LocalAddr:     opts.LocalAddr,
-			Timeout:       timeout,
-			CACertFile:    opts.CACertFile,
-			TLSCertFile:   opts.TLSCertFile,
-			TLSKeyFile:    opts.TLSKeyFile,
-			TLSServerName: opts.TLSServerName,
+			Network:         opts.Network,
+			Address:         opts.Address,
+			LocalAddr:       opts.LocalAddr,
+			Timeout:         timeout,
+			CACertFile:      opts.CACertFile,
+			TLSCertFile:     opts.TLSCertFile,
+			TLSKeyFile:      opts.TLSKeyFile,
+			TLSCertProvider: opts.TLSCertProvider,
+			TLSServerName:   opts.TLSServerName,
 		})
 		if err != nil {
 			return nil, errs.NewFrameError(errs.RetClientConnectFail,
@@ -121,6 +122,7 @@ func (c *clientTransport) dialTCP(ctx context.Context, opts *RoundTripOptions) (
 	getOpts.WithContext(ctx)
 	getOpts.WithFramerBuilder(opts.FramerBuilder)
 	getOpts.WithDialTLS(opts.TLSCertFile, opts.TLSKeyFile, opts.CACertFile, opts.TLSServerName)
+	getOpts.WithCertProvider(opts.TLSCertProvider)
 	getOpts.WithLocalAddr(opts.LocalAddr)
 	getOpts.WithDialTimeout(opts.DialTimeout)
 	getOpts.WithProtocol(opts.Protocol)
@@ -223,6 +225,7 @@ func (c *clientTransport) multiplexed(ctx context.Context, req []byte, opts *Rou
 	}
 	getOpts.WithFrameParser(fp)
 	getOpts.WithDialTLS(opts.TLSCertFile, opts.TLSKeyFile, opts.CACertFile, opts.TLSServerName)
+	getOpts.WithCertProvider(opts.TLSCertProvider)
 	getOpts.WithLocalAddr(opts.LocalAddr)
 	conn, err := opts.Multiplexed.GetMuxConn(ctx, opts.Network, opts.Address, getOpts)
 	if err != nil {

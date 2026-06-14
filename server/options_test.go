@@ -110,6 +110,13 @@ func TestOptions(t *testing.T) {
 	}
 	assert.Equal(t, transportOpts.TLSCertFile, "server.crt")
 	assert.Equal(t, transportOpts.TLSKeyFile, "server.key")
+
+	o = server.WithCertProvider("provider")
+	o(opts)
+	for _, o := range opts.ServeOptions {
+		o(transportOpts)
+	}
+	assert.Equal(t, "provider", transportOpts.TLSCertProvider)
 }
 
 func TestMoreOptions(t *testing.T) {

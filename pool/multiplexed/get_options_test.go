@@ -28,12 +28,14 @@ func TestGetOptions(t *testing.T) {
 	keyFile := "keyFile"
 	serverName := "serverName"
 	certFile := "certFile"
+	providerName := "providerName"
 	localAddr := "127.0.0.1:8080"
 	var id uint32 = 2
 
 	opts.WithFrameParser(fp)
 	opts.WithVID(id)
 	opts.WithDialTLS(certFile, keyFile, caFile, serverName)
+	opts.WithCertProvider(providerName)
 	opts.WithLocalAddr(localAddr)
 
 	assert.Equal(t, opts.FP, fp)
@@ -42,6 +44,7 @@ func TestGetOptions(t *testing.T) {
 	assert.Equal(t, opts.TLSKeyFile, keyFile)
 	assert.Equal(t, opts.TLSServerName, serverName)
 	assert.Equal(t, opts.TLSCertFile, certFile)
+	assert.Equal(t, opts.TLSCertProvider, providerName)
 	assert.Equal(t, opts.LocalAddr, localAddr)
 }
 

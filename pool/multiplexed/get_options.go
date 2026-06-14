@@ -18,10 +18,11 @@ type GetOptions struct {
 	FP  FrameParser
 	VID uint32
 
-	CACertFile    string // CA certificate.
-	TLSCertFile   string // Client certificate.
-	TLSKeyFile    string // Client secret key.
-	TLSServerName string // The client verifies the server's service name,
+	CACertFile      string // CA certificate.
+	TLSCertFile     string // Client certificate.
+	TLSKeyFile      string // Client secret key.
+	TLSCertProvider string // Provider used to load TLS certificate files.
+	TLSServerName   string // The client verifies the server's service name,
 	// if not filled in, it defaults to the http hostname.
 
 	LocalAddr string
@@ -48,6 +49,11 @@ func (o *GetOptions) WithDialTLS(certFile, keyFile, caFile, serverName string) {
 	o.TLSKeyFile = keyFile
 	o.CACertFile = caFile
 	o.TLSServerName = serverName
+}
+
+// WithCertProvider sets the TLS certificate provider.
+func (o *GetOptions) WithCertProvider(providerName string) {
+	o.TLSCertProvider = providerName
 }
 
 // WithVID returns an Option which sets virtual connection ID.

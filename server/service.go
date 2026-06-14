@@ -40,6 +40,8 @@ const MaxCloseWaitTime = 10 * time.Second
 
 // Service is the interface that provides services.
 type Service interface {
+	// ServiceName returns the configured service name.
+	ServiceName() string
 	// Register registers a proto service.
 	Register(serviceDesc interface{}, serviceImpl interface{}) error
 	// Serve starts serving.
@@ -110,6 +112,14 @@ type service struct {
 	streamHandlers map[string]StreamHandler
 	streamInfo     map[string]*StreamServerInfo
 	stopListening  chan<- struct{}
+}
+
+// ServiceName returns the configured service name.
+func (s *service) ServiceName() string {
+	if s.opts == nil {
+		return ""
+	}
+	return s.opts.ServiceName
 }
 
 // New creates a service.

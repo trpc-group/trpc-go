@@ -224,6 +224,9 @@ func (cs *clientStream) prepare(opt ...client.Option) error {
 		return err
 	}
 	cs.opts = opts
+	if cs.opts.EnableStreamSelectInFilter {
+		cs.ctx = client.ContextWithOptions(cs.ctx, cs.opts)
+	}
 	return nil
 }
 

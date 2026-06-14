@@ -58,7 +58,7 @@ func init() {
 	// http.DefaultServeMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 	//
 	// Simply importing the net/http/pprof package anonymously will not work.
-	// More details see: https://git.woa.com/trpc-go/trpc-go/issues/912, and https://github.com/golang/go/issues/42834.
+	// More details see: https://github.com/golang/go/issues/42834.
 	http.DefaultServeMux = http.NewServeMux()
 }
 
@@ -152,6 +152,11 @@ func (s *Server) configRouter(r *router) *router {
 func (s *Server) Register(serviceDesc interface{}, serviceImpl interface{}) error {
 	// The admin service does not need to do anything in this registration function.
 	return nil
+}
+
+// ServiceName implements server.Service.
+func (s *Server) ServiceName() string {
+	return ServiceName
 }
 
 // RegisterHealthCheck registers a new service and returns two functions, one for unregistering the service and one for

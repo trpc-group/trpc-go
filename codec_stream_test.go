@@ -325,6 +325,50 @@ func TestStreamCodecClose(t *testing.T) {
 
 }
 
+func TestStreamCodecCloseMetadata(t *testing.T) {
+	serverCodec := codec.GetServer("trpc")
+	clientCodec := codec.GetClient("trpc")
+	laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10000")
+	require.Nil(t, err)
+	raddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	require.Nil(t, err)
+
+	frameHead := &trpc.FrameHead{
+		FrameType:       uint8(trpcpb.TrpcDataFrameType_TRPC_STREAM_FRAME),
+		StreamFrameType: uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_CLOSE),
+		StreamID:        100,
+	}
+	_, serverMsg := codec.WithNewMessage(context.Background())
+	serverMsg.WithFrameHead(frameHead)
+	serverMsg.WithLocalAddr(laddr)
+	serverMsg.WithRemoteAddr(raddr)
+	serverMsg.WithStreamID(100)
+	serverMsg.WithServerMetaData(codec.MetaData{"trailer-key": []byte("trailer-value")})
+	serverMsg.WithStreamFrame(&trpcpb.TrpcStreamCloseMeta{
+		CloseType:   int32(trpcpb.TrpcStreamCloseType_TRPC_STREAM_CLOSE),
+		Ret:         0,
+		FuncRet:     0,
+		MessageType: uint32(trpcpb.TrpcMessageType_TRPC_TRACE_MESSAGE),
+	})
+
+	closeBuf, err := serverCodec.Encode(serverMsg, nil)
+	require.Nil(t, err)
+
+	_, clientMsg := codec.WithNewMessage(context.Background())
+	clientMsg.WithFrameHead(frameHead)
+	clientMsg.WithLocalAddr(laddr)
+	clientMsg.WithRemoteAddr(raddr)
+	rspHead := &trpcpb.ResponseProtocol{}
+	clientMsg.WithClientRspHead(rspHead)
+
+	rsp, err := clientCodec.Decode(clientMsg, closeBuf)
+	require.Nil(t, err)
+	require.Nil(t, rsp)
+	require.Equal(t, uint32(trpcpb.TrpcMessageType_TRPC_TRACE_MESSAGE), rspHead.MessageType)
+	require.Equal(t, []byte("trailer-value"), rspHead.TransInfo["trailer-key"])
+	require.Equal(t, []byte("trailer-value"), clientMsg.ClientMetaData()["trailer-key"])
+}
+
 // TestStreamCodecReset tests stream Reset/Close frame codec.
 func TestStreamCodecReset(t *testing.T) {
 	// initMeta will be deleted from cache after TestStreamCodecClose.

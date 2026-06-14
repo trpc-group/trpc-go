@@ -19,11 +19,11 @@ package http
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	stdhttp "net/http"
@@ -73,9 +73,10 @@ var DefaultHTTP2ServerTransport transport.ServerTransport
 
 // ServerTransport is the http transport layer.
 type ServerTransport struct {
-	newServer func() *stdhttp.Server
-	reusePort bool
-	enableH2C bool
+	newServer   func() *stdhttp.Server
+	reusePort   bool
+	enableH2C   bool
+	http2Config *transport.HTTP2Config
 }
 
 // NewServerTransport creates a new ServerTransport which implement transport.ServerTransport.
@@ -179,8 +180,8 @@ func (t *ServerTransport) serve(ctx context.Context, s *stdhttp.Server, opts *tr
 		go func() {
 			if err := s.ServeTLS(
 				tcpKeepAliveListener{ln.(*net.TCPListener)},
-				opts.TLSCertFile,
-				opts.TLSKeyFile,
+				"",
+				"",
 			); err != stdhttp.ErrServerClosed {
 				log.Errorf("serve TLS failed: %w", err)
 			}
@@ -246,19 +247,25 @@ func (t *ServerTransport) newHTTPServer(
 	s.Addr = opts.Address
 	s.Handler = stdhttp.HandlerFunc(serveFunc)
 	if t.enableH2C {
-		h2s := &http2.Server{}
+		h2s := newHTTP2Server(t.http2Config)
 		s.Handler = h2c.NewHandler(stdhttp.HandlerFunc(serveFunc), h2s)
-		return s, nil
 	}
-	if len(opts.CACertFile) != 0 { // Enable two-way authentication to verify client certificate.
-		s.TLSConfig = &tls.Config{
-			ClientAuth: tls.RequireAndVerifyClientCert,
-		}
-		certPool, err := itls.GetCertPool(opts.CACertFile)
+	if len(opts.TLSKeyFile) != 0 && len(opts.TLSCertFile) != 0 {
+		tlsConf, err := itls.GetServerConfig(
+			opts.CACertFile,
+			opts.TLSCertFile,
+			opts.TLSKeyFile,
+			opts.TLSCertProvider,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("http server get ca cert file error:%v", err)
+			return nil, fmt.Errorf("http server get tls config error:%v", err)
 		}
-		s.TLSConfig.ClientCAs = certPool
+		s.TLSConfig = tlsConf
+	}
+	if t.http2Config != nil {
+		if err := http2.ConfigureServer(s, newHTTP2Server(t.http2Config)); err != nil {
+			return nil, fmt.Errorf("http server configure http2 error:%w", err)
+		}
 	}
 	if opts.DisableKeepAlives {
 		s.SetKeepAlivesEnabled(false)
@@ -267,6 +274,43 @@ func (t *ServerTransport) newHTTPServer(
 		s.IdleTimeout = opts.IdleTimeout
 	}
 	return s, nil
+}
+
+func newHTTP2Server(config *transport.HTTP2Config) *http2.Server {
+	s := &http2.Server{}
+	if config == nil {
+		return s
+	}
+	s.MaxConcurrentStreams = http2Uint32(config.MaxConcurrentStreams)
+	s.MaxDecoderHeaderTableSize = http2Uint32(config.MaxDecoderHeaderTableSize)
+	s.MaxEncoderHeaderTableSize = http2Uint32(config.MaxEncoderHeaderTableSize)
+	s.MaxReadFrameSize = http2Uint32(config.MaxReadFrameSize)
+	s.PermitProhibitedCipherSuites = config.PermitProhibitedCipherSuites
+	s.IdleTimeout = config.IdleTimeout
+	s.MaxUploadBufferPerConnection = http2Int32(config.MaxReceiveBufferPerConnection)
+	s.MaxUploadBufferPerStream = http2Int32(config.MaxReceiveBufferPerStream)
+	s.CountError = config.CountError
+	return s
+}
+
+func http2Uint32(v int) uint32 {
+	if v <= 0 {
+		return 0
+	}
+	if int64(v) > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	return uint32(v) // #nosec G115 -- v is checked to be in the uint32 range above.
+}
+
+func http2Int32(v int) int32 {
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if v < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(v)
 }
 
 // tcpKeepAliveListener sets TCP keep-alive timeouts on accepted
@@ -501,7 +545,7 @@ func (ct *ClientTransport) RoundTrip(
 	request := req.WithContext(httptrace.WithClientTrace(reqCtx, trace))
 
 	client, err := ct.getStdHTTPClient(opts.CACertFile, opts.TLSCertFile,
-		opts.TLSKeyFile, opts.TLSServerName)
+		opts.TLSKeyFile, opts.TLSServerName, opts.TLSCertProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -568,12 +612,12 @@ func (b *responseBodyWithCancel) Close() error {
 }
 
 func (ct *ClientTransport) getStdHTTPClient(caFile, certFile,
-	keyFile, serverName string) (*stdhttp.Client, error) {
+	keyFile, serverName, providerName string) (*stdhttp.Client, error) {
 	if len(caFile) == 0 { // HTTP requests share one client.
 		return &ct.Client, nil
 	}
 
-	cacheKey := fmt.Sprintf("%s-%s-%s", caFile, certFile, serverName)
+	cacheKey := fmt.Sprintf("%s-%s-%s-%s", caFile, certFile, serverName, providerName)
 	ct.tlsLock.RLock()
 	cli, ok := ct.tlsClients[cacheKey]
 	ct.tlsLock.RUnlock()
@@ -588,7 +632,7 @@ func (ct *ClientTransport) getStdHTTPClient(caFile, certFile,
 		return cli, nil
 	}
 
-	conf, err := itls.GetClientConfig(serverName, caFile, certFile, keyFile)
+	conf, err := itls.GetClientConfig(serverName, caFile, certFile, keyFile, providerName)
 	if err != nil {
 		return nil, err
 	}

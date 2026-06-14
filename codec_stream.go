@@ -114,6 +114,7 @@ func (c *ClientStreamCodec) decodeCloseFrame(msg codec.Msg, rspBuf []byte) ([]by
 	if err := proto.Unmarshal(rspBuf[frameHeadLen:], close); err != nil {
 		return nil, err
 	}
+	updateClientStreamCloseMeta(msg, close)
 
 	// It is considered an exception and an error should be returned to the client if:
 	// 1. the CloseType is Reset
@@ -126,9 +127,33 @@ func (c *ClientStreamCodec) decodeCloseFrame(msg codec.Msg, rspBuf []byte) ([]by
 			Msg:  string(close.GetMsg()),
 		}
 		msg.WithClientRspErr(e)
+	} else if close.GetFuncRet() != 0 {
+		msg.WithClientRspErr(errs.New(int(close.GetFuncRet()), string(close.GetMsg())))
 	}
 	msg.WithStreamFrame(close)
 	return nil, nil
+}
+
+func updateClientStreamCloseMeta(msg codec.Msg, close *trpcpb.TrpcStreamCloseMeta) {
+	if rsp, ok := msg.ClientRspHead().(*trpcpb.ResponseProtocol); ok {
+		rsp.Ret = close.GetRet()
+		rsp.FuncRet = close.GetFuncRet()
+		rsp.ErrorMsg = close.GetMsg()
+		rsp.MessageType = close.GetMessageType()
+		rsp.TransInfo = close.GetTransInfo()
+	}
+
+	if len(close.GetTransInfo()) == 0 {
+		return
+	}
+	md := msg.ClientMetaData()
+	if len(md) == 0 {
+		md = codec.MetaData{}
+	}
+	for k, v := range close.GetTransInfo() {
+		md[k] = v
+	}
+	msg.WithClientMetaData(md)
 }
 
 // decodeFeedbackFrame decodes the Feedback frame.
@@ -253,12 +278,25 @@ func (s *ServerStreamCodec) encodeCloseFrame(frameHead *FrameHead, msg codec.Msg
 	if !ok {
 		return nil, errEncodeCloseFrame
 	}
+	setStreamCloseMetaData(msg, closeFrame)
 	msg.WithStreamID(frameHead.StreamID)
 	streamBuf, err := proto.Marshal(closeFrame)
 	if err != nil {
 		return nil, err
 	}
 	return frameWrite(frameHead, streamBuf)
+}
+
+func setStreamCloseMetaData(msg codec.Msg, closeFrame *trpcpb.TrpcStreamCloseMeta) {
+	if len(msg.ServerMetaData()) == 0 {
+		return
+	}
+	if closeFrame.TransInfo == nil {
+		closeFrame.TransInfo = make(map[string][]byte)
+	}
+	for k, v := range msg.ServerMetaData() {
+		closeFrame.TransInfo[k] = v
+	}
 }
 
 // encodeDataFrame encodes the Data frame.

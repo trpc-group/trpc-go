@@ -156,15 +156,19 @@ func (s *stream) Init(ctx context.Context, opt ...Option) (*Options, error) {
 	// Update msg.
 	s.updateMsg(msg, opts)
 
-	// Select a node of backend service.
-	node, err := selectNode(ctx, msg, opts)
-	if err != nil {
-		report.SelectNodeFail.Incr()
-		return nil, err
+	if !opts.EnableStreamSelectInFilter {
+		// Select a node of backend service.
+		node, err := selectNode(ctx, msg, opts)
+		if err != nil {
+			report.SelectNodeFail.Incr()
+			return nil, err
+		}
+		ensureMsgRemoteAddr(msg, findFirstNonEmpty(node.Network, opts.Network), node.Address, node.ParseAddr)
+		const invalidCost = -1
+		opts.Node.set(node, node.Address, invalidCost)
+	} else {
+		opts.StreamFilters = append(opts.StreamFilters, streamSelectorFilter)
 	}
-	ensureMsgRemoteAddr(msg, findFirstNonEmpty(node.Network, opts.Network), node.Address, node.ParseAddr)
-	const invalidCost = -1
-	opts.Node.set(node, node.Address, invalidCost)
 	if opts.Codec == nil {
 		report.ClientCodecEmpty.Incr()
 		return nil, errs.NewFrameError(errs.RetClientEncodeFail, "client: codec empty")
