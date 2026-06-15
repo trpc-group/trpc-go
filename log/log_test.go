@@ -49,6 +49,24 @@ func TestLogXXX(t *testing.T) {
 	log.Fatal("xxx")
 }
 
+func TestDisableTrace(t *testing.T) {
+	old := log.GetDefaultLogger()
+	defer log.SetLogger(old)
+	defer log.DisableTrace()
+
+	out := &bytes.Buffer{}
+	log.SetLogger(log.NewZapBufLogger(out, 0))
+
+	log.EnableTrace()
+	log.Trace("visible trace")
+	require.Contains(t, out.String(), "visible trace")
+
+	out.Reset()
+	log.DisableTrace()
+	log.Trace("hidden trace")
+	require.NotContains(t, out.String(), "hidden trace")
+}
+
 func TestLoggerNil(t *testing.T) {
 	ctx := context.Background()
 	ctx, msg := codec.WithNewMessage(ctx)
