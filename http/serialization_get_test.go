@@ -141,3 +141,30 @@ func TestGetMarshal(t *testing.T) {
 	_, err := s.Marshal(require)
 	require.NotNil(err)
 }
+
+func TestGetSerializationCaseSensitive(t *testing.T) {
+	type helloReq struct {
+		Msg string `json:"msg,omitempty"`
+	}
+
+	old := codec.GetSerializer(codec.SerializationTypeGet)
+	defer codec.RegisterSerializer(codec.SerializationTypeGet, old)
+
+	s := codec.GetSerializer(codec.SerializationTypeGet)
+	for _, query := range []string{"msg=hello", "Msg=hello", "mSg=hello"} {
+		req := &helloReq{}
+		require.Nil(t, s.Unmarshal([]byte(query), req))
+		require.Equal(t, "hello", req.Msg)
+	}
+
+	codec.RegisterSerializer(codec.SerializationTypeGet, http.NewGetSerializationWithCaseSensitive("json", true))
+	s = codec.GetSerializer(codec.SerializationTypeGet)
+
+	req := &helloReq{}
+	require.Nil(t, s.Unmarshal([]byte("msg=hello"), req))
+	require.Equal(t, "hello", req.Msg)
+
+	req = &helloReq{}
+	require.Nil(t, s.Unmarshal([]byte("Msg=hello"), req))
+	require.Empty(t, req.Msg)
+}

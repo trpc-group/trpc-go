@@ -275,3 +275,43 @@ func TestServer_AtExit_ExecuteOrder(t *testing.T) {
 	_, ok := <-ch
 	require.False(t, ok)
 }
+
+func TestServerRegisterAfterShutdown(t *testing.T) {
+	s := &server.Server{}
+	ch := make(chan string, 5)
+	s.AddService("trpc.app.server.service", &closeOrderService{name: "service", ch: ch})
+	s.RegisterOnShutdown(func() { ch <- "before1" })
+	s.RegisterOnShutdown(func() { ch <- "before2" })
+	s.RegisterAfterShutdown(func() { ch <- "after1" })
+	s.RegisterAfterShutdown(func() { ch <- "after2" })
+
+	require.Nil(t, s.Close(nil))
+	require.Equal(t, "before1", <-ch)
+	require.Equal(t, "before2", <-ch)
+	require.Equal(t, "service", <-ch)
+	require.Equal(t, "after1", <-ch)
+	require.Equal(t, "after2", <-ch)
+}
+
+type closeOrderService struct {
+	name string
+	ch   chan string
+}
+
+func (s *closeOrderService) Register(interface{}, interface{}) error {
+	return nil
+}
+
+func (s *closeOrderService) Serve() error {
+	return nil
+}
+
+func (s *closeOrderService) ServiceName() string {
+	return s.name
+}
+
+func (s *closeOrderService) Close(ch chan struct{}) error {
+	ch <- struct{}{}
+	s.ch <- s.name
+	return nil
+}

@@ -77,10 +77,11 @@ type Options struct {
 	RspHead interface{} // Allow custom rsp head.
 	Node    *onceNode   // For getting node info.
 
-	MaxWindowSize uint32            // Max size of stream receiver's window.
-	SControl      SendControl       // Sender's flow control.
-	RControl      RecvControl       // Receiver's flow control.
-	StreamFilters StreamFilterChain // Stream filter chain.
+	DisabledFlowControl bool
+	MaxWindowSize       uint32            // Max size of stream receiver's window.
+	SControl            SendControl       // Sender's flow control.
+	RControl            RecvControl       // Receiver's flow control.
+	StreamFilters       StreamFilterChain // Stream filter chain.
 
 	// EnableStreamSelectInFilter toggles selecting stream nodes inside the stream filter chain
 	// instead of during stream.Init. Disabled by default to preserve legacy behavior.
@@ -568,6 +569,13 @@ func WithStreamTransport(st transport.ClientStreamTransport) Option {
 func WithMaxWindowSize(s uint32) Option {
 	return func(o *Options) {
 		o.MaxWindowSize = s
+	}
+}
+
+// WithDisableStreamFlowControl disables flow control of streaming.
+func WithDisableStreamFlowControl() Option {
+	return func(o *Options) {
+		o.DisabledFlowControl = true
 	}
 }
 

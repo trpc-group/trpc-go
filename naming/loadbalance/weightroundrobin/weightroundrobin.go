@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	internalregistry "trpc.group/trpc-go/trpc-go/naming/internal/registry"
 	"trpc.group/trpc-go/trpc-go/naming/loadbalance"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 )
@@ -92,7 +93,7 @@ func (p *wrrPicker) Pick(list []*registry.Node, opts *loadbalance.Options) (*reg
 		return nil, loadbalance.ErrNoServerAvailable
 	}
 	selected := p.selectServer()
-	return selected.node, nil
+	return internalregistry.DeepCopyNode(selected.node), nil
 }
 
 func (p *wrrPicker) selectServer() *Server {

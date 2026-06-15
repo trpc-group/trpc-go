@@ -181,7 +181,11 @@ func (st *RESTServerTransport) serve(
 	// Get router.
 	router := restful.GetRouter(opts.ServiceName)
 	if router == nil {
-		return fmt.Errorf("service %s router not registered", opts.ServiceName)
+		if st.basedOnFastHTTP {
+			router = restful.NewRouter()
+		} else {
+			router = http.NewServeMux()
+		}
 	}
 
 	if st.basedOnFastHTTP { // Based on fasthttp.

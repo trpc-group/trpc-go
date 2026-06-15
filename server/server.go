@@ -30,10 +30,13 @@ type Server struct {
 
 	services map[string]Service // k=serviceName,v=Service
 
-	mux sync.Mutex // guards onShutdownHooks
+	mux sync.Mutex // guards onShutdownHooks and afterShutdownHooks
 	// onShutdownHooks are hook functions that would be executed when server is
 	// shutting down (before closing all services of the server).
 	onShutdownHooks []func()
+	// afterShutdownHooks are hook functions that would be executed after closing
+	// all services of the server.
+	afterShutdownHooks []func()
 
 	failedServices sync.Map
 	signalCh       chan os.Signal
@@ -137,16 +140,33 @@ func (s *Server) tryClose() {
 			}(service)
 		}
 		wg.Wait()
+
+		s.mux.Lock()
+		for _, f := range s.afterShutdownHooks {
+			f()
+		}
+		s.mux.Unlock()
 	}
 	s.closeOnce.Do(fn)
 }
 
-// RegisterOnShutdown registers a hook function that would be executed when server is shutting down.
+// RegisterOnShutdown registers a hook function that would be executed when server is shutting down
+// before closing all services of the server.
 func (s *Server) RegisterOnShutdown(fn func()) {
 	if fn == nil {
 		return
 	}
 	s.mux.Lock()
 	s.onShutdownHooks = append(s.onShutdownHooks, fn)
+	s.mux.Unlock()
+}
+
+// RegisterAfterShutdown registers a hook function that would be executed after closing all services.
+func (s *Server) RegisterAfterShutdown(fn func()) {
+	if fn == nil {
+		return
+	}
+	s.mux.Lock()
+	s.afterShutdownHooks = append(s.afterShutdownHooks, fn)
 	s.mux.Unlock()
 }

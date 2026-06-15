@@ -436,6 +436,33 @@ func TestSelectorRemoteAddrUseUserProvidedParser(t *testing.T) {
 	require.Equal(t, t.Name(), addr.String())
 }
 
+func TestSelectorFailKeepsCalleeSetName(t *testing.T) {
+	const (
+		selectorName = "selector_fail_set"
+		protocolName = "fake_selector_fail_set"
+		calleeSet    = "test_set"
+	)
+	selector.Register(selectorName, &fSelector{
+		selectNode: func(string, ...selector.Option) (*registry.Node, error) {
+			return nil, errors.New("select fail")
+		},
+		report: func(*registry.Node, time.Duration, error) error { return nil },
+	})
+	codec.Register(protocolName, nil, &fakeCodec{})
+
+	ctx, msg := codec.WithNewMessage(context.Background())
+	defer codec.PutBackMessage(msg)
+	err := client.New().Invoke(ctx, &codec.Body{Data: []byte("test")}, &codec.Body{},
+		client.WithTarget(selectorName+"://127.0.0.1:8080"),
+		client.WithProtocol(protocolName),
+		client.WithCurrentSerializationType(codec.SerializationTypeNoop),
+		client.WithCalleeSetName(calleeSet),
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "select fail")
+	require.Equal(t, calleeSet, msg.CalleeSetName())
+}
+
 type multiplexedTransport struct {
 	require func(context.Context, []byte, ...transport.RoundTripOption)
 	fakeTransport

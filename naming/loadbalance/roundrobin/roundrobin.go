@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	internalregistry "trpc.group/trpc-go/trpc-go/naming/internal/registry"
 	"trpc.group/trpc-go/trpc-go/naming/loadbalance"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 )
@@ -86,7 +87,7 @@ func (p *rrPicker) Pick(list []*registry.Node, opts *loadbalance.Options) (*regi
 	}
 	node := p.list[p.next]
 	p.next = (p.next + 1) % len(p.list)
-	return node, nil
+	return internalregistry.DeepCopyNode(node), nil
 }
 
 func (p *rrPicker) updateState(list []*registry.Node) {

@@ -18,6 +18,7 @@ import (
 
 	"trpc.group/trpc-go/trpc-go/internal/rand"
 	"trpc.group/trpc-go/trpc-go/naming/bannednodes"
+	internalregistry "trpc.group/trpc-go/trpc-go/naming/internal/registry"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 )
 
@@ -75,7 +76,7 @@ func (b *Random) chooseOne(nodes []*registry.Node) (*registry.Node, error) {
 	if len(nodes) == 0 {
 		return nil, ErrNoServerAvailable
 	}
-	return nodes[b.safeRand.Intn(len(nodes))], nil
+	return internalregistry.DeepCopyNode(nodes[b.safeRand.Intn(len(nodes))]), nil
 }
 
 func (b *Random) chooseUnbanned(
@@ -86,10 +87,13 @@ func (b *Random) chooseUnbanned(
 		return nil, ErrNoServerAvailable
 	}
 	i := b.safeRand.Intn(len(nodes))
-	if !bans.Range(func(n *registry.Node) bool {
-		return n.Address != nodes[i].Address
-	}) {
-		return b.chooseUnbanned(append(nodes[:i], nodes[i+1:]...), bans)
+	for offset := 0; offset < len(nodes); offset++ {
+		node := nodes[(i+offset)%len(nodes)]
+		if bans.Range(func(n *registry.Node) bool {
+			return n.Address != node.Address
+		}) {
+			return internalregistry.DeepCopyNode(node), nil
+		}
 	}
-	return nodes[i], nil
+	return nil, ErrNoServerAvailable
 }

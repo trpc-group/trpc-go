@@ -245,6 +245,17 @@ func TestServerDecodeHTTPHeader(t *testing.T) {
 	require.Equal(t, "val1", string(req.GetTransInfo()["key1"]))
 	require.Equal(t, "val2", string(req.GetTransInfo()["key2"]))
 
+	rsp, ok := msg.ServerRspHead().(*trpcpb.ResponseProtocol)
+	require.True(t, ok)
+	require.NotNil(t, rsp, "failed to decode get trpc rsp head")
+	require.Equal(t, req.GetVersion(), rsp.GetVersion())
+	require.Equal(t, req.GetCallType(), rsp.GetCallType())
+	require.Equal(t, req.GetMessageType(), rsp.GetMessageType())
+	require.Equal(t, req.GetRequestId(), rsp.GetRequestId())
+	require.Equal(t, req.GetContentType(), rsp.GetContentType())
+	require.Equal(t, req.GetContentEncoding(), rsp.GetContentEncoding())
+	require.Equal(t, req.GetTransInfo(), rsp.GetTransInfo())
+
 	// JSON unmarshal failed.
 	r.Header.Set(thttp.TrpcTransInfo, `{"key1":"dmFsMQ==", "key2":"dmFsMg=="`)
 	w = &httptest.ResponseRecorder{}

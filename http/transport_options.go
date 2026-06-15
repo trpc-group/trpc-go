@@ -13,7 +13,11 @@
 
 package http
 
-import "trpc.group/trpc-go/trpc-go/transport"
+import (
+	stdhttp "net/http"
+
+	"trpc.group/trpc-go/trpc-go/transport"
+)
 
 // OptServerTransport modifies ServerTransport.
 type OptServerTransport func(*ServerTransport)
@@ -36,5 +40,12 @@ func WithEnableH2C() OptServerTransport {
 func WithHTTP2Config(config *transport.HTTP2Config) OptServerTransport {
 	return func(st *ServerTransport) {
 		st.http2Config = config
+	}
+}
+
+// WithDecorateHTTPServer allows users to customize the underlying HTTP server before it serves requests.
+func WithDecorateHTTPServer(f func(*stdhttp.Server) *stdhttp.Server) OptServerTransport {
+	return func(st *ServerTransport) {
+		st.decorate = f
 	}
 }
