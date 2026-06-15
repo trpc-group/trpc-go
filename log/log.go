@@ -46,6 +46,11 @@ func EnableTrace() {
 	traceEnabled = true
 }
 
+// DisableTrace disables trace.
+func DisableTrace() {
+	traceEnabled = false
+}
+
 // SetLevel sets log level for different output which may be "0", "1" or "2".
 func SetLevel(output string, level Level) {
 	GetDefaultLogger().SetLevel(output, level)
