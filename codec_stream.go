@@ -119,6 +119,7 @@ func (c *ClientStreamCodec) decodeCloseFrame(msg codec.Msg, rspBuf []byte) ([]by
 	// It is considered an exception and an error should be returned to the client if:
 	// 1. the CloseType is Reset
 	// 2. ret code != 0
+	// 3. func_ret != 0 (business-level error)
 	if close.GetCloseType() == int32(trpcpb.TrpcStreamCloseType_TRPC_STREAM_RESET) || close.GetRet() != 0 {
 		e := &errs.Error{
 			Type: errs.ErrorTypeCalleeFramework,
@@ -511,7 +512,7 @@ func (s *ServerStreamCodec) updateMsg(msg codec.Msg, initMeta *trpcpb.TrpcStream
 	msg.WithDyeing((req.GetMessageType() & uint32(trpcpb.TrpcMessageType_TRPC_DYEING_MESSAGE)) != 0)
 
 	if len(req.TransInfo) > 0 {
-		msg.WithServerMetaData(req.GetTransInfo())
+		msg.WithServerMetaData(codec.MetaData(req.GetTransInfo()).Clone())
 		// set dyeing key
 		if bs, ok := req.TransInfo[DyeingKey]; ok {
 			msg.WithDyeingKey(string(bs))

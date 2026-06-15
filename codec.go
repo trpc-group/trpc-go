@@ -322,7 +322,7 @@ func msgWithRequestProtocol(msg codec.Msg, req *trpcpb.RequestProtocol, attm []b
 	msg.WithDyeing((req.GetMessageType() & uint32(trpcpb.TrpcMessageType_TRPC_DYEING_MESSAGE)) != 0)
 	// parse tracing MetaData, set MetaData into msg
 	if len(req.TransInfo) > 0 {
-		msg.WithServerMetaData(req.GetTransInfo())
+		msg.WithServerMetaData(codec.MetaData(req.GetTransInfo()).Clone())
 		// mark with dyeing key
 		if bs, ok := req.TransInfo[DyeingKey]; ok {
 			msg.WithDyeingKey(string(bs))

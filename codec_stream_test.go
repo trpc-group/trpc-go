@@ -456,6 +456,50 @@ func TestStreamCodecReset(t *testing.T) {
 
 }
 
+// TestStreamCodecCloseFuncRet tests that a Close frame with only func_ret != 0
+// (ret == 0, CloseType == CLOSE) is propagated as a business error to the client.
+// This covers the case where the server reports a business-level error via func_ret
+// without setting the framework-level ret field.
+func TestStreamCodecCloseFuncRet(t *testing.T) {
+	TestStreamCodecInit(t)
+
+	clientCodec := codec.GetClient("trpc")
+
+	laddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10000")
+	require.Nil(t, err)
+	raddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	require.Nil(t, err)
+
+	// Close frame: CloseType=CLOSE(0), Ret=0, FuncRet=10001, Msg="business error"
+	// stream_id=100
+	closeWithFuncRet := []byte{
+		0x09, 0x30, 0x01, 0x04, 0x00, 0x00, 0x00, 0x23,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00,
+		0x1a, 0x0e, 0x62, 0x75, 0x73, 0x69, 0x6e, 0x65,
+		0x73, 0x73, 0x20, 0x65, 0x72, 0x72, 0x6f, 0x72,
+		0x30, 0x91, 0x4e,
+	}
+
+	clientCtx := context.Background()
+	_, clientMsg := codec.WithNewMessage(clientCtx)
+	clientMsg.WithLocalAddr(laddr)
+	clientMsg.WithRemoteAddr(raddr)
+
+	rspBuf, err := clientCodec.Decode(clientMsg, closeWithFuncRet)
+	assert.Nil(t, err)
+	assert.Nil(t, rspBuf)
+	assert.Equal(t, uint32(100), clientMsg.StreamID())
+
+	// func_ret != 0 should be propagated as a business error (not a framework error)
+	rspErr := clientMsg.ClientRspErr()
+	assert.NotNil(t, rspErr)
+	assert.EqualValues(t, 10001, errs.Code(rspErr))
+	var e *errs.Error
+	require.ErrorAs(t, rspErr, &e)
+	assert.Equal(t, errs.ErrorTypeBusiness, e.Type)
+	assert.Contains(t, rspErr.Error(), "business error")
+}
+
 // TestUnknownFrameType tests stream frame with unknown type.
 func TestUnknownFrameType(t *testing.T) {
 	msg := trpc.Message(ctx)

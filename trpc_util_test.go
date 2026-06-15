@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	"trpc.group/trpc-go/trpc-go/codec"
 )
@@ -82,6 +84,23 @@ func TestGetMetaData(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMsgWithRequestProtocol_DoesNotShareTransInfoWithServerMetaData(t *testing.T) {
+	ctx, msg := codec.WithNewMessage(context.Background())
+	req := &trpcpb.RequestProtocol{
+		TransInfo: map[string][]byte{
+			"key": []byte("value"),
+		},
+	}
+	msgWithRequestProtocol(msg, req, nil)
+
+	require.Equal(t, []byte("value"), msg.ServerMetaData()["key"])
+	require.NotEqual(t, reflect.ValueOf(req.TransInfo).Pointer(), reflect.ValueOf(msg.ServerMetaData()).Pointer())
+
+	SetMetaData(ctx, "new-key", []byte("new-value"))
+	require.Nil(t, req.TransInfo["new-key"])
+	require.Equal(t, []byte("new-value"), msg.ServerMetaData()["new-key"])
 }
 
 // TestGetIP test getIP.

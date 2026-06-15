@@ -14,7 +14,11 @@
 package metrics_test
 
 import (
+	"context"
+	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"trpc.group/trpc-go/trpc-go/metrics"
@@ -106,4 +110,58 @@ func BenchmarkReportHistogram(b *testing.B) {
 			c.AddSample(1)
 		}
 	})
+}
+
+type concurrentSink struct {
+	name string
+}
+
+func (s *concurrentSink) Name() string {
+	return s.name
+}
+
+func (s *concurrentSink) Report(metrics.Record, ...metrics.Option) error {
+	return nil
+}
+
+func TestConcurrentSinkRegistrationAndReporting(t *testing.T) {
+	const (
+		numReporters  = 8
+		numRegistrars = 4
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	wg.Add(numReporters + numRegistrars)
+	for i := 0; i < numReporters; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					metrics.Counter(fmt.Sprintf("sink-counter-%d", id)).Incr()
+					metrics.Gauge(fmt.Sprintf("sink-gauge-%d", id)).Set(1)
+					metrics.Timer(fmt.Sprintf("sink-timer-%d", id)).Record()
+					metrics.Histogram(fmt.Sprintf("sink-histogram-%d", id), metrics.NewDurationBounds()).AddSample(1)
+				}
+			}
+		}(i)
+	}
+	for i := 0; i < numRegistrars; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					metrics.RegisterMetricsSink(&concurrentSink{name: fmt.Sprintf("concurrent-sink-%d", id)})
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
 }
