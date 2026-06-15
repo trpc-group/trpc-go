@@ -21,15 +21,22 @@ import (
 	"fmt"
 	"net"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
-	_ "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/keeporder"
+	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
 	"trpc.group/trpc-go/trpc-go/transport"
 )
 
@@ -1065,4 +1072,246 @@ func TestListenAndServeWithStopListener(t *testing.T) {
 	time.Sleep(time.Millisecond)
 	_, err = net.Dial("tcp", ln.Addr().String())
 	require.NotNil(t, err)
+}
+
+func TestTCPListenAndServeKeepOrderPreDecode(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	defer ln.Close()
+
+	const metaDataKey = "keep_order_key"
+	h := &keepOrderPreDecodeHandler{values: make(map[string][]string)}
+	go func() {
+		st := transport.NewServerTransport(transport.WithKeepAlivePeriod(time.Minute))
+		err := st.ListenAndServe(context.Background(),
+			transport.WithListener(ln),
+			transport.WithHandler(h),
+			transport.WithServerFramerBuilder(trpc.DefaultFramerBuilder),
+			transport.WithServiceName(t.Name()),
+			transport.WithServerAsync(true),
+			transport.WithKeepOrderPreDecodeExtractor(func(ctx context.Context, reqBody []byte) (string, bool) {
+				meta := codec.Message(ctx).ServerMetaData()
+				if meta == nil {
+					return "", false
+				}
+				return string(meta[metaDataKey]), true
+			}),
+		)
+		if err != nil {
+			t.Logf("ListenAndServe fail: %v", err)
+		}
+	}()
+
+	sendKeepOrderPreDecodeRequests(t, ln.Addr().String(), metaDataKey, assertKeepOrderResponses)
+}
+
+func TestTCPListenAndServeKeepOrderPreUnmarshal(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	defer ln.Close()
+
+	h := &keepOrderPreUnmarshalHandler{values: make(map[string][]string)}
+	go func() {
+		st := transport.NewServerTransport(transport.WithKeepAlivePeriod(time.Minute))
+		err := st.ListenAndServe(context.Background(),
+			transport.WithListener(ln),
+			transport.WithHandler(h),
+			transport.WithServerFramerBuilder(trpc.DefaultFramerBuilder),
+			transport.WithServiceName(t.Name()),
+			transport.WithServerAsync(true),
+			transport.WithKeepOrderPreUnmarshalExtractor(func(ctx context.Context, req interface{}) (string, bool) {
+				request, ok := req.([]byte)
+				if !ok {
+					return "", false
+				}
+				parts := strings.Split(string(request), " ")
+				if len(parts) != 2 {
+					return "", false
+				}
+				return parts[0], true
+			}),
+		)
+		if err != nil {
+			t.Logf("ListenAndServe fail: %v", err)
+		}
+	}()
+
+	sendKeepOrderPreUnmarshalRequests(t, ln.Addr().String(), assertKeepOrderResponses)
+}
+
+func sendKeepOrderPreDecodeRequests(
+	t *testing.T,
+	addr string,
+	metaDataKey string,
+	checkResponses func(t *testing.T, rspCount int, keys []string, rsps map[string]string),
+) {
+	sendKeepOrderRequests(t, addr, checkResponses, func(ctx context.Context, key string) context.Context {
+		msg := codec.Message(ctx)
+		msg.WithClientMetaData(codec.MetaData{metaDataKey: []byte(key)})
+		return ctx
+	})
+}
+
+func sendKeepOrderPreUnmarshalRequests(
+	t *testing.T,
+	addr string,
+	checkResponses func(t *testing.T, rspCount int, keys []string, rsps map[string]string),
+) {
+	sendKeepOrderRequests(t, addr, checkResponses, func(ctx context.Context, key string) context.Context {
+		return ctx
+	})
+}
+
+func sendKeepOrderRequests(
+	t *testing.T,
+	addr string,
+	checkResponses func(t *testing.T, rspCount int, keys []string, rsps map[string]string),
+	prepareContext func(ctx context.Context, key string) context.Context,
+) {
+	var (
+		mu        sync.Mutex
+		eg        errgroup.Group
+		requestID uint32
+	)
+	keys := []string{"key1", "key2", "key3"}
+	const count = 6
+	rsps := make(map[string]string)
+	p := multiplexed.New(multiplexed.WithConnectNumber(1))
+	for _, key := range keys {
+		key := key
+		for i := 0; i < count; i++ {
+			i := i
+			sendErr := make(chan error, 1)
+			ctx := keeporder.NewContextWithClientInfo(context.Background(), &keeporder.ClientInfo{
+				SendError: sendErr,
+			})
+			eg.Go(func() error {
+				ctx, cancel := context.WithTimeout(ctx, time.Second)
+				defer cancel()
+				ctx, msg := codec.WithNewMessage(ctx)
+				msg.WithRequestID(atomic.AddUint32(&requestID, 1))
+				ctx = prepareContext(ctx, key)
+				data := []byte(key + " " + strconv.Itoa(i))
+				reqData, err := trpc.DefaultClientCodec.Encode(msg, data)
+				if err != nil {
+					return fmt.Errorf("client codec encode: %w", err)
+				}
+				rsp, err := transport.RoundTrip(ctx, reqData,
+					transport.WithDialNetwork("tcp"),
+					transport.WithDialAddress(addr),
+					transport.WithMultiplexedPool(p),
+					transport.WithMsg(msg),
+					transport.WithClientFramerBuilder(trpc.DefaultFramerBuilder),
+				)
+				select {
+				case sendErr <- err:
+				default:
+				}
+				if err != nil {
+					return err
+				}
+				rsp, err = trpc.DefaultClientCodec.Decode(msg, rsp)
+				if err != nil {
+					return fmt.Errorf("client codec decode: %w", err)
+				}
+				mu.Lock()
+				s := string(rsp)
+				if len(rsps[key]) < len(s) {
+					rsps[key] = s
+				}
+				mu.Unlock()
+				return nil
+			})
+			require.NoError(t, <-sendErr)
+		}
+	}
+	require.NoError(t, eg.Wait())
+	checkResponses(t, count, keys, rsps)
+}
+
+type keepOrderPreDecodeHandler struct {
+	mu     sync.Mutex
+	values map[string][]string
+}
+
+func (h *keepOrderPreDecodeHandler) Handle(ctx context.Context, req []byte) ([]byte, error) {
+	return h.handle(ctx, req)
+}
+
+func (h *keepOrderPreDecodeHandler) PreDecode(ctx context.Context, reqBuf []byte) ([]byte, error) {
+	return trpc.DefaultServerCodec.Decode(codec.Message(ctx), reqBuf)
+}
+
+func (h *keepOrderPreDecodeHandler) handle(ctx context.Context, req []byte) ([]byte, error) {
+	msg := codec.Message(ctx)
+	req, err := trpc.DefaultServerCodec.Decode(msg, req)
+	if err != nil {
+		return nil, fmt.Errorf("decode request %q: %w", req, err)
+	}
+	return h.handleBody(msg, req)
+}
+
+type keepOrderPreUnmarshalHandler struct {
+	mu     sync.Mutex
+	values map[string][]string
+}
+
+func (h *keepOrderPreUnmarshalHandler) Handle(ctx context.Context, req []byte) ([]byte, error) {
+	return h.handle(ctx, req)
+}
+
+func (h *keepOrderPreUnmarshalHandler) PreUnmarshal(ctx context.Context, reqBuf []byte) (interface{}, error) {
+	return trpc.DefaultServerCodec.Decode(codec.Message(ctx), reqBuf)
+}
+
+func (h *keepOrderPreUnmarshalHandler) handle(ctx context.Context, req []byte) ([]byte, error) {
+	msg := codec.Message(ctx)
+	req, err := trpc.DefaultServerCodec.Decode(msg, req)
+	if err != nil {
+		return nil, fmt.Errorf("decode request %q: %w", req, err)
+	}
+	return h.handleBody(msg, req)
+}
+
+func (h *keepOrderPreUnmarshalHandler) handleBody(msg codec.Msg, req []byte) ([]byte, error) {
+	return handleKeepOrderBody(&h.mu, h.values, msg, req)
+}
+
+func (h *keepOrderPreDecodeHandler) handleBody(msg codec.Msg, req []byte) ([]byte, error) {
+	return handleKeepOrderBody(&h.mu, h.values, msg, req)
+}
+
+func handleKeepOrderBody(mu *sync.Mutex, values map[string][]string, msg codec.Msg, req []byte) ([]byte, error) {
+	parts := strings.Split(string(req), " ")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid request %q, should be `key value`", req)
+	}
+	key, val := parts[0], parts[1]
+	cnt, err := strconv.Atoi(val)
+	if err != nil {
+		return nil, fmt.Errorf("invalid value %q: %w", val, err)
+	}
+	time.Sleep(time.Duration(countdownDelay(cnt)) * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	values[key] = append(values[key], val)
+	body := []byte(strings.Join(values[key], " "))
+	return trpc.DefaultServerCodec.Encode(msg, body)
+}
+
+func countdownDelay(n int) int {
+	if n >= 6 {
+		return 0
+	}
+	return (6 - n) * 10
+}
+
+func assertKeepOrderResponses(t *testing.T, rspCount int, keys []string, rsps map[string]string) {
+	expect := make([]string, 0, rspCount)
+	for i := 0; i < rspCount; i++ {
+		expect = append(expect, strconv.Itoa(i))
+	}
+	for _, key := range keys {
+		require.Equal(t, strings.Join(expect, " "), rsps[key])
+	}
 }

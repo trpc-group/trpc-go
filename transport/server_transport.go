@@ -93,6 +93,7 @@ func (s *serverTransport) ListenAndServe(ctx context.Context, opts ...ListenServ
 	for _, opt := range opts {
 		opt(lsopts)
 	}
+	lsopts.fixKeepOrder()
 
 	if lsopts.Listener != nil {
 		return s.listenAndServeStream(ctx, lsopts)

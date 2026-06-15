@@ -27,6 +27,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/filter"
 	icodec "trpc.group/trpc-go/trpc-go/internal/codec"
+	ikeeporder "trpc.group/trpc-go/trpc-go/internal/keeporder"
 	"trpc.group/trpc-go/trpc-go/internal/report"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
@@ -187,6 +188,49 @@ func (s *service) Serve() error {
 	return nil
 }
 
+// PreDecode pre-decodes the given request, which is typically used by keep-order processing.
+func (s *service) PreDecode(ctx context.Context, reqBuf []byte) (reqBodyBuf []byte, err error) {
+	if s.opts.Codec == nil {
+		log.ErrorContextf(ctx, "server codec empty")
+		report.ServerCodecEmpty.Incr()
+		return nil, errors.New("server codec empty")
+	}
+	msg := codec.Message(ctx)
+	span := rpcz.SpanFromContext(ctx)
+	_, end := span.NewChild("DecodeProtocolHead")
+	reqBodyBuf, err = s.decode(ctx, msg, reqBuf)
+	end.End()
+	return reqBodyBuf, err
+}
+
+// PreUnmarshal pre-unmarshals the given request, which is typically used by keep-order processing.
+func (s *service) PreUnmarshal(ctx context.Context, reqBuf []byte) (reqBody interface{}, err error) {
+	reqBodyBuf, err := s.PreDecode(ctx, reqBuf)
+	if err != nil {
+		return nil, err
+	}
+	msg := codec.Message(ctx)
+	handler, ok := s.handlers[msg.ServerRPCName()]
+	if !ok {
+		handler, ok = s.handlers["*"] // wildcard
+		if !ok {
+			report.ServiceHandleRPCNameInvalid.Incr()
+			return nil, errs.NewFrameError(errs.RetServerNoFunc,
+				fmt.Sprintf("service handle: rpc name %s invalid, current service:%s",
+					msg.ServerRPCName(), msg.CalleeServiceName()))
+		}
+	}
+	info, ok := ikeeporder.PreUnmarshalInfoFromContext(ctx)
+	if !ok || info == nil {
+		return nil, errors.New("failed to get keeporder pre-unmarshal info")
+	}
+	newFilterFunc := s.filterFunc(ctx, msg, reqBodyBuf, nil)
+	if _, err := handler(ctx, newFilterFunc); err != nil {
+		return nil, fmt.Errorf("do handler during pre-unmarshal error: %w", err)
+	}
+	return info.ReqBody, nil
+}
+
 // Handle implements transport.Handler.
 // service itself is passed to its transport plugin as a transport handler.
 // This is like a callback function that would be called by service's transport plugin.
@@ -207,9 +251,15 @@ func (s *service) Handle(ctx context.Context, reqBuf []byte) (rspBuf []byte, err
 	span := rpcz.SpanFromContext(ctx)
 	span.SetAttribute(rpcz.TRPCAttributeFilterNames, s.opts.FilterNames)
 
-	_, end := span.NewChild("DecodeProtocolHead")
-	reqBodyBuf, err := s.decode(ctx, msg, reqBuf)
-	end.End()
+	var reqBodyBuf []byte
+	if info, ok := ikeeporder.PreDecodeInfoFromContext(ctx); ok && info != nil {
+		reqBodyBuf = info.ReqBodyBuf
+		info.ReqBodyBuf = nil
+	} else {
+		_, end := span.NewChild("DecodeProtocolHead")
+		reqBodyBuf, err = s.decode(ctx, msg, reqBuf)
+		end.End()
+	}
 
 	if err != nil {
 		return s.encode(ctx, msg, nil, err)
@@ -397,41 +447,31 @@ func (s *service) filterFunc(
 	reqBodyBuf []byte,
 	fixTimeout filter.ServerFilter,
 ) FilterFunc {
+	info, hasPreUnmarshal := ikeeporder.PreUnmarshalInfoFromContext(ctx)
 	// Decompression, serialization of request body are put into a closure.
 	// Both serialization type & compress type can be set.
 	// serialization type is set to msg.SerializationType() by default,
 	// if serialization type Option is called, serialization type is set by the Option.
 	// compress type's setting is similar to it.
 	return func(reqBody interface{}) (filter.ServerChain, error) {
-		// decompress request body
-		compressType := msg.CompressType()
-		if icodec.IsValidCompressType(s.opts.CurrentCompressType) {
-			compressType = s.opts.CurrentCompressType
-		}
-		span := rpcz.SpanFromContext(ctx)
-		_, end := span.NewChild("Decompress")
-		reqBodyBuf, err := codec.Decompress(compressType, reqBodyBuf)
-		end.End()
-		if err != nil {
-			report.ServiceCodecDecompressFail.Incr()
-			return nil, errs.NewFrameError(errs.RetServerDecodeFail, "service codec Decompress: "+err.Error())
-		}
-
-		// unmarshal request body
-		serializationType := msg.SerializationType()
-		if icodec.IsValidSerializationType(s.opts.CurrentSerializationType) {
-			serializationType = s.opts.CurrentSerializationType
-		}
-		_, end = span.NewChild("Unmarshal")
-		err = codec.Unmarshal(serializationType, reqBodyBuf, reqBody)
-		end.End()
-		if err != nil {
-			log.TraceContextf(ctx,
-				"ServiceCodecUnmarshalFail: callerService:%s callerMethod:%s calleeService:%s calleeMethod:%s req:%+X",
-				msg.CallerService(), msg.CallerMethod(), msg.CalleeService(), msg.CalleeMethod(), reqBodyBuf,
-			)
-			report.ServiceCodecUnmarshalFail.Incr()
-			return nil, errs.NewFrameError(errs.RetServerDecodeFail, "service codec Unmarshal: "+err.Error())
+		if hasPreUnmarshal && info != nil && info.Stored {
+			if err := assignPreUnmarshal(reqBody, info.ReqBody); err != nil {
+				return nil, fmt.Errorf("assigning pre-unmarshal value to stub error: %w", err)
+			}
+			info.ReqBody = nil
+		} else {
+			if err := s.decompressAndUnmarshal(ctx, msg, reqBodyBuf, reqBody); err != nil {
+				return nil, err
+			}
+			if hasPreUnmarshal && info != nil && !info.Stored {
+				info.ReqBody = reqBody
+				info.Stored = true
+				return filter.ServerChain{
+					func(context.Context, interface{}, filter.ServerHandleFunc) (interface{}, error) {
+						return nil, nil
+					},
+				}, nil
+			}
 		}
 
 		if fixTimeout != nil {
@@ -442,6 +482,65 @@ func (s *service) filterFunc(
 		}
 		return s.opts.Filters, nil
 	}
+}
+
+func (s *service) decompressAndUnmarshal(
+	ctx context.Context,
+	msg codec.Msg,
+	reqBodyBuf []byte,
+	reqBody interface{},
+) error {
+	compressType := msg.CompressType()
+	if icodec.IsValidCompressType(s.opts.CurrentCompressType) {
+		compressType = s.opts.CurrentCompressType
+	}
+	span := rpcz.SpanFromContext(ctx)
+	_, end := span.NewChild("Decompress")
+	reqBodyBuf, err := codec.Decompress(compressType, reqBodyBuf)
+	end.End()
+	if err != nil {
+		report.ServiceCodecDecompressFail.Incr()
+		return errs.NewFrameError(errs.RetServerDecodeFail, "service codec Decompress: "+err.Error())
+	}
+
+	serializationType := msg.SerializationType()
+	if icodec.IsValidSerializationType(s.opts.CurrentSerializationType) {
+		serializationType = s.opts.CurrentSerializationType
+	}
+	_, end = span.NewChild("Unmarshal")
+	err = codec.Unmarshal(serializationType, reqBodyBuf, reqBody)
+	end.End()
+	if err != nil {
+		log.TraceContextf(ctx,
+			"ServiceCodecUnmarshalFail: callerService:%s callerMethod:%s calleeService:%s calleeMethod:%s req:%+X",
+			msg.CallerService(), msg.CallerMethod(), msg.CalleeService(), msg.CalleeMethod(), reqBodyBuf,
+		)
+		report.ServiceCodecUnmarshalFail.Incr()
+		return errs.NewFrameError(errs.RetServerDecodeFail, "service codec Unmarshal: "+err.Error())
+	}
+	return nil
+}
+
+func assignPreUnmarshal(dst interface{}, src interface{}) error {
+	if src == nil {
+		return nil
+	}
+	dstValue := reflect.ValueOf(dst)
+	if !dstValue.IsValid() || dstValue.Kind() != reflect.Ptr || dstValue.IsNil() {
+		return fmt.Errorf("destination must be a non-nil pointer, got %T", dst)
+	}
+	srcValue := reflect.ValueOf(src)
+	if srcValue.Kind() == reflect.Ptr {
+		if srcValue.IsNil() {
+			return nil
+		}
+		srcValue = srcValue.Elem()
+	}
+	if !srcValue.Type().AssignableTo(dstValue.Elem().Type()) {
+		return fmt.Errorf("cannot assign %T to %T", src, dst)
+	}
+	dstValue.Elem().Set(srcValue)
+	return nil
 }
 
 // Register implements Service interface, registering a proto service impl for the service.
