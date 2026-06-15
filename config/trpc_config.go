@@ -364,6 +364,9 @@ func (c *TrpcConfig) set(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("trpc/config: failed to parse:%w, id:%s", err, c.id)
 	}
+	if v, ok := e.data.(map[interface{}]interface{}); ok {
+		e.data = cast.ToStringMap(v)
+	}
 	c.value = e
 	return nil
 }

@@ -206,11 +206,11 @@ func (c *clientTransport) multiplex(ctx context.Context, req []byte, opts *trans
 
 	buf, err := conn.Read()
 	if err != nil {
-		if err == context.Canceled {
+		if errors.Is(err, context.Canceled) {
 			return nil, errs.NewFrameError(errs.RetClientCanceled,
 				"tcp tnet multiplexed ReadFrame: "+err.Error())
 		}
-		if err == context.DeadlineExceeded {
+		if errors.Is(err, context.DeadlineExceeded) {
 			return nil, errs.NewFrameError(errs.RetClientTimeout,
 				"tcp tnet multiplexed ReadFrame: "+err.Error())
 		}

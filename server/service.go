@@ -150,6 +150,10 @@ var New = func(opts ...Option) Service {
 func (s *service) Serve() error {
 	pid := os.Getpid()
 
+	if len(s.handlers) == 0 && len(s.streamHandlers) == 0 {
+		log.Warnf("process:%d service:%s no handlers registered", pid, s.opts.ServiceName)
+	}
+
 	// make sure ListenAndServe succeeds before Naming Service Registry.
 	if err := s.opts.Transport.ListenAndServe(s.ctx, s.opts.ServeOptions...); err != nil {
 		log.Errorf("process:%d service:%s ListenAndServe fail:%v", pid, s.opts.ServiceName, err)
@@ -422,6 +426,10 @@ func (s *service) filterFunc(
 		err = codec.Unmarshal(serializationType, reqBodyBuf, reqBody)
 		end.End()
 		if err != nil {
+			log.TraceContextf(ctx,
+				"ServiceCodecUnmarshalFail: callerService:%s callerMethod:%s calleeService:%s calleeMethod:%s req:%+X",
+				msg.CallerService(), msg.CallerMethod(), msg.CalleeService(), msg.CalleeMethod(), reqBodyBuf,
+			)
 			report.ServiceCodecUnmarshalFail.Incr()
 			return nil, errs.NewFrameError(errs.RetServerDecodeFail, "service codec Unmarshal: "+err.Error())
 		}
