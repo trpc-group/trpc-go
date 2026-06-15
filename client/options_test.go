@@ -245,6 +245,10 @@ func TestOptions(t *testing.T) {
 	o(opts)
 	require.Equal(t, uint32(1024), opts.MaxWindowSize)
 
+	o = client.WithDisableStreamFlowControl()
+	o(opts)
+	require.True(t, opts.DisabledFlowControl)
+
 	o = client.WithMultiplexed(true)
 	o(opts)
 	require.Equal(t, true, opts.EnableMultiplexed)

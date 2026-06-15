@@ -442,6 +442,7 @@ func selectNode(ctx context.Context, msg codec.Msg, opts *Options) (*registry.No
 	opts.SelectOptions = append(opts.SelectOptions, selector.WithContext(ctx))
 	node, err := getNode(opts)
 	if err != nil {
+		ensureMsgCalleeInfo(msg, opts)
 		report.SelectNodeFail.Incr()
 		return nil, err
 	}
@@ -473,6 +474,19 @@ func selectNode(ctx context.Context, msg codec.Msg, opts *Options) (*registry.No
 	}
 
 	return node, nil
+}
+
+func ensureMsgCalleeInfo(msg codec.Msg, opts *Options) {
+	if opts == nil {
+		return
+	}
+	o := selector.Options{}
+	for _, opt := range opts.SelectOptions {
+		opt(&o)
+	}
+	if o.DestinationSetName != "" {
+		msg.WithCalleeSetName(o.DestinationSetName)
+	}
 }
 
 func getNode(opts *Options) (*registry.Node, error) {

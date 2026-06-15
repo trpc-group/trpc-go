@@ -77,6 +77,7 @@ type ServerTransport struct {
 	reusePort   bool
 	enableH2C   bool
 	http2Config *transport.HTTP2Config
+	decorate    func(*stdhttp.Server) *stdhttp.Server
 }
 
 // NewServerTransport creates a new ServerTransport which implement transport.ServerTransport.
@@ -175,6 +176,13 @@ func (t *ServerTransport) serve(ctx context.Context, s *stdhttp.Server, opts *tr
 
 	if err := transport.SaveListener(ln); err != nil {
 		return fmt.Errorf("save http listener error: %w", err)
+	}
+
+	if t.decorate != nil {
+		s = t.decorate(s)
+		if s == nil {
+			return errors.New("http server transport decorate server returned nil")
+		}
 	}
 
 	if len(opts.TLSKeyFile) != 0 && len(opts.TLSCertFile) != 0 {
@@ -401,9 +409,6 @@ func (ct *ClientTransport) getRequest(reqHeader *ClientReqHeader,
 	if err := ct.setTransInfo(msg, req); err != nil {
 		return nil, err
 	}
-	if len(opts.TLSServerName) == 0 {
-		opts.TLSServerName = req.Host
-	}
 	return req, nil
 }
 
@@ -545,8 +550,15 @@ func (ct *ClientTransport) RoundTrip(
 	}()
 	request := req.WithContext(httptrace.WithClientTrace(reqCtx, trace))
 
+	hostName := ""
+	if req.URL != nil {
+		hostName = req.URL.Hostname()
+	}
+	if reqHeader.Host != "" {
+		hostName = reqHeader.Host
+	}
 	client, err := ct.getStdHTTPClient(opts.CACertFile, opts.TLSCertFile,
-		opts.TLSKeyFile, opts.TLSServerName, opts.TLSCertProvider)
+		opts.TLSKeyFile, opts.TLSServerName, opts.TLSCertProvider, hostName)
 	if err != nil {
 		return nil, err
 	}
@@ -613,12 +625,15 @@ func (b *responseBodyWithCancel) Close() error {
 }
 
 func (ct *ClientTransport) getStdHTTPClient(caFile, certFile,
-	keyFile, serverName, providerName string) (*stdhttp.Client, error) {
+	keyFile, serverName, providerName, hostName string) (*stdhttp.Client, error) {
 	if len(caFile) == 0 { // HTTP requests share one client.
 		return &ct.Client, nil
 	}
 
-	cacheKey := fmt.Sprintf("%s-%s-%s-%s", caFile, certFile, serverName, providerName)
+	if serverName != "" {
+		hostName = serverName
+	}
+	cacheKey := fmt.Sprintf("%s-%s-%s-%s", caFile, certFile, hostName, providerName)
 	ct.tlsLock.RLock()
 	cli, ok := ct.tlsClients[cacheKey]
 	ct.tlsLock.RUnlock()
@@ -633,7 +648,7 @@ func (ct *ClientTransport) getStdHTTPClient(caFile, certFile,
 		return cli, nil
 	}
 
-	conf, err := itls.GetClientConfig(serverName, caFile, certFile, keyFile, providerName)
+	conf, err := itls.GetClientConfig(hostName, caFile, certFile, keyFile, providerName)
 	if err != nil {
 		return nil, err
 	}

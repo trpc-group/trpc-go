@@ -35,6 +35,14 @@ func detachCtxValue(ctx context.Context) context.Context {
 		return context.Background()
 	}
 	c := valueDetachedCtx{ctx: ctx}
+	collect(ctx, &c)
+	return &c
+}
+
+func collect(ctx context.Context, c *valueDetachedCtx) {
+	if globalScavenger.collect(c) {
+		return
+	}
 	go func() {
 		<-ctx.Done()
 		deadline, ok := ctx.Deadline()
@@ -47,7 +55,6 @@ func detachCtxValue(ctx context.Context) context.Context {
 		}
 		c.mu.Unlock()
 	}()
-	return &c
 }
 
 // Deadline implements the Deadline method of Context.

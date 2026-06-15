@@ -15,6 +15,7 @@ package http
 
 import (
 	"errors"
+	"net/url"
 
 	"trpc.group/trpc-go/trpc-go/codec"
 )
@@ -25,20 +26,36 @@ func init() {
 
 // NewGetSerialization initializes the get serialized object.
 func NewGetSerialization(tag string) codec.Serializer {
+	return NewGetSerializationWithCaseSensitive(tag, false)
+}
+
+// NewGetSerializationWithCaseSensitive initializes the get serialized object.
+// Register the returned serializer with codec.RegisterSerializer to use it.
+// By default, GET serialization is case-insensitive for backward compatibility.
+func NewGetSerializationWithCaseSensitive(tag string, caseSensitive bool) codec.Serializer {
 	formSerializer := NewFormSerialization(tag)
 	return &GetSerialization{
 		formSerializer: formSerializer.(*FormSerialization),
+		caseSensitive:  caseSensitive,
 	}
 }
 
 // GetSerialization packages kv structure of the http get request.
 type GetSerialization struct {
 	formSerializer *FormSerialization
+	caseSensitive  bool
 }
 
 // Unmarshal unpacks kv structure.
 func (s *GetSerialization) Unmarshal(in []byte, body interface{}) error {
-	return s.formSerializer.Unmarshal(in, body)
+	if s.caseSensitive {
+		return s.formSerializer.Unmarshal(in, body)
+	}
+	values, err := url.ParseQuery(string(in))
+	if err != nil {
+		return err
+	}
+	return unmarshalValues(s.formSerializer.tagname, values, body)
 }
 
 // Marshal packages kv structure.

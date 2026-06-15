@@ -32,6 +32,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -1487,6 +1488,84 @@ func TestHTTPGotConnectionRemoteAddr(t *testing.T) {
 					return err
 				})))
 	}
+}
+
+func TestDecorateHTTPServer(t *testing.T) {
+	wantBody := t.Name()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	defer ln.Close()
+	var decorated bool
+
+	tp := thttp.NewServerTransport(newNoopStdHTTPServer, thttp.WithDecorateHTTPServer(
+		func(s *http.Server) *http.Server {
+			decorated = true
+			s.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(wantBody))
+			})
+			return s
+		},
+	))
+	err = tp.ListenAndServe(context.Background(), transport.WithListener(ln), transport.WithHandler(&h{}))
+	require.Nil(t, err)
+	require.True(t, decorated)
+
+	require.Eventually(t, func() bool {
+		rsp, err := http.Get("http://" + ln.Addr().String())
+		if err != nil {
+			return false
+		}
+		defer rsp.Body.Close()
+		body, err := io.ReadAll(rsp.Body)
+		return err == nil && string(body) == wantBody
+	}, time.Second, 10*time.Millisecond)
+}
+
+func TestDecorateHTTPServerWithTLS(t *testing.T) {
+	wantBody := t.Name()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	defer ln.Close()
+	var decorated bool
+
+	tp := thttp.NewServerTransport(newNoopStdHTTPServer, thttp.WithDecorateHTTPServer(
+		func(s *http.Server) *http.Server {
+			decorated = true
+			s.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(wantBody))
+			})
+			return s
+		},
+	))
+	err = tp.ListenAndServe(context.Background(),
+		transport.WithListener(ln),
+		transport.WithHandler(&h{}),
+		transport.WithServeTLS("../testdata/server.crt", "../testdata/server.key", ""),
+	)
+	require.Nil(t, err)
+	require.True(t, decorated)
+
+	pool := x509.NewCertPool()
+	ca, err := os.ReadFile("../testdata/ca.pem")
+	require.Nil(t, err)
+	require.True(t, pool.AppendCertsFromPEM(ca))
+
+	client := &http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{
+			RootCAs:    pool,
+			ServerName: "localhost",
+			MinVersion: tls.VersionTLS12,
+		},
+	}}
+	require.Eventually(t, func() bool {
+		rsp, err := client.Get("https://" + ln.Addr().String())
+		if err != nil {
+			return false
+		}
+		defer rsp.Body.Close()
+		body, err := io.ReadAll(rsp.Body)
+		return err == nil && string(body) == wantBody
+	}, time.Second, 10*time.Millisecond)
 }
 
 type h struct{}

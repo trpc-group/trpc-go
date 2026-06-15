@@ -33,6 +33,7 @@ var (
 	errDeepWildcard     = errors.New("deep wildcard must be the last segment")
 	errDupFieldPath     = errors.New("dup field path")
 	errLeadingSlash     = errors.New("leading slash required")
+	errTrailingSlash    = errors.New("trailing slash is not allowed")
 )
 
 // parser is the template parser.
@@ -167,6 +168,9 @@ func (p *parser) parseSegments() ([]segment, error) {
 	result := []segment{seg}
 
 	if err := p.consume('/'); err == nil {
+		if p.done() {
+			return nil, errTrailingSlash
+		}
 		// parse segments recursively.
 		segs, err := p.parseSegments()
 		if err != nil {

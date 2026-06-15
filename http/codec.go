@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/r3labs/sse/v2"
 	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
 	"trpc.group/trpc-go/trpc-go/codec"
@@ -234,6 +235,28 @@ type ClientRspHeader struct {
 	// The default value is false.
 	ManualReadBody bool
 	Response       *http.Response
+
+	// ResponseHandler is invoked when SSECondition returns false or SSEHandler is not set.
+	// It only takes effect when ManualReadBody is false.
+	ResponseHandler RspHandler
+
+	// SSECondition determines whether the response should be handled as server-sent events.
+	// If SSECondition is nil, the default condition always returns true.
+	SSECondition func(*http.Response) bool
+
+	// SSEHandler handles server-sent event callbacks.
+	// It only takes effect when ManualReadBody is false.
+	SSEHandler SSEHandler
+}
+
+// RspHandler handles common HTTP responses.
+type RspHandler interface {
+	Handle(*http.Response) error
+}
+
+// SSEHandler handles server-sent events.
+type SSEHandler interface {
+	Handle(*sse.Event) error
 }
 
 // ErrsToHTTPStatus maps from framework errs retcode to http status code.
@@ -289,7 +312,6 @@ func (sc *ServerCodec) setReqHeader(head *Header, msg codec.Msg) error {
 
 	trpcReq := &trpcpb.RequestProtocol{}
 	msg.WithServerReqHead(trpcReq)
-	msg.WithServerRspHead(trpcReq)
 
 	trpcReq.Func = []byte(msg.ServerRPCName())
 	trpcReq.ContentType = uint32(msg.SerializationType())
@@ -334,7 +356,20 @@ func (sc *ServerCodec) setReqHeader(head *Header, msg codec.Msg) error {
 		}
 		trpcReq.TransInfo = transInfo
 	}
+	msg.WithServerRspHead(newResponseProtocol(trpcReq))
 	return nil
+}
+
+func newResponseProtocol(req *trpcpb.RequestProtocol) *trpcpb.ResponseProtocol {
+	return &trpcpb.ResponseProtocol{
+		Version:         req.GetVersion(),
+		CallType:        req.GetCallType(),
+		MessageType:     req.GetMessageType(),
+		RequestId:       req.GetRequestId(),
+		ContentType:     req.GetContentType(),
+		ContentEncoding: req.GetContentEncoding(),
+		TransInfo:       req.GetTransInfo(),
+	}
 }
 
 func unmarshalTransInfo(msg codec.Msg, v string) (map[string][]byte, error) {
@@ -582,17 +617,74 @@ func (c *ClientCodec) Encode(msg codec.Msg, reqBody []byte) ([]byte, error) {
 		}
 	}
 
+	var rspHeader *ClientRspHeader
 	if msg.ClientRspHead() != nil { // User himself has set http client rsp header.
-		_, ok := msg.ClientRspHead().(*ClientRspHeader)
+		header, ok := msg.ClientRspHead().(*ClientRspHeader)
 		if !ok {
 			return nil, errors.New("http header must be type of *http.ClientRspHeader")
 		}
+		rspHeader = header
 	} else {
-		msg.WithClientRspHead(&ClientRspHeader{})
+		rspHeader = &ClientRspHeader{}
+		msg.WithClientRspHead(rspHeader)
 	}
 
+	tryFillSSEHeaders(reqHeader, rspHeader)
 	c.updateMsg(msg)
 	return reqBody, nil
+}
+
+func tryFillSSEHeaders(reqHeader *ClientReqHeader, rspHeader *ClientRspHeader) {
+	if rspHeader.SSEHandler == nil {
+		return
+	}
+	tryAddHeader(reqHeader, "Accept", "text/event-stream")
+	tryAddHeader(reqHeader, Connection, "keep-alive")
+	tryAddHeader(reqHeader, "Cache-Control", "no-cache")
+}
+
+func tryAddHeader(reqHeader *ClientReqHeader, key, value string) {
+	if reqHeader.Header.Get(key) != "" {
+		return
+	}
+	reqHeader.AddHeader(key, value)
+}
+
+var defaultSSECondition = func(*http.Response) bool {
+	return true
+}
+
+func handleResponseBody(rspHeader *ClientRspHeader, msg codec.Msg) ([]byte, error) {
+	rsp := rspHeader.Response
+	if rsp.Body == nil || rspHeader.ManualReadBody {
+		return nil, nil
+	}
+	defer rsp.Body.Close()
+
+	if rspHeader.SSECondition == nil {
+		rspHeader.SSECondition = defaultSSECondition
+	}
+	if rspHeader.SSECondition(rsp) && rspHeader.SSEHandler != nil {
+		if err := handleSSE(rsp.Body, rspHeader.SSEHandler, msg); err != nil {
+			return nil, fmt.Errorf("handle sse error: %w", err)
+		}
+		return nil, nil
+	}
+	if rspHeader.ResponseHandler != nil {
+		if err := rspHeader.ResponseHandler.Handle(rsp); err != nil {
+			return nil, fmt.Errorf("handle response error: %w", err)
+		}
+		return nil, nil
+	}
+
+	body, err := io.ReadAll(rsp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("readall http body fail: %w", err)
+	}
+	// Reset body and allow multiple read.
+	rsp.Body.Close()
+	rsp.Body = io.NopCloser(bytes.NewReader(body))
+	return body, nil
 }
 
 // Decode parses metadata in http client's response.
@@ -607,14 +699,8 @@ func (c *ClientCodec) Decode(msg codec.Msg, _ []byte) ([]byte, error) {
 		err  error
 	)
 	rsp := rspHeader.Response
-	if rsp.Body != nil && !rspHeader.ManualReadBody {
-		defer rsp.Body.Close()
-		if body, err = io.ReadAll(rsp.Body); err != nil {
-			return nil, fmt.Errorf("readall http body fail: %w", err)
-		}
-		// Reset body and allow multiple read.
-		rsp.Body.Close()
-		rsp.Body = io.NopCloser(bytes.NewReader(body))
+	if body, err = handleResponseBody(rspHeader, msg); err != nil {
+		return nil, err
 	}
 
 	if val := rsp.Header.Get("Content-Encoding"); val != "" {

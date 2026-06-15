@@ -229,6 +229,28 @@ func TestReplaceRouter(t *testing.T) {
 	require.Nil(t, err)
 }
 
+func TestRESTfulListenAndServeEmptyRouter(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	defer ln.Close()
+	st := thttp.NewRESTServerTransport(false, transport.WithReusePort(false))
+	require.Nil(t, st.ListenAndServe(context.Background(),
+		transport.WithListener(ln),
+		transport.WithServiceName(t.Name()),
+	))
+}
+
+func TestRESTfulListenAndServeEmptyRouterFastHTTP(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	defer ln.Close()
+	st := thttp.NewRESTServerTransport(true, transport.WithReusePort(false))
+	require.Nil(t, st.ListenAndServe(context.Background(),
+		transport.WithListener(ln),
+		transport.WithServiceName(t.Name()),
+	))
+}
+
 var (
 	headerMatcherTransInfo, _ = json.Marshal(map[string]string{
 		"kfuin": base64.StdEncoding.EncodeToString([]byte("3009025887")),

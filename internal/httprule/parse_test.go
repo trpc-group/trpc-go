@@ -214,6 +214,11 @@ func TestValidateTemplate(t *testing.T) {
 			wantErr: nil,
 			desc:    "validate tpl test 06",
 		},
+		{
+			input:   "/v1/a/b/c/",
+			wantErr: errTrailingSlash,
+			desc:    "validate tpl test 07",
+		},
 	} {
 		_, gotErr := Parse(test.input)
 		require.Equal(t, errors.Unwrap(gotErr), test.wantErr, test.desc)

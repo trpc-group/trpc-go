@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"testing"
 	"time"
 
@@ -108,6 +109,53 @@ func (c *fakeCodec) Decode(msg codec.Msg, rspBuf []byte) (rspBody []byte, err er
 		return nil, nil
 	}
 	return rspBuf, nil
+}
+
+type blockingStreamTransport struct {
+	closed chan struct{}
+	once   sync.Once
+}
+
+func newBlockingStreamTransport() *blockingStreamTransport {
+	return &blockingStreamTransport{closed: make(chan struct{})}
+}
+
+func (t *blockingStreamTransport) Send(context.Context, []byte, ...transport.RoundTripOption) error {
+	return nil
+}
+
+func (t *blockingStreamTransport) Recv(context.Context, ...transport.RoundTripOption) ([]byte, error) {
+	<-t.closed
+	return nil, context.Canceled
+}
+
+func (t *blockingStreamTransport) Init(context.Context, ...transport.RoundTripOption) error {
+	return nil
+}
+
+func (t *blockingStreamTransport) Close(context.Context) {
+	t.once.Do(func() {
+		close(t.closed)
+	})
+}
+
+var (
+	errCustomSendControl = errors.New("custom send control")
+	errCustomRecvControl = errors.New("custom recv control")
+)
+
+type failingSendControl struct{}
+
+func (failingSendControl) GetWindow(uint32) error {
+	return errCustomSendControl
+}
+
+func (failingSendControl) UpdateWindow(uint32) {}
+
+type failingRecvControl struct{}
+
+func (failingRecvControl) OnRecv(uint32) error {
+	return errCustomRecvControl
 }
 
 // TestMain tests the Main function.
@@ -265,6 +313,59 @@ func TestClientFlowControl(t *testing.T) {
 	err = cs.RecvMsg(rspBody)
 	assert.Equal(t, io.EOF, err)
 	assert.Nil(t, rspBody.Data)
+}
+
+func TestClientCustomFlowControl(t *testing.T) {
+	codec.RegisterSerializer(0, &codec.NoopSerialization{})
+	codec.Register("custom-flow-control", nil, &fakeCodec{})
+
+	t.Run("send control", func(t *testing.T) {
+		tp := &fakeTransport{expectChan: make(chan recvExpect, 1)}
+		tp.expectChan <- func(fh *trpc.FrameHead, m codec.Msg) ([]byte, error) {
+			fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
+			m.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{InitWindowSize: 2000})
+			return nil, nil
+		}
+		cs, err := stream.NewStreamClient().NewStream(ctx, &client.ClientStreamDesc{}, "",
+			client.WithProtocol("custom-flow-control"),
+			client.WithTarget("ip://127.0.0.1:8000"),
+			client.WithCurrentSerializationType(codec.SerializationTypeNoop),
+			client.WithStreamTransport(tp),
+			client.WithSendControl(failingSendControl{}),
+		)
+		assert.Nil(t, err)
+		assert.NotNil(t, cs)
+		assert.ErrorIs(t, cs.SendMsg(&codec.Body{Data: []byte("body")}), errCustomSendControl)
+		tp.expectChan <- func(fh *trpc.FrameHead, m codec.Msg) ([]byte, error) {
+			return nil, errors.New("close")
+		}
+	})
+
+	t.Run("recv control", func(t *testing.T) {
+		tp := &fakeTransport{expectChan: make(chan recvExpect, 2)}
+		tp.expectChan <- func(fh *trpc.FrameHead, m codec.Msg) ([]byte, error) {
+			fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_INIT)
+			m.WithStreamFrame(&trpcpb.TrpcStreamInitMeta{InitWindowSize: 2000})
+			return nil, nil
+		}
+		cs, err := stream.NewStreamClient().NewStream(ctx, &client.ClientStreamDesc{ServerStreams: true}, "",
+			client.WithProtocol("custom-flow-control"),
+			client.WithTarget("ip://127.0.0.1:8000"),
+			client.WithCurrentSerializationType(codec.SerializationTypeNoop),
+			client.WithStreamTransport(tp),
+			client.WithRecvControl(failingRecvControl{}),
+		)
+		assert.Nil(t, err)
+		assert.NotNil(t, cs)
+		tp.expectChan <- func(fh *trpc.FrameHead, m codec.Msg) ([]byte, error) {
+			fh.StreamFrameType = uint8(trpcpb.TrpcStreamFrameType_TRPC_STREAM_FRAME_DATA)
+			return []byte("body"), nil
+		}
+		assert.ErrorIs(t, cs.RecvMsg(&codec.Body{}), errCustomRecvControl)
+		tp.expectChan <- func(fh *trpc.FrameHead, m codec.Msg) ([]byte, error) {
+			return nil, errors.New("close")
+		}
+	})
 }
 
 // TestClientError tests the case of streaming Client error handling.
@@ -801,6 +902,31 @@ func TestClientNewStreamFail(t *testing.T) {
 		assert.NotNil(t, err)
 		assert.True(t, isClosed)
 	})
+}
+
+func TestClientNewStreamCloseTransportWhenInitRecvBlocks(t *testing.T) {
+	codec.Register("blocking_stream_timeout", nil, &fakeCodec{})
+	tp := newBlockingStreamTransport()
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := stream.NewStreamClient().NewStream(timeoutCtx, &client.ClientStreamDesc{}, "",
+			client.WithProtocol("blocking_stream_timeout"),
+			client.WithTarget("ip://127.0.0.1:8000"),
+			client.WithCurrentSerializationType(codec.SerializationTypeNoop),
+			client.WithStreamTransport(tp),
+		)
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		assert.ErrorIs(t, err, context.Canceled)
+	case <-time.After(time.Second):
+		assert.Fail(t, "NewStream should return after context timeout")
+	}
 }
 
 func TestClientServerCompress(t *testing.T) {

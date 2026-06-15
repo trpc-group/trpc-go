@@ -234,7 +234,10 @@ func (cs *clientStream) invoke(ctx context.Context, _ *client.ClientStreamDesc) 
 	if err := cs.stream.Invoke(ctx); err != nil {
 		return nil, err
 	}
-	w := getWindowSize(cs.opts.MaxWindowSize)
+	var w uint32
+	if !cs.opts.DisabledFlowControl {
+		w = getWindowSize(cs.opts.MaxWindowSize)
+	}
 	newCtx, newMsg := codec.WithCloneContextAndMessage(ctx)
 	defer codec.PutBackMessage(newMsg)
 	copyMetaData(newMsg, codec.Message(cs.ctx))
@@ -246,11 +249,14 @@ func (cs *clientStream) invoke(ctx context.Context, _ *client.ClientStreamDesc) 
 		RequestMeta:    &trpcpb.TrpcStreamInitRequestMeta{},
 		InitWindowSize: w,
 	})
-	cs.opts.RControl = newReceiveControl(w, cs.feedback)
+	if cs.opts.RControl == nil {
+		cs.opts.RControl = newReceiveControl(w, cs.feedback)
+	}
 	// Send the init message out.
 	if err := cs.stream.Send(newCtx, nil); err != nil {
 		return nil, err
 	}
+	go cs.monitorContextCancellation()
 	// After init is sent, the server will return directly.
 	if _, err := cs.stream.Recv(newCtx); err != nil {
 		return nil, err
@@ -269,6 +275,15 @@ func (cs *clientStream) invoke(ctx context.Context, _ *client.ClientStreamDesc) 
 	return cs, nil
 }
 
+func (cs *clientStream) monitorContextCancellation() {
+	select {
+	case <-cs.ctx.Done():
+		cs.opts.StreamTransport.Close(cs.ctx)
+		cs.close()
+	case <-cs.closeCh:
+	}
+}
+
 // configSendControl configs Send Control according to initWindowSize.
 func (cs *clientStream) configSendControl(initWindowSize uint32) {
 	if initWindowSize == 0 {
@@ -277,7 +292,9 @@ func (cs *clientStream) configSendControl(initWindowSize uint32) {
 		cs.opts.SControl = nil
 		return
 	}
-	cs.opts.SControl = newSendControl(initWindowSize, cs.ctx.Done(), cs.closeCh)
+	if cs.opts.SControl == nil {
+		cs.opts.SControl = newSendControl(initWindowSize, cs.ctx.Done(), cs.closeCh)
+	}
 }
 
 // feedback send feedback frame.

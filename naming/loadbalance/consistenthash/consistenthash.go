@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash"
+	internalregistry "trpc.group/trpc-go/trpc-go/naming/internal/registry"
 	"trpc.group/trpc-go/trpc-go/naming/loadbalance"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 )
@@ -125,11 +126,12 @@ func (p *chPicker) Pick(list []*registry.Node, opts *loadbalance.Options) (*regi
 	}
 	switch len(nodes) {
 	case 1:
-		return nodes[0], nil
+		return internalregistry.DeepCopyNode(nodes[0]), nil
 	default:
 		innerIndex := p.hashFunc(innerRepr(opts.Key))
+		// #nosec G115: the modulo result is always smaller than len(nodes).
 		pos := int(innerIndex % uint64(len(nodes)))
-		return nodes[pos], nil
+		return internalregistry.DeepCopyNode(nodes[pos]), nil
 	}
 }
 
