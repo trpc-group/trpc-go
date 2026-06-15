@@ -143,6 +143,21 @@ func TestYamlCodec_Unmarshal(t *testing.T) {
 	})
 }
 
+func TestTrpcConfigStringifiesTopLevelYAMLKeys(t *testing.T) {
+	provider := NewEnvProvider(t.Name(), []byte(`
+1:
+  name: numeric
+true:
+  name: boolean
+`))
+	RegisterProvider(provider)
+
+	cfg, err := DefaultConfigLoader.Load(t.Name(), WithProvider(provider.Name()), WithCodec("yaml"))
+	require.NoError(t, err)
+	require.Equal(t, "numeric", cfg.GetString("1.name", ""))
+	require.Equal(t, "boolean", cfg.GetString("true.name", ""))
+}
+
 func TestEnvExpanded(t *testing.T) {
 	RegisterProvider(NewEnvProvider(t.Name(), []byte(`
 password: ${pwd}
