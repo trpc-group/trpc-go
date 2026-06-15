@@ -32,6 +32,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -1543,8 +1544,17 @@ func TestDecorateHTTPServerWithTLS(t *testing.T) {
 	require.Nil(t, err)
 	require.True(t, decorated)
 
+	pool := x509.NewCertPool()
+	ca, err := os.ReadFile("../testdata/ca.pem")
+	require.Nil(t, err)
+	require.True(t, pool.AppendCertsFromPEM(ca))
+
 	client := &http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: &tls.Config{
+			RootCAs:    pool,
+			ServerName: "localhost",
+			MinVersion: tls.VersionTLS12,
+		},
 	}}
 	require.Eventually(t, func() bool {
 		rsp, err := client.Get("https://" + ln.Addr().String())

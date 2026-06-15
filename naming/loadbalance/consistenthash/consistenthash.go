@@ -129,6 +129,7 @@ func (p *chPicker) Pick(list []*registry.Node, opts *loadbalance.Options) (*regi
 		return internalregistry.DeepCopyNode(nodes[0]), nil
 	default:
 		innerIndex := p.hashFunc(innerRepr(opts.Key))
+		// #nosec G115: the modulo result is always smaller than len(nodes).
 		pos := int(innerIndex % uint64(len(nodes)))
 		return internalregistry.DeepCopyNode(nodes[pos]), nil
 	}

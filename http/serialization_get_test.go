@@ -93,6 +93,7 @@ func TestGetSerializer(t *testing.T) {
 	}
 
 	for i, query := range expects {
+		query := query
 		buf, _ := s.Marshal(&query)
 		require.Equal(string(buf), expectedQueries[i], "x should be equal")
 	}

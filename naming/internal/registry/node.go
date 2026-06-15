@@ -11,6 +11,7 @@
 //
 //
 
+// Package registry contains helpers shared by naming implementations.
 package registry
 
 import publicregistry "trpc.group/trpc-go/trpc-go/naming/registry"
