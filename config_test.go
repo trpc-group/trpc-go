@@ -16,6 +16,7 @@ package trpc
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -235,16 +236,14 @@ func TestServerOverloadControl(t *testing.T) {
 		return testServerOC
 	})
 
-	filePath := "trpc_go_overload_test.yaml"
-	require.NoError(t, os.WriteFile(filePath, []byte(`
-server:
-  app: some_app
-  server: some_server
-  overload_ctrl: default_overload_ctrl_test
-  service:
-    - name: some_service
-`), os.ModePerm))
-	t.Cleanup(func() { _ = os.Remove(filePath) })
+	filePath := filepath.Join(t.TempDir(), "trpc_go_overload_test.yaml")
+	data := []byte("server:\n" +
+		"  app: some_app\n" +
+		"  server: some_server\n" +
+		"  overload_ctrl: default_overload_ctrl_test\n" +
+		"  service:\n" +
+		"    - name: some_service\n")
+	require.NoError(t, os.WriteFile(filePath, data, 0600))
 
 	c, err := LoadConfig(filePath)
 	require.NoError(t, err)
