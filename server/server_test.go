@@ -25,6 +25,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
+	"trpc.group/trpc-go/trpc-go/precool"
 	"trpc.group/trpc-go/trpc-go/restful"
 	"trpc.group/trpc-go/trpc-go/server"
 	"trpc.group/trpc-go/trpc-go/transport"
@@ -291,6 +292,37 @@ func TestServerRegisterAfterShutdown(t *testing.T) {
 	require.Equal(t, "service", <-ch)
 	require.Equal(t, "after1", <-ch)
 	require.Equal(t, "after2", <-ch)
+}
+
+func TestRegisterServicePrecool(t *testing.T) {
+	checker := &serverPrecoolChecker{registered: make(map[string]precool.Func)}
+	s := server.NewServer(server.WithPrecool(checker))
+	require.NoError(t, s.RegisterServicePrecool("svc", func() precool.Status { return precool.Success }))
+	require.Contains(t, checker.registered, "svc")
+
+	require.Error(t, s.RegisterServicePrecool("svc2", nil))
+	require.Error(t, server.NewServer().RegisterServicePrecool("svc", func() precool.Status {
+		return precool.Success
+	}))
+}
+
+type serverPrecoolChecker struct {
+	registered map[string]precool.Func
+}
+
+func (m *serverPrecoolChecker) Register(name string, fn precool.Func) error {
+	m.registered[name] = fn
+	return nil
+}
+
+func (m *serverPrecoolChecker) Unregister(string) {}
+
+func (m *serverPrecoolChecker) CheckService(string) precool.Status {
+	return precool.Unknown
+}
+
+func (m *serverPrecoolChecker) CheckServer() precool.Status {
+	return precool.Unknown
 }
 
 type closeOrderService struct {

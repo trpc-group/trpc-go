@@ -36,6 +36,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/config"
 	"trpc.group/trpc-go/trpc-go/healthcheck"
 	"trpc.group/trpc-go/trpc-go/log"
+	"trpc.group/trpc-go/trpc-go/precool"
 	"trpc.group/trpc-go/trpc-go/rpcz"
 	"trpc.group/trpc-go/trpc-go/transport"
 )
@@ -462,6 +463,76 @@ func TestCmdsHealthCheck(t *testing.T) {
 	rsp, err = http.Get(fmt.Sprintf("http://%s/is_healthy/service", s.server.Addr))
 	require.Nil(t, err)
 	require.Equal(t, http.StatusNotFound, rsp.StatusCode)
+}
+
+func TestCmdsPrecool(t *testing.T) {
+	checker := &mockPrecoolChecker{
+		serverStatus: precool.Success,
+		serviceStatus: map[string]precool.Status{
+			"svc": precool.Ongoing,
+		},
+	}
+	s := NewServer(
+		WithVersion(testVersion),
+		WithAddr(testAddress),
+		WithConfigPath(testConfigPath),
+		WithPrecool(checker),
+	)
+	mustStartAdminServer(t, s)
+	t.Cleanup(func() {
+		if err := s.Close(nil); err != nil {
+			t.Log(err)
+		}
+	})
+
+	baseURL := fmt.Sprintf("http://%s", s.server.Addr)
+	rsp, err := httpRequest(http.MethodGet, baseURL+"/cmds/is_precool/", "")
+	require.NoError(t, err)
+	require.Contains(t, string(rsp), `"is_precool":"proc_success"`)
+
+	rsp, err = httpRequest(http.MethodGet, baseURL+"/cmds/is_precool/svc", "")
+	require.NoError(t, err)
+	require.Contains(t, string(rsp), `"is_precool":"proc_ongoing"`)
+
+	rsp, err = httpRequest(http.MethodPost, baseURL+"/cmds/is_precool/", "")
+	require.NoError(t, err)
+	require.Contains(t, string(rsp), "Method Not Allowed")
+}
+
+func TestCmdsPrecoolWithoutChecker(t *testing.T) {
+	s := newDefaultAdminServer()
+	mustStartAdminServer(t, s)
+	t.Cleanup(func() {
+		if err := s.Close(nil); err != nil {
+			t.Log(err)
+		}
+	})
+
+	rsp, err := httpRequest(http.MethodGet, fmt.Sprintf("http://%s/cmds/is_precool/", s.server.Addr), "")
+	require.NoError(t, err)
+	require.Contains(t, string(rsp), "precool checker is not initialized")
+}
+
+type mockPrecoolChecker struct {
+	serverStatus  precool.Status
+	serviceStatus map[string]precool.Status
+}
+
+func (m *mockPrecoolChecker) Register(string, precool.Func) error {
+	return nil
+}
+
+func (m *mockPrecoolChecker) Unregister(string) {}
+
+func (m *mockPrecoolChecker) CheckService(name string) precool.Status {
+	if status, ok := m.serviceStatus[name]; ok {
+		return status
+	}
+	return precool.Unknown
+}
+
+func (m *mockPrecoolChecker) CheckServer() precool.Status {
+	return m.serverStatus
 }
 
 func TestCmds(t *testing.T) {
