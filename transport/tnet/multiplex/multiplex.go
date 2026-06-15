@@ -408,6 +408,11 @@ func (c *connection) onRequest(conn tnet.Conn) error {
 	if !ok {
 		return nil
 	}
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
+	if vc.isClosed.Load() || vc.ctx.Err() != nil {
+		return nil
+	}
 	vc.recvQueue.Put(buf)
 	return nil
 }
@@ -432,7 +437,9 @@ func (c *connection) deleteAllVirConn(cause error) {
 	defer c.mu.unlock()
 	c.mu.closeLocked()
 	for _, vc := range c.idToVirConn.loadAll() {
+		vc.mu.Lock()
 		vc.notifyRead(cause)
+		vc.mu.Unlock()
 	}
 	c.idToVirConn.reset()
 }
@@ -490,6 +497,7 @@ type virtualConnection struct {
 	cancelFunc            context.CancelFunc
 	id                    uint32
 	isClosed              atomic.Bool
+	mu                    sync.Mutex
 	localAddr             net.Addr
 	remoteAddr            net.Addr
 }
@@ -520,6 +528,8 @@ func (vc *virtualConnection) Read() ([]byte, error) {
 // Close closes the connection.
 // Any blocked Read or Write operations will be unblocked and return errors.
 func (vc *virtualConnection) Close() {
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
 	vc.close(nil)
 }
 
