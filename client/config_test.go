@@ -30,6 +30,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/internal/rand"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 	"trpc.group/trpc-go/trpc-go/naming/selector"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"trpc.group/trpc-go/trpc-go/transport"
 )
 
@@ -242,6 +243,50 @@ transport: test-transport
 `), &cfg))
 		require.Equal(t, "test-transport", cfg.Transport)
 		require.Nil(t, client.RegisterClientConfig("trpc.test.hello", &cfg))
+	})
+}
+
+func TestLoadClientOverloadCtrlCfg(t *testing.T) {
+	testClientOC := &overloadctrl.NoopOC{}
+	overloadctrl.RegisterClient("test_client_oc",
+		func(*overloadctrl.ServiceMethodInfo) overloadctrl.OverloadController {
+			return testClientOC
+		})
+
+	t.Run("default oc", func(t *testing.T) {
+		var cfg client.BackendConfig
+		require.NoError(t, yaml.Unmarshal([]byte(`
+name: xxx
+`), &cfg))
+		token, err := cfg.OverloadCtrl.Acquire(context.Background(), "")
+		require.NoError(t, err)
+		require.Equal(t, overloadctrl.NoopToken{}, token)
+	})
+	t.Run("wrong format", func(t *testing.T) {
+		var cfg client.BackendConfig
+		require.Error(t, yaml.Unmarshal([]byte(`
+overload_ctrl: [1, 2, 3]
+`), &cfg))
+	})
+	t.Run("oc not found", func(t *testing.T) {
+		var cfg client.BackendConfig
+		require.Error(t, yaml.Unmarshal([]byte(`
+overload_ctrl: not_exist
+`), &cfg))
+	})
+	t.Run("oc found", func(t *testing.T) {
+		var cfg client.BackendConfig
+		require.NoError(t, yaml.Unmarshal([]byte(`
+overload_ctrl: test_client_oc
+`), &cfg))
+		require.Equal(t, testClientOC, cfg.OverloadCtrl.OverloadController)
+	})
+	t.Run("marshal", func(t *testing.T) {
+		var cfg client.BackendConfig
+		require.NoError(t, yaml.Unmarshal([]byte(`overload_ctrl: test_client_oc`), &cfg))
+		data, err := yaml.Marshal(&cfg)
+		require.NoError(t, err)
+		require.Contains(t, string(data), "overload_ctrl: test_client_oc")
 	})
 }
 

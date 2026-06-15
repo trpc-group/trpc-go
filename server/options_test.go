@@ -28,6 +28,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/filter"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"trpc.group/trpc-go/trpc-go/restful"
 	"trpc.group/trpc-go/trpc-go/server"
 	"trpc.group/trpc-go/trpc-go/transport"
@@ -143,6 +144,10 @@ func TestMoreOptions(t *testing.T) {
 	o = server.WithTransport(transport.DefaultServerTransport)
 	o(opts)
 	assert.Equal(t, opts.Transport, transport.DefaultServerTransport)
+
+	o = server.WithOverloadCtrl(overloadctrl.NoopOC{})
+	o(opts)
+	assert.NotNil(t, opts.OverloadCtrl)
 
 	// register ServerTransport
 	transport.RegisterServerTransport("trpc", transport.DefaultServerTransport)

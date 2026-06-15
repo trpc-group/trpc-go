@@ -32,6 +32,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/rand"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"trpc.group/trpc-go/trpc-go/plugin"
 	"trpc.group/trpc-go/trpc-go/rpcz"
 )
@@ -100,6 +101,8 @@ type Config struct {
 		// Maximum waiting time in milliseconds when closing the server to wait for requests to finish.
 		MaxCloseWaitTime int `yaml:"max_close_wait_time"`
 		Timeout          int `yaml:"timeout"` // Timeout in milliseconds.
+		// OverloadCtrl is the server global overload control configuration.
+		OverloadCtrl overloadctrl.Impl `yaml:"overload_ctrl,omitempty"`
 	}
 	Client  ClientConfig  `yaml:"client"`  // Client configuration.
 	Plugins plugin.Config `yaml:"plugins"` // Plugins configuration.
@@ -538,6 +541,31 @@ type ServiceConfig struct {
 	MaxRoutines int    `yaml:"max_routines"`
 	Writev      *bool  `yaml:"writev,omitempty"` // Whether to enable writev.
 	Transport   string `yaml:"transport"`        // Transport type.
+
+	OverloadCtrl overloadctrl.Impl `yaml:"overload_ctrl,omitempty"` // Overload control.
+	// OverloadCtrls is retained for compatibility with older configuration.
+	OverloadCtrls []string `yaml:"overload_ctrls,omitempty"`
+}
+
+// UnmarshalYAML implements yaml.Unmarshaler.
+func (cfg *ServiceConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type tmp ServiceConfig
+	if err := unmarshal((*tmp)(cfg)); err != nil {
+		return err
+	}
+	if len(cfg.OverloadCtrls) > 1 {
+		return errors.New("multiple overload controllers are not supported")
+	}
+	if len(cfg.OverloadCtrls) == 1 && cfg.OverloadCtrl.Builder != "" {
+		return errors.New("both overload_ctrl and overload_ctrls are set")
+	}
+	if len(cfg.OverloadCtrls) == 1 {
+		cfg.OverloadCtrl.Builder = cfg.OverloadCtrls[0]
+	}
+	return cfg.OverloadCtrl.Build(overloadctrl.GetServer, &overloadctrl.ServiceMethodInfo{
+		ServiceName: cfg.Name,
+		MethodName:  overloadctrl.AnyMethod,
+	})
 }
 
 // ClientConfig is the configuration for the client to request backends.
@@ -681,6 +709,11 @@ func RepairConfig(cfg *Config) error {
 	if err := repairServiceIPWithNic(cfg); err != nil {
 		return err
 	}
+	if err := cfg.Server.OverloadCtrl.Build(overloadctrl.GetServer, &overloadctrl.ServiceMethodInfo{
+		MethodName: overloadctrl.AnyMethod,
+	}); err != nil {
+		return err
+	}
 
 	// Set empty ip to "0.0.0.0" to prevent malformed key matching
 	// for passed listeners during hot restart.
@@ -708,6 +741,16 @@ func RepairConfig(cfg *Config) error {
 		}
 		if serviceCfg.Timeout == 0 {
 			serviceCfg.Timeout = cfg.Server.Timeout
+		}
+		if serviceCfg.OverloadCtrl.Builder == "" {
+			serviceCfg.OverloadCtrl = cfg.Server.OverloadCtrl
+		} else if serviceCfg.OverloadCtrl.OverloadController == nil {
+			if err := serviceCfg.OverloadCtrl.Build(overloadctrl.GetServer, &overloadctrl.ServiceMethodInfo{
+				ServiceName: serviceCfg.Name,
+				MethodName:  overloadctrl.AnyMethod,
+			}); err != nil {
+				return err
+			}
 		}
 		if serviceCfg.Idletime == 0 {
 			serviceCfg.Idletime = defaultIdleTimeout

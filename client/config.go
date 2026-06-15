@@ -27,6 +27,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/naming/loadbalance"
 	"trpc.group/trpc-go/trpc-go/naming/selector"
 	"trpc.group/trpc-go/trpc-go/naming/servicerouter"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"trpc.group/trpc-go/trpc-go/transport"
 )
 
@@ -51,6 +52,8 @@ type BackendConfig struct {
 
 	Target   string `yaml:"target"`   // Polaris by default, generally no need to configure this.
 	Password string `yaml:"password"` // Password for authentication.
+
+	OverloadCtrl overloadctrl.Impl `yaml:"overload_ctrl,omitempty"` // Overload control.
 
 	// Naming service four swordsmen.
 	// Discovery.List => ServiceRouter.Filter => Loadbalancer.Select => Circuitbreaker.Report
@@ -84,12 +87,29 @@ type BackendConfig struct {
 	ReportAnyErrToSelector bool `yaml:"report_any_err_to_selector"`
 }
 
+// UnmarshalYAML sets BackendConfig fields that depend on YAML values.
+func (cfg *BackendConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type tmp BackendConfig
+	if err := unmarshal((*tmp)(cfg)); err != nil {
+		return err
+	}
+	name := cfg.ServiceName
+	if name == "" {
+		name = cfg.Callee
+	}
+	return cfg.OverloadCtrl.Build(overloadctrl.GetClient, &overloadctrl.ServiceMethodInfo{
+		ServiceName: name,
+		MethodName:  overloadctrl.AnyMethod,
+	})
+}
+
 // genOptions generates options for each RPC from BackendConfig.
 func (cfg *BackendConfig) genOptions() (*Options, error) {
 	opts := NewOptions()
 	if err := cfg.setNamingOptions(opts); err != nil {
 		return nil, err
 	}
+	opts.OverloadCtrl = &cfg.OverloadCtrl
 
 	if cfg.Timeout > 0 {
 		opts.Timeout = time.Duration(cfg.Timeout) * time.Millisecond

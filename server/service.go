@@ -30,6 +30,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/internal/report"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"trpc.group/trpc-go/trpc-go/restful"
 	"trpc.group/trpc-go/trpc-go/rpcz"
 	"trpc.group/trpc-go/trpc-go/transport"
@@ -220,17 +221,32 @@ func (s *service) Handle(ctx context.Context, reqBuf []byte) (rspBuf []byte, err
 		return s.encode(ctx, msg, nil, err)
 	}
 
+	token := overloadctrl.Token(overloadctrl.NoopToken{})
+	if !overloadctrl.IsNoop(s.opts.OverloadCtrl) {
+		var addr string
+		if msg.RemoteAddr() != nil {
+			addr = msg.RemoteAddr().String()
+		}
+		token, err = s.opts.OverloadCtrl.Acquire(ctx, addr)
+		if err != nil {
+			return s.encode(ctx, msg, nil, errs.NewFrameError(errs.RetServerOverload, err.Error()))
+		}
+	}
+
 	rspbody, err := s.handle(ctx, msg, reqBodyBuf)
 	if err != nil {
 		// no response
 		if err == errs.ErrServerNoResponse {
+			token.OnResponse(ctx, nil)
 			return nil, err
 		}
+		defer token.OnResponse(ctx, err)
 		// failed to handle, should respond to client with error code,
 		// ignore rspBody.
 		report.ServiceHandleFail.Incr()
 		return s.encode(ctx, msg, nil, err)
 	}
+	defer token.OnResponse(ctx, err)
 	return s.handleResponse(ctx, msg, rspbody)
 }
 
@@ -622,6 +638,7 @@ func defaultOptions() *Options {
 	return &Options{
 		protocol:                 "unknown-protocol",
 		ServiceName:              "empty-name",
+		OverloadCtrl:             overloadctrl.NoopOC{},
 		CurrentSerializationType: invalidSerializationType,
 		CurrentCompressType:      invalidCompressType,
 	}

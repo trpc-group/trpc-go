@@ -31,6 +31,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/filter"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"trpc.group/trpc-go/trpc-go/restful"
 	"trpc.group/trpc-go/trpc-go/server"
 	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
@@ -295,6 +296,19 @@ func TestServiceTimeout(t *testing.T) {
 		})
 }
 
+func TestServiceOverload(t *testing.T) {
+	require.Nil(t, os.Setenv(transport.EnvGraceRestart, ""))
+	addr, stop := startService(t, &GreeterServerImpl{}, server.WithOverloadCtrl(&overloadControllerAlwaysFail{}))
+	defer stop()
+
+	c := pb.NewGreeterClientProxy(client.WithTarget("ip://" + addr))
+	_, err := c.SayHello(context.Background(), &pb.HelloRequest{})
+	require.NotNil(t, err)
+	trpcErr, ok := err.(*errs.Error)
+	require.True(t, ok)
+	require.EqualValues(t, errs.RetServerOverload, trpcErr.Code)
+}
+
 func TestServiceUDP(t *testing.T) {
 	addr := "127.0.0.1:10000"
 	s := server.New([]server.Option{
@@ -425,6 +439,12 @@ func (g *Greeter) SayHello(ctx context.Context, req *codec.Body) (rsp *codec.Bod
 
 func (*Greeter) SayHi(gs Greeter_SayHiServer) error {
 	return nil
+}
+
+type overloadControllerAlwaysFail struct{}
+
+func (overloadControllerAlwaysFail) Acquire(context.Context, string) (overloadctrl.Token, error) {
+	return nil, errors.New("always limited")
 }
 
 func TestStreamFilterChainFilter(t *testing.T) {
