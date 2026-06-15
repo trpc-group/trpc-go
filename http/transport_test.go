@@ -59,6 +59,7 @@ import (
 	thttp "trpc.group/trpc-go/trpc-go/http"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
+	"trpc.group/trpc-go/trpc-go/rpcz"
 	"trpc.group/trpc-go/trpc-go/server"
 	"trpc.group/trpc-go/trpc-go/testdata/restful/helloworld"
 	"trpc.group/trpc-go/trpc-go/transport"
@@ -1555,4 +1556,114 @@ func (t *mockTransport) RoundTrip(ctx context.Context, req []byte, opts ...trans
 	}
 	msg.WithRemoteAddr(raddr)
 	return []byte("mock transport"), nil
+}
+
+func TestHTTPRspHandlerContextIsLatest(t *testing.T) {
+	oldRPCZ := rpcz.GlobalRPCZ
+	rpcz.GlobalRPCZ = rpcz.NewRPCZ(&rpcz.Config{Fraction: 1.0, Capacity: 16})
+	defer func() {
+		rpcz.GlobalRPCZ = oldRPCZ
+	}()
+
+	oldRsp := thttp.DefaultServerCodec.RspHandler
+	defer func() { thttp.DefaultServerCodec.RspHandler = oldRsp }()
+
+	spanNameCh := make(chan string, 1)
+	thttp.DefaultServerCodec.RspHandler = func(w http.ResponseWriter, r *http.Request, body []byte) error {
+		spanNameCh <- rpcz.SpanFromContext(r.Context()).Name()
+		if len(body) > 0 {
+			_, _ = w.Write(body)
+		}
+		return nil
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer ln.Close()
+
+	svc := server.New(
+		server.WithListener(ln),
+		server.WithServiceName("trpc.http.ctx.latest.rsp"),
+		server.WithProtocol("http"),
+	)
+
+	oldMethods := thttp.ServiceDesc.Methods
+	defer func() { thttp.ServiceDesc.Methods = oldMethods }()
+
+	thttp.HandleFunc("/ctx", func(w http.ResponseWriter, r *http.Request) error {
+		_, _ = w.Write([]byte("OK"))
+		return nil
+	})
+	thttp.RegisterDefaultService(svc)
+
+	s := &server.Server{}
+	s.AddService("trpc.http.ctx.latest.rsp", svc)
+
+	go func() { _ = s.Serve() }()
+	defer func() { _ = s.Close(nil) }()
+	time.Sleep(100 * time.Millisecond)
+
+	resp, err := http.Get("http://" + ln.Addr().String() + "/ctx")
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+
+	select {
+	case name := <-spanNameCh:
+		require.Equal(t, "http-server", name, "RspHandler should observe span injected after request was bound")
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for RspHandler span name")
+	}
+}
+
+func TestHTTPErrHandlerContextIsLatest(t *testing.T) {
+	oldRPCZ := rpcz.GlobalRPCZ
+	rpcz.GlobalRPCZ = rpcz.NewRPCZ(&rpcz.Config{Fraction: 1.0, Capacity: 16})
+	defer func() {
+		rpcz.GlobalRPCZ = oldRPCZ
+	}()
+
+	oldErr := thttp.DefaultServerCodec.ErrHandler
+	defer func() { thttp.DefaultServerCodec.ErrHandler = oldErr }()
+
+	spanNameCh := make(chan string, 1)
+	thttp.DefaultServerCodec.ErrHandler = func(w http.ResponseWriter, r *http.Request, e *errs.Error) {
+		spanNameCh <- rpcz.SpanFromContext(r.Context()).Name()
+		// mimic default behavior: status will be set by framework based on error code.
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer ln.Close()
+
+	svc := server.New(
+		server.WithListener(ln),
+		server.WithServiceName("trpc.http.ctx.latest.err"),
+		server.WithProtocol("http"),
+	)
+
+	oldMethods := thttp.ServiceDesc.Methods
+	defer func() { thttp.ServiceDesc.Methods = oldMethods }()
+
+	thttp.HandleFunc("/err", func(w http.ResponseWriter, r *http.Request) error {
+		return errs.New(errs.RetServerSystemErr, "boom")
+	})
+	thttp.RegisterDefaultService(svc)
+
+	s := &server.Server{}
+	s.AddService("trpc.http.ctx.latest.err", svc)
+
+	go func() { _ = s.Serve() }()
+	defer func() { _ = s.Close(nil) }()
+	time.Sleep(100 * time.Millisecond)
+
+	resp, err := http.Get("http://" + ln.Addr().String() + "/err")
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+
+	select {
+	case name := <-spanNameCh:
+		require.Equal(t, "http-server", name, "ErrHandler should observe span injected after request was bound")
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for ErrHandler span name")
+	}
 }

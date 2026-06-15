@@ -329,6 +329,11 @@ func (c *TrpcConfig) get() *entity {
 
 // init return config entity error when entity is empty and load run loads config once
 func (c *TrpcConfig) init() error {
+	if !c.watch {
+		c.mutex.Lock()
+		defer c.mutex.Unlock()
+		return c.readAndSet()
+	}
 	c.mutex.RLock()
 	if c.value != nil {
 		c.mutex.RUnlock()
@@ -342,12 +347,18 @@ func (c *TrpcConfig) init() error {
 		return nil
 	}
 
+	return c.readAndSet()
+}
+
+// readAndSet reads data from provider and sets it to the config
+func (c *TrpcConfig) readAndSet() error {
 	data, err := c.p.Read(c.path)
 	if err != nil {
 		return fmt.Errorf("trpc/config failed to load error: %w config id: %s", err, c.id)
 	}
 	return c.set(data)
 }
+
 func (c *TrpcConfig) doWatch(data []byte) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
