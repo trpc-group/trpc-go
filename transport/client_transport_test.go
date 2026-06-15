@@ -796,3 +796,9 @@ func TestWithDisableEncodeTransInfoBase64(t *testing.T) {
 	transport.WithDisableEncodeTransInfoBase64()(opts)
 	assert.Equal(t, true, opts.DisableHTTPEncodeTransInfoBase64)
 }
+
+func TestWithMaxRedirectsCount(t *testing.T) {
+	opts := &transport.ClientTransportOptions{}
+	transport.WithMaxRedirectsCount(3)(opts)
+	assert.Equal(t, 3, opts.MaxRedirectsCount)
+}
