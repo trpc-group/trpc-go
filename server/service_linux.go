@@ -4,6 +4,7 @@
 package server
 
 import (
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/transport"
 	"trpc.group/trpc-go/trpc-go/transport/tnet"
@@ -14,10 +15,10 @@ func attemptSwitchingTransport(o *Options) transport.ServerTransport {
 	// attempt to switch to the tnet transport.
 	if o.Transport == nil {
 		// Only use tnet transport with TCP and trpc.
-		if (o.network == "tcp" ||
-			o.network == "tcp4" ||
-			o.network == "tcp6") &&
-			o.protocol == "trpc" {
+		if (o.network == protocol.TCP ||
+			o.network == protocol.TCP4 ||
+			o.network == protocol.TCP6) &&
+			o.protocol == protocol.TRPC {
 			log.Infof("service %s with network %s and protocol %s is empowered with tnet! 🤩 "+
 				"you can set 'transport: go-net' in your trpc_go.yaml's service configuration "+
 				"to switch to the golang net framework",

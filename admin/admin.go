@@ -34,6 +34,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/config"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/healthcheck"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/rpcz"
 	"trpc.group/trpc-go/trpc-go/transport"
@@ -180,7 +181,7 @@ func (s *Server) Serve() error {
 		return errors.New("admin service does not support tls")
 	}
 
-	const network = "tcp"
+	const network = protocol.TCP
 	ln, err := s.listen(network, cfg.addr)
 	if err != nil {
 		return err

@@ -21,6 +21,8 @@ import (
 	"net"
 	"os"
 	"syscall"
+
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 )
 
 var (
@@ -84,9 +86,9 @@ func getTCPSockaddr(proto, addr string) (sa syscall.Sockaddr, soType int, err er
 		return nil, -1, err
 	}
 	switch tcpVersion {
-	case "tcp":
+	case protocol.TCP:
 		return &syscall.SockaddrInet4{Port: tcp.Port}, syscall.AF_INET, nil
-	case "tcp4":
+	case protocol.TCP4:
 		return getTCP4Sockaddr(tcp)
 	default:
 		// must be "tcp6"
@@ -100,15 +102,15 @@ func determineTCPProto(proto string, ip *net.TCPAddr) (string, error) {
 	// the protocol given to us by the caller.
 
 	if ip.IP.To4() != nil {
-		return "tcp4", nil
+		return protocol.TCP4, nil
 	}
 
 	if ip.IP.To16() != nil {
-		return "tcp6", nil
+		return protocol.TCP6, nil
 	}
 
 	switch proto {
-	case "tcp", "tcp4", "tcp6":
+	case protocol.TCP, protocol.TCP4, protocol.TCP6:
 		return proto, nil
 	default:
 		return "", errUnsupportedTCPProtocol

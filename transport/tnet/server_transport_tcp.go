@@ -35,6 +35,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/addrutil"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/internal/report"
 	intertls "trpc.group/trpc-go/trpc-go/internal/tls"
 	"trpc.group/trpc-go/trpc-go/log"
@@ -249,7 +250,7 @@ func (s *serverTransport) onConnClosed(conn net.Conn, handler transport.Handler)
 	e := &errs.Error{
 		Type: errs.ErrorTypeFramework,
 		Code: errs.RetServerSystemErr,
-		Desc: "trpc",
+		Desc: protocol.TRPC,
 		Msg:  "Server connection closed",
 	}
 	msg.WithServerRspErr(e)
