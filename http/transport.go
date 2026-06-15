@@ -118,8 +118,6 @@ func (t *ServerTransport) listenAndServeHTTP(ctx context.Context, opts *transpor
 		// Generates new empty general message structure data and save it to ctx.
 		ctx, msg := codec.WithNewMessage(ctx)
 		defer codec.PutBackMessage(msg)
-		// The old request must be replaced to ensure that the context is embedded.
-		h.Request = r.WithContext(ctx)
 		defer func() {
 			// Fix issues/778
 			if r.MultipartForm == nil {
@@ -132,6 +130,9 @@ func (t *ServerTransport) listenAndServeHTTP(ctx context.Context, opts *transpor
 		span.SetAttribute(rpcz.HTTPAttributeURL, r.URL)
 		span.SetAttribute(rpcz.HTTPAttributeRequestContentLength, r.ContentLength)
 
+		// The old request must be replaced to ensure that the latest context is embedded
+		// into the http.Request passed to RspHandler/ErrHandler.
+		h.Request = r.WithContext(ctx)
 		// Records LocalAddr and RemoteAddr to Context.
 		localAddr, ok := h.Request.Context().Value(stdhttp.LocalAddrContextKey).(net.Addr)
 		if ok {

@@ -288,7 +288,10 @@ var DefaultResponseHandler = func(
 // putBackCtxMessage calls codec.PutBackMessage to put a codec.Msg back to pool,
 // if the codec.Msg has been put into ctx.
 func putBackCtxMessage(ctx context.Context) {
-	if msg, ok := ctx.Value(codec.ContextKeyMessage).(codec.Msg); ok {
+	if ctx == nil {
+		return
+	}
+	if msg, ok := ctx.Value(codec.ContextKeyMessage).(codec.Msg); ok && msg != nil {
 		codec.PutBackMessage(msg)
 	}
 }
@@ -332,6 +335,7 @@ func (r *Router) handle(
 ) {
 	modifiedCtx, err := r.opts.HeaderMatcher(ctx, w, req, r.opts.ServiceName, tr.name)
 	if err != nil {
+		putBackCtxMessage(modifiedCtx)
 		r.opts.ErrorHandler(ctx, w, req, errs.New(errs.RetServerDecodeFail, err.Error()))
 		return
 	}

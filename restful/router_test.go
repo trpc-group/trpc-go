@@ -23,12 +23,14 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/filter"
 	thttp "trpc.group/trpc-go/trpc-go/http"
@@ -310,4 +312,114 @@ type greeterAlwaysTimeout struct{}
 func (*greeterAlwaysTimeout) SayHello(ctx context.Context, req *helloworld.HelloRequest) (*helloworld.HelloReply, error) {
 	<-ctx.Done()
 	return nil, errs.NewFrameError(errs.RetServerTimeout, "ctx timeout")
+}
+
+// TestMsgLifecycle_ConcurrentScenarios stress tests all error paths under concurrent load.
+// Run with: go test -race -run TestMsgLifecycle_ConcurrentScenarios
+func TestMsgLifecycle_ConcurrentScenarios(t *testing.T) {
+	tests := []struct {
+		name        string
+		setupServer func(*testing.T, net.Listener) server.Service
+	}{
+		{
+			name: "handler_errors",
+			setupServer: func(t *testing.T, l net.Listener) server.Service {
+				s := server.New(
+					server.WithListener(l),
+					server.WithServiceName(t.Name()),
+					server.WithProtocol("restful"),
+				)
+				RegisterGreeterService(s, &errorReturningGreeter{err: errors.New("error"), errorRate: 0.3})
+				return s
+			},
+		},
+		{
+			name: "header_matcher_errors",
+			setupServer: func(t *testing.T, l net.Listener) server.Service {
+				var count int32
+				s := server.New(
+					server.WithListener(l),
+					server.WithServiceName(t.Name()),
+					server.WithProtocol("restful"),
+					server.WithRESTOptions(
+						restful.WithHeaderMatcher(func(ctx context.Context, w http.ResponseWriter, r *http.Request, serviceName, methodName string) (context.Context, error) {
+							ctx, msg := codec.WithNewMessage(ctx)
+							msg.WithServerRPCName(methodName)
+							msg.WithCalleeServiceName(serviceName)
+							c := atomic.AddInt32(&count, 1)
+							if c%2 == 0 {
+								return ctx, errors.New("header error")
+							}
+							return ctx, nil
+						}),
+					),
+				)
+				RegisterGreeterService(s, &greeter{})
+				return s
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := mustListen(t)
+			defer l.Close()
+
+			s := tt.setupServer(t, l)
+			mustStartServer(t, s)
+			defer s.Close(nil)
+
+			// Concurrent requests
+			const numRequests = 100
+			done := make(chan bool, numRequests)
+			for i := 0; i < numRequests; i++ {
+				go func() {
+					rsp, err := http.Get(fmt.Sprintf("http://%s/v2/bar/world", l.Addr().String()))
+					if err == nil {
+						rsp.Body.Close()
+					}
+					done <- true
+				}()
+			}
+
+			// Wait for all requests
+			for i := 0; i < numRequests; i++ {
+				<-done
+			}
+		})
+	}
+}
+
+type errorReturningGreeter struct {
+	err       error
+	errorRate float64
+	counter   int32
+}
+
+func (s *errorReturningGreeter) SayHello(ctx context.Context, req *helloworld.HelloRequest) (*helloworld.HelloReply, error) {
+	if s.errorRate > 0 {
+		count := atomic.AddInt32(&s.counter, 1)
+		if float64(count%10) < s.errorRate*10 {
+			return nil, s.err
+		}
+	} else if s.err != nil {
+		return nil, s.err
+	}
+	return &helloworld.HelloReply{Message: req.Name}, nil
+}
+
+func mustListen(t *testing.T) net.Listener {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	return l
+}
+
+func mustStartServer(t *testing.T, s server.Service) {
+	errCh := make(chan error)
+	go func() { errCh <- s.Serve() }()
+	select {
+	case err := <-errCh:
+		require.FailNow(t, "serve failed", err)
+	case <-time.After(100 * time.Millisecond):
+	}
 }
