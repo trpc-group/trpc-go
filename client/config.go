@@ -82,6 +82,15 @@ type BackendConfig struct {
 
 	// Report any error to the selector if this value is true.
 	ReportAnyErrToSelector bool `yaml:"report_any_err_to_selector"`
+
+	// PreWarm specifies the configuration for client connection prewarming.
+	PreWarm PreWarmConfig `yaml:"pre_warm,omitempty"`
+}
+
+// PreWarmConfig defines the configuration for client connection prewarming.
+type PreWarmConfig struct {
+	ConnsPerNode *int           `yaml:"conns_per_node,omitempty"`
+	Timeout      *time.Duration `yaml:"timeout,omitempty"`
 }
 
 // genOptions generates options for each RPC from BackendConfig.
@@ -113,6 +122,7 @@ func (cfg *BackendConfig) genOptions() (*Options, error) {
 	if cfg.TLSCertProvider != "" {
 		WithCertProvider(cfg.TLSCertProvider)(opts)
 	}
+	cfg.setPreWarm(opts)
 	if cfg.Protocol != "" && opts.Codec == nil {
 		return nil, fmt.Errorf("codec %s not exists", cfg.Protocol)
 	}
@@ -200,6 +210,17 @@ func (cfg *BackendConfig) setNamingOptions(opts *Options) error {
 		opts.SelectOptions = append(opts.SelectOptions, selector.WithCircuitBreaker(cb))
 	}
 	return nil
+}
+
+func (cfg *BackendConfig) setPreWarm(opts *Options) {
+	if cfg.PreWarm.ConnsPerNode == nil {
+		return
+	}
+	preWarmOpts := transport.PreWarmOptions{ConnsPerNode: *cfg.PreWarm.ConnsPerNode}
+	if cfg.PreWarm.Timeout != nil {
+		preWarmOpts.Timeout = *cfg.PreWarm.Timeout
+	}
+	opts.CallOptions = append(opts.CallOptions, transport.WithPreWarm(preWarmOpts))
 }
 
 var (

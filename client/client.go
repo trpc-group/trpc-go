@@ -39,6 +39,13 @@ type Client interface {
 	Invoke(ctx context.Context, reqBody interface{}, rspBody interface{}, opt ...Option) error
 }
 
+// InitializableClient is a client that supports explicit initialization.
+type InitializableClient interface {
+	Client
+	// Init initializes the client with the provided options.
+	Init(ctx context.Context, opt ...Option) error
+}
+
 // DefaultClient is the default global client.
 // It's thread-safe.
 var DefaultClient = New()
