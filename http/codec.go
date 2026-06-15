@@ -358,7 +358,7 @@ func unmarshalTransInfo(msg codec.Msg, v string) (map[string][]byte, error) {
 			msg.WithDyeingKey(string(decoded))
 		}
 	}
-	msg.WithServerMetaData(transInfo)
+	msg.WithServerMetaData(codec.MetaData(transInfo).Clone())
 	return transInfo, nil
 }
 
