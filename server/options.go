@@ -22,6 +22,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/filter"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 	"trpc.group/trpc-go/trpc-go/overloadctrl"
+	"trpc.group/trpc-go/trpc-go/precool"
 	"trpc.group/trpc-go/trpc-go/restful"
 	"trpc.group/trpc-go/trpc-go/transport"
 )
@@ -29,6 +30,8 @@ import (
 // Options are server side options.
 type Options struct {
 	container string // container name
+	// precoolChecker provides service-level precool detection for server-level APIs.
+	precoolChecker precool.Checker
 
 	Namespace   string // namespace like "Production", "Development" etc.
 	EnvName     string // environment name
@@ -335,6 +338,13 @@ func WithMaxCloseWaitTime(t time.Duration) Option {
 func WithOverloadCtrl(oc overloadctrl.OverloadController) Option {
 	return func(o *Options) {
 		o.OverloadCtrl = oc
+	}
+}
+
+// WithPrecool returns an Option that sets precool.Checker.
+func WithPrecool(checker precool.Checker) Option {
+	return func(o *Options) {
+		o.precoolChecker = checker
 	}
 }
 

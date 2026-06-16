@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/panjf2000/ants/v2"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/internal/reuseport"
 
 	itls "trpc.group/trpc-go/trpc-go/internal/tls"
@@ -102,11 +103,11 @@ func (s *serverTransport) ListenAndServe(ctx context.Context, opts ...ListenServ
 	for _, network := range networks {
 		lsopts.Network = network
 		switch lsopts.Network {
-		case "tcp", "tcp4", "tcp6", "unix":
+		case protocol.TCP, protocol.TCP4, protocol.TCP6, protocol.UNIX:
 			if err := s.listenAndServeStream(ctx, lsopts); err != nil {
 				return err
 			}
-		case "udp", "udp4", "udp6":
+		case protocol.UDP, protocol.UDP4, protocol.UDP6:
 			if err := s.listenAndServePacket(ctx, lsopts); err != nil {
 				return err
 			}
@@ -193,7 +194,7 @@ func (s *serverTransport) getTCPListener(opts *ListenServeOptions) (listener net
 	}
 
 	// Reuse port. To speed up IO, the kernel dispatches IO ReadReady events to threads.
-	if s.opts.ReusePort && opts.Network != "unix" {
+	if s.opts.ReusePort && opts.Network != protocol.UNIX {
 		listener, err = reuseport.Listen(opts.Network, opts.Address)
 		if err != nil {
 			return nil, fmt.Errorf("%s reuseport error:%v", opts.Network, err)

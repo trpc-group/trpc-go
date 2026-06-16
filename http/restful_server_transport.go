@@ -27,6 +27,7 @@ import (
 	"github.com/valyala/fasthttp"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/internal/reuseport"
 	itls "trpc.group/trpc-go/trpc-go/internal/tls"
 	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
@@ -130,7 +131,7 @@ func NewRESTServerTransport(basedOnFastHTTP bool, opt ...transport.ServerTranspo
 // ListenAndServe implements interface of transport.ServerTransport.
 func (st *RESTServerTransport) ListenAndServe(ctx context.Context, opt ...transport.ListenServeOption) error {
 	opts := &transport.ListenServeOptions{
-		Network: "tcp",
+		Network: protocol.TCP,
 	}
 	for _, o := range opt {
 		o(opts)

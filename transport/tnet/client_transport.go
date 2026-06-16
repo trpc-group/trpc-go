@@ -25,6 +25,7 @@ import (
 	"trpc.group/trpc-go/tnet/tls"
 
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	intertls "trpc.group/trpc-go/trpc-go/internal/tls"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/pool/connpool"
@@ -100,7 +101,7 @@ func (c *clientTransport) switchNetworkToRoundTrip(
 		return c.multiplex(ctx, req, option)
 	}
 	switch option.Network {
-	case "tcp", "tcp4", "tcp6":
+	case protocol.TCP, protocol.TCP4, protocol.TCP6:
 		return c.tcpRoundTrip(ctx, req, option)
 	default:
 		return nil, errs.NewFrameError(errs.RetClientConnectFail,
@@ -190,7 +191,7 @@ func validateTnetTLSConn(conn net.Conn) bool {
 
 func canUseTnet(opts *transport.RoundTripOptions) error {
 	switch opts.Network {
-	case "tcp", "tcp4", "tcp6":
+	case protocol.TCP, protocol.TCP4, protocol.TCP6:
 	default:
 		return fmt.Errorf("tnet doesn't support network [%s]", opts.Network)
 	}

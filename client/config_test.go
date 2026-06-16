@@ -290,6 +290,82 @@ overload_ctrl: test_client_oc
 	})
 }
 
+func TestConfigPreWarm(t *testing.T) {
+	tests := []struct {
+		name         string
+		config       string
+		connsPerNode int
+		timeout      time.Duration
+		isPreWarmNil bool
+	}{
+		{
+			name: "prewarm",
+			config: `
+pre_warm:
+  conns_per_node: 2
+  timeout: 1000ms
+`,
+			connsPerNode: 2,
+			timeout:      time.Second,
+		},
+		{
+			name: "prewarm without timeout",
+			config: `
+pre_warm:
+  conns_per_node: 1
+`,
+			connsPerNode: 1,
+		},
+		{
+			name: "prewarm without connections",
+			config: `
+pre_warm:
+`,
+			isPreWarmNil: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cfg client.BackendConfig
+			require.Nil(t, yaml.Unmarshal([]byte(tt.config), &cfg))
+			require.Nil(t, client.RegisterClientConfig("trpc.test.prewarm."+tt.name, &cfg))
+			opts := client.Config("trpc.test.prewarm." + tt.name)
+			roundTripOpts := &transport.RoundTripOptions{}
+			genOpts, err := optsForBackendConfig(opts)
+			require.NoError(t, err)
+			for _, o := range genOpts.CallOptions {
+				o(roundTripOpts)
+			}
+			if tt.isPreWarmNil {
+				require.Nil(t, roundTripOpts.PreWarm)
+				return
+			}
+			require.NotNil(t, roundTripOpts.PreWarm)
+			require.Equal(t, tt.connsPerNode, roundTripOpts.PreWarm.ConnsPerNode)
+			require.Equal(t, tt.timeout, roundTripOpts.PreWarm.Timeout)
+		})
+	}
+}
+
+func optsForBackendConfig(cfg *client.BackendConfig) (*client.Options, error) {
+	const callee = "trpc.test.prewarm.generated"
+	if err := client.RegisterClientConfig(callee, cfg); err != nil {
+		return nil, err
+	}
+	ctx, msg := codec.EnsureMessage(context.Background())
+	msg.WithCalleeServiceName(callee)
+	ch := make(chan *client.Options, 1)
+	err := client.New().Invoke(ctx, nil, nil, client.WithFilter(
+		func(ctx context.Context, _, _ interface{}, _ filter.ClientHandleFunc) error {
+			ch <- client.OptionsFromContext(ctx)
+			return nil
+		}))
+	if err != nil {
+		return nil, err
+	}
+	return <-ch, nil
+}
+
 func TestConfigStreamFilter(t *testing.T) {
 	filterName := "sf1"
 	cfg := &client.BackendConfig{}

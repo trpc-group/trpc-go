@@ -37,12 +37,22 @@ type RoundTripOptions struct {
 	Multiplexed           multiplexed.Pool
 	Msg                   codec.Msg
 	Protocol              string // protocol type
+	PreWarm               *PreWarmOptions
 
 	CACertFile      string // CA certificate file
 	TLSCertFile     string // client certificate file
 	TLSKeyFile      string // client key file
 	TLSCertProvider string // provider used to load TLS certificate files
 	TLSServerName   string // the name when client verifies the server, default as HTTP hostname
+}
+
+// PreWarmOptions configures client connection prewarming.
+type PreWarmOptions struct {
+	// ConnsPerNode is the number of connections to prewarm for each selected node.
+	// Zero disables prewarming.
+	ConnsPerNode int
+	// Timeout is the optional total timeout for prewarming.
+	Timeout time.Duration
 }
 
 // ConnectionMode is the connection mode, either Connected or NotConnected.
@@ -181,5 +191,13 @@ func WithDialTimeout(dur time.Duration) RoundTripOption {
 func WithProtocol(s string) RoundTripOption {
 	return func(o *RoundTripOptions) {
 		o.Protocol = s
+	}
+}
+
+// WithPreWarm returns a RoundTripOption which sets prewarm options.
+// This option is intended for client initialization.
+func WithPreWarm(p PreWarmOptions) RoundTripOption {
+	return func(o *RoundTripOptions) {
+		o.PreWarm = &p
 	}
 }

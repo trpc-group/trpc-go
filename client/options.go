@@ -610,6 +610,14 @@ func WithShouldErrReportToSelector(f func(error) bool) Option {
 	}
 }
 
+// WithPreWarm returns an Option that sets prewarm options.
+// This option is intended for client initialization.
+func WithPreWarm(p transport.PreWarmOptions) Option {
+	return func(o *Options) {
+		o.CallOptions = append(o.CallOptions, transport.WithPreWarm(p))
+	}
+}
+
 type optionsKey struct{}
 
 func contextWithOptions(ctx context.Context, opts *Options) context.Context {

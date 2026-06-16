@@ -24,6 +24,8 @@ import (
 	"net"
 	"os"
 	"syscall"
+
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 )
 
 const fileNameTemplate = "reuseport.%d.%s.%s"
@@ -34,9 +36,9 @@ var errUnsupportedProtocol = errors.New("only tcp, tcp4, tcp6, udp, udp4, udp6 a
 // of syscall.Sockaddr: syscall.SockaddrInet4 or syscall.SockaddrInet6.
 func getSockaddr(proto, addr string) (sa syscall.Sockaddr, soType int, err error) {
 	switch proto {
-	case "tcp", "tcp4", "tcp6":
+	case protocol.TCP, protocol.TCP4, protocol.TCP6:
 		return getTCPSockaddr(proto, addr)
-	case "udp", "udp4", "udp6":
+	case protocol.UDP, protocol.UDP4, protocol.UDP6:
 		return getUDPSockaddr(proto, addr)
 	default:
 		return nil, -1, errUnsupportedProtocol

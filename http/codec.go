@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/textproto"
 	"os"
 	"path"
 	"strconv"
@@ -33,20 +34,22 @@ import (
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	icodec "trpc.group/trpc-go/trpc-go/internal/codec"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 )
 
 // Constants of header keys related to trpc.
 const (
-	TrpcVersion     = "trpc-version"
-	TrpcCallType    = "trpc-call-type"
-	TrpcMessageType = "trpc-message-type"
-	TrpcRequestID   = "trpc-request-id"
-	TrpcTimeout     = "trpc-timeout"
-	TrpcCaller      = "trpc-caller"
-	TrpcCallee      = "trpc-callee"
-	TrpcTransInfo   = "trpc-trans-info"
-	TrpcEnv         = "trpc-env"
-	TrpcDyeingKey   = "trpc-dyeing-key"
+	TrpcVersion      = "trpc-version"
+	TrpcCallType     = "trpc-call-type"
+	TrpcMessageType  = "trpc-message-type"
+	TrpcRequestID    = "trpc-request-id"
+	TrpcTimeout      = "trpc-timeout"
+	TrpcCaller       = "trpc-caller"
+	TrpcCallerMethod = "trpc-caller-method"
+	TrpcCallee       = "trpc-callee"
+	TrpcTransInfo    = "trpc-trans-info"
+	TrpcEnv          = "trpc-env"
+	TrpcDyeingKey    = "trpc-dyeing-key"
 	// TrpcErrorMessage used to pass error messages,
 	// contains user code's error or frame errors (such as validation framework).
 	TrpcErrorMessage = "trpc-error-msg"
@@ -56,6 +59,27 @@ const (
 	TrpcUserFuncErrorCode = "trpc-func-ret"
 	// Connection is used to set whether connect mode is "Connection".
 	Connection = "Connection"
+)
+
+var (
+	canonicalContentType         = textproto.CanonicalMIMEHeaderKey("Content-Type")
+	canonicalXContentTypeOptions = textproto.CanonicalMIMEHeaderKey("X-Content-Type-Options")
+	canonicalContentEncoding     = textproto.CanonicalMIMEHeaderKey("Content-Encoding")
+)
+
+var (
+	canonicalTrpcVersion            = textproto.CanonicalMIMEHeaderKey(TrpcVersion)
+	canonicalTrpcCallType           = textproto.CanonicalMIMEHeaderKey(TrpcCallType)
+	canonicalTrpcMessageType        = textproto.CanonicalMIMEHeaderKey(TrpcMessageType)
+	canonicalTrpcRequestID          = textproto.CanonicalMIMEHeaderKey(TrpcRequestID)
+	canonicalTrpcTimeout            = textproto.CanonicalMIMEHeaderKey(TrpcTimeout)
+	canonicalTrpcCaller             = textproto.CanonicalMIMEHeaderKey(TrpcCaller)
+	canonicalTrpcCallerMethod       = textproto.CanonicalMIMEHeaderKey(TrpcCallerMethod)
+	canonicalTrpcCallee             = textproto.CanonicalMIMEHeaderKey(TrpcCallee)
+	canonicalTrpcTransInfo          = textproto.CanonicalMIMEHeaderKey(TrpcTransInfo)
+	canonicalTrpcErrorMessage       = textproto.CanonicalMIMEHeaderKey(TrpcErrorMessage)
+	canonicalTrpcFrameworkErrorCode = textproto.CanonicalMIMEHeaderKey(TrpcFrameworkErrorCode)
+	canonicalTrpcUserFuncErrorCode  = textproto.CanonicalMIMEHeaderKey(TrpcUserFuncErrorCode)
 )
 
 var contentTypeSerializationType = map[string]int{
@@ -129,11 +153,11 @@ func RegisterStatus[T errs.ErrCode](code T, httpStatus int) {
 }
 
 func init() {
-	codec.Register("http", DefaultServerCodec, DefaultClientCodec)
-	codec.Register("http2", DefaultServerCodec, DefaultClientCodec)
+	codec.Register(protocol.HTTP, DefaultServerCodec, DefaultClientCodec)
+	codec.Register(protocol.HTTP2, DefaultServerCodec, DefaultClientCodec)
 	// Support no protocol file custom routing and feature isolation.
-	codec.Register("http_no_protocol", DefaultNoProtocolServerCodec, DefaultClientCodec)
-	codec.Register("http2_no_protocol", DefaultNoProtocolServerCodec, DefaultClientCodec)
+	codec.Register(protocol.HTTPNoProtocol, DefaultNoProtocolServerCodec, DefaultClientCodec)
+	codec.Register(protocol.HTTP2NoProtocol, DefaultNoProtocolServerCodec, DefaultClientCodec)
 }
 
 var (
@@ -719,7 +743,7 @@ func (c *ClientCodec) Decode(msg codec.Msg, _ []byte) ([]byte, error) {
 			e := &errs.Error{
 				Type: errs.ErrorTypeCalleeFramework,
 				Code: trpcpb.TrpcRetCode(i),
-				Desc: "trpc",
+				Desc: protocol.TRPC,
 				Msg:  rsp.Header.Get(TrpcErrorMessage),
 			}
 			msg.WithClientRspErr(e)
@@ -737,7 +761,7 @@ func (c *ClientCodec) Decode(msg codec.Msg, _ []byte) ([]byte, error) {
 		e := &errs.Error{
 			Type: errs.ErrorTypeBusiness,
 			Code: trpcpb.TrpcRetCode(rsp.StatusCode),
-			Desc: "http",
+			Desc: protocol.HTTP,
 			Msg:  fmt.Sprintf("http client codec StatusCode: %s, body: %q", http.StatusText(rsp.StatusCode), body),
 		}
 		msg.WithClientRspErr(e)

@@ -21,6 +21,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 )
 
 // Client provides the HTTP client interface.
@@ -52,7 +53,7 @@ var NewClientProxy = func(name string, opts ...client.Option) Client {
 		client:      client.DefaultClient,
 	}
 	c.opts = make([]client.Option, 0, len(opts)+1)
-	c.opts = append(c.opts, client.WithProtocol("http"))
+	c.opts = append(c.opts, client.WithProtocol(protocol.HTTP))
 	c.opts = append(c.opts, opts...)
 	return c
 }
@@ -65,7 +66,7 @@ func NewStdHTTPClient(name string, opts ...client.Option) *http.Client {
 		client:      client.DefaultClient,
 	}
 	c.opts = make([]client.Option, 0, len(opts)+1)
-	c.opts = append(c.opts, client.WithProtocol("http"))
+	c.opts = append(c.opts, client.WithProtocol(protocol.HTTP))
 	c.opts = append(c.opts, opts...)
 	return &http.Client{Transport: c}
 }
