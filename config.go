@@ -31,6 +31,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/internal/rand"
 	"trpc.group/trpc-go/trpc-go/plugin"
 	"trpc.group/trpc-go/trpc-go/rpcz"
@@ -566,10 +567,10 @@ func init() {
 func defaultConfig() *Config {
 	cfg := &Config{}
 	cfg.Global.EnableSet = "N"
-	cfg.Server.Network = "tcp"
-	cfg.Server.Protocol = "trpc"
-	cfg.Client.Network = "tcp"
-	cfg.Client.Protocol = "trpc"
+	cfg.Server.Network = protocol.TCP
+	cfg.Server.Protocol = protocol.TRPC
+	cfg.Client.Network = protocol.TCP
+	cfg.Client.Protocol = protocol.TRPC
 	return cfg
 }
 

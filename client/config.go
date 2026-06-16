@@ -22,6 +22,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/config"
 	"trpc.group/trpc-go/trpc-go/filter"
 	icodec "trpc.group/trpc-go/trpc-go/internal/codec"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/naming/circuitbreaker"
 	"trpc.group/trpc-go/trpc-go/naming/discovery"
 	"trpc.group/trpc-go/trpc-go/naming/loadbalance"
@@ -208,8 +209,8 @@ var (
 	DefaultSelectorFilterName = "selector"
 
 	defaultBackendConf = &BackendConfig{
-		Network:  "tcp",
-		Protocol: "trpc",
+		Network:  protocol.TCP,
+		Protocol: protocol.TRPC,
 	}
 	defaultBackendOptions *Options
 

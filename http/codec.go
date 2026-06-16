@@ -33,6 +33,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	icodec "trpc.group/trpc-go/trpc-go/internal/codec"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 )
 
 // Constants of header keys related to trpc.
@@ -129,11 +130,11 @@ func RegisterStatus[T errs.ErrCode](code T, httpStatus int) {
 }
 
 func init() {
-	codec.Register("http", DefaultServerCodec, DefaultClientCodec)
-	codec.Register("http2", DefaultServerCodec, DefaultClientCodec)
+	codec.Register(protocol.HTTP, DefaultServerCodec, DefaultClientCodec)
+	codec.Register(protocol.HTTP2, DefaultServerCodec, DefaultClientCodec)
 	// Support no protocol file custom routing and feature isolation.
-	codec.Register("http_no_protocol", DefaultNoProtocolServerCodec, DefaultClientCodec)
-	codec.Register("http2_no_protocol", DefaultNoProtocolServerCodec, DefaultClientCodec)
+	codec.Register(protocol.HTTPNoProtocol, DefaultNoProtocolServerCodec, DefaultClientCodec)
+	codec.Register(protocol.HTTP2NoProtocol, DefaultNoProtocolServerCodec, DefaultClientCodec)
 }
 
 var (
@@ -719,7 +720,7 @@ func (c *ClientCodec) Decode(msg codec.Msg, _ []byte) ([]byte, error) {
 			e := &errs.Error{
 				Type: errs.ErrorTypeCalleeFramework,
 				Code: trpcpb.TrpcRetCode(i),
-				Desc: "trpc",
+				Desc: protocol.TRPC,
 				Msg:  rsp.Header.Get(TrpcErrorMessage),
 			}
 			msg.WithClientRspErr(e)
@@ -737,7 +738,7 @@ func (c *ClientCodec) Decode(msg codec.Msg, _ []byte) ([]byte, error) {
 		e := &errs.Error{
 			Type: errs.ErrorTypeBusiness,
 			Code: trpcpb.TrpcRetCode(rsp.StatusCode),
-			Desc: "http",
+			Desc: protocol.HTTP,
 			Msg:  fmt.Sprintf("http client codec StatusCode: %s, body: %q", http.StatusText(rsp.StatusCode), body),
 		}
 		msg.WithClientRspErr(e)

@@ -27,6 +27,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/attachment"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/transport"
 
 	"google.golang.org/protobuf/proto"
@@ -75,7 +76,7 @@ const (
 	UserIP      = "trpc-user-ip"    // user ip
 	EnvTransfer = "trpc-env"        // env info
 
-	ProtocolName = "trpc" // protocol name
+	ProtocolName = protocol.TRPC // protocol name
 )
 
 // trpc protocol codec

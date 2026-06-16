@@ -27,6 +27,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/addrutil"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/internal/report"
 	"trpc.group/trpc-go/trpc-go/internal/writev"
 	"trpc.group/trpc-go/trpc-go/log"
@@ -187,7 +188,7 @@ func (c *tcpconn) close() {
 		e := &errs.Error{
 			Type: errs.ErrorTypeFramework,
 			Code: errs.RetServerSystemErr,
-			Desc: "trpc",
+			Desc: protocol.TRPC,
 			Msg:  "Server connection closed",
 		}
 		msg.WithServerRspErr(e)

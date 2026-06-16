@@ -38,6 +38,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 	icontext "trpc.group/trpc-go/trpc-go/internal/context"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/internal/reuseport"
 	trpcpb "trpc.group/trpc/trpc-protocol/pb/go/trpc"
 
@@ -55,14 +56,14 @@ func init() {
 	DefaultServerTransport = st
 	DefaultHTTP2ServerTransport = st
 	// Server transport (protocol file service).
-	transport.RegisterServerTransport("http", st)
-	transport.RegisterServerTransport("http2", st)
+	transport.RegisterServerTransport(protocol.HTTP, st)
+	transport.RegisterServerTransport(protocol.HTTP2, st)
 	// Server transport (no protocol file service).
-	transport.RegisterServerTransport("http_no_protocol", st)
-	transport.RegisterServerTransport("http2_no_protocol", st)
+	transport.RegisterServerTransport(protocol.HTTPNoProtocol, st)
+	transport.RegisterServerTransport(protocol.HTTP2NoProtocol, st)
 	// Client transport.
-	transport.RegisterClientTransport("http", DefaultClientTransport)
-	transport.RegisterClientTransport("http2", DefaultHTTP2ClientTransport)
+	transport.RegisterClientTransport(protocol.HTTP, DefaultClientTransport)
+	transport.RegisterClientTransport(protocol.HTTP2, DefaultHTTP2ClientTransport)
 }
 
 // DefaultServerTransport is the default server http transport.
@@ -97,7 +98,7 @@ func NewServerTransport(
 // ListenAndServe handles configuration.
 func (t *ServerTransport) ListenAndServe(ctx context.Context, opt ...transport.ListenServeOption) error {
 	opts := &transport.ListenServeOptions{
-		Network: "tcp",
+		Network: protocol.TCP,
 	}
 	for _, o := range opt {
 		o(opts)
@@ -139,7 +140,7 @@ func (t *ServerTransport) listenAndServeHTTP(ctx context.Context, opts *transpor
 		if ok {
 			msg.WithLocalAddr(localAddr)
 		}
-		raddr, _ := net.ResolveTCPAddr("tcp", h.Request.RemoteAddr)
+		raddr, _ := net.ResolveTCPAddr(protocol.TCP, h.Request.RemoteAddr)
 		msg.WithRemoteAddr(raddr)
 		_, err := opts.Handler.Handle(ctx, emptyBuf)
 		if err != nil {
@@ -461,9 +462,9 @@ func (ct *ClientTransport) newRequest(reqHeader *ClientReqHeader,
 	scheme := reqHeader.Schema
 	if scheme == "" {
 		if len(opts.CACertFile) > 0 || strings.HasSuffix(opts.Address, ":443") {
-			scheme = "https"
+			scheme = protocol.HTTPS
 		} else {
-			scheme = "http"
+			scheme = protocol.HTTP
 		}
 	}
 

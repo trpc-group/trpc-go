@@ -4,6 +4,7 @@
 package client
 
 import (
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/transport"
 	"trpc.group/trpc-go/trpc-go/transport/tnet"
@@ -25,10 +26,10 @@ func attemptSwitchingTransport(o *Options) transport.ClientTransport {
 
 func check(o *Options) bool {
 	// Only use tnet transport with TCP and trpc.
-	return (o.Network == "tcp" ||
-		o.Network == "tcp4" ||
-		o.Network == "tcp6") &&
-		o.Protocol == "trpc"
+	return (o.Network == protocol.TCP ||
+		o.Network == protocol.TCP4 ||
+		o.Network == protocol.TCP6) &&
+		o.Protocol == protocol.TRPC
 }
 
 func cheer(o *Options) {
