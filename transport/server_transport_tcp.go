@@ -120,10 +120,12 @@ func (s *serverTransport) serveTCP(ctx context.Context, ln net.Listener, opts *L
 				}
 			}
 		}
+		reader := newReadCountingReader(codec.NewReader(rwc))
 		tc := &tcpconn{
 			conn:        s.newConn(ctx, opts),
 			rwc:         rwc,
-			fr:          opts.FramerBuilder.New(codec.NewReader(rwc)),
+			fr:          opts.FramerBuilder.New(reader),
+			readCounter: reader,
 			remoteAddr:  rwc.RemoteAddr(),
 			localAddr:   rwc.LocalAddr(),
 			serverAsync: opts.ServerAsync,
@@ -166,6 +168,7 @@ type tcpconn struct {
 	*conn
 	rwc         net.Conn
 	fr          codec.Framer
+	readCounter *readCountingReader
 	localAddr   net.Addr
 	remoteAddr  net.Addr
 	serverAsync bool
@@ -243,6 +246,9 @@ func (c *tcpconn) serve() {
 			}
 		}
 
+		if c.readCounter != nil {
+			c.readCounter.ResetReadBytes()
+		}
 		req, err := c.fr.ReadFrame()
 		if err != nil {
 			if err == io.EOF {
@@ -251,6 +257,11 @@ func (c *tcpconn) serve() {
 			}
 			// Server closes the connection if client sends no package in last idle timeout.
 			if e, ok := err.(net.Error); ok && e.Timeout() {
+				if c.readCounter != nil && c.readCounter.ReadBytes() > 0 {
+					report.TCPServerTransportReadFail.Incr()
+					log.Trace("transport: tcpconn serve ReadFrame timeout after partial read ", err)
+					return
+				}
 				report.TCPServerTransportIdleTimeout.Incr()
 				return
 			}
