@@ -32,6 +32,8 @@ import (
 const (
 	// default size of http req body buffer
 	defaultBodyBufferSize = 4096
+	// maxPooledBodyBufferSize is the largest http request body buffer kept in pool.
+	maxPooledBodyBufferSize = 1 << 20
 )
 
 // transcoder is for tRPC/httpjson transcoding.
@@ -133,6 +135,18 @@ var bodyBufferPool = sync.Pool{
 	},
 }
 
+// putBackBodyBuffer puts a body buffer back to the pool.
+func putBackBodyBuffer(buffer *bytes.Buffer) {
+	if buffer == nil {
+		return
+	}
+	if buffer.Cap() > maxPooledBodyBufferSize {
+		return
+	}
+	buffer.Reset()
+	bodyBufferPool.Put(buffer)
+}
+
 // transcodeBody transcodes tRPC/httpjson by http request body.
 func (tr *transcoder) transcodeBody(protoReq proto.Message, body io.Reader, c Compressor, s Serializer) error {
 	// HttpRule body is not specified
@@ -154,7 +168,7 @@ func (tr *transcoder) transcodeBody(protoReq proto.Message, body io.Reader, c Co
 	// read body
 	buffer := bodyBufferPool.Get().(*bytes.Buffer)
 	buffer.Reset()
-	defer bodyBufferPool.Put(buffer)
+	defer putBackBodyBuffer(buffer)
 	if _, err := io.Copy(buffer, reader); err != nil {
 		return fmt.Errorf("failed to read request body: %w", err)
 	}
