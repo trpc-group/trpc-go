@@ -18,6 +18,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/panjf2000/ants/v2"
 	"github.com/stretchr/testify/require"
 	"trpc.group/trpc-go/trpc-go/client"
 	"trpc.group/trpc-go/trpc-go/internal/keeporder"
@@ -50,6 +51,16 @@ func TestKeepOrderClientError(t *testing.T) {
 	require.ErrorIs(t, err, sendErr)
 	rspOrError := <-ch
 	require.ErrorIs(t, rspOrError.Err, invokeErr)
+}
+
+func TestKeepOrderClientSubmitError(t *testing.T) {
+	ants.Release()
+	defer ants.Reboot()
+
+	c := client.NewKeepOrderClient[testRsp](&testKeepOrderClient{})
+	ch, err := c.KeepOrderInvoke(context.Background(), &testReq{})
+	require.Nil(t, ch)
+	require.Error(t, err)
 }
 
 type testReq struct {
