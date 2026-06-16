@@ -32,7 +32,7 @@ func TestGetSerializerRegister(t *testing.T) {
 	defer func() {
 		codec.RegisterSerializer(codec.SerializationTypeGet, s)
 	}()
-	codec.RegisterSerializer(codec.SerializationTypeGet, http.NewGetSerialization("json"))
+	codec.RegisterSerializer(codec.SerializationTypeGet, http.NewGetSerialization(http.DefaultSerializationTag))
 	serializer := codec.GetSerializer(codec.SerializationTypeGet)
 	require.NotNil(t, serializer)
 }
@@ -158,7 +158,8 @@ func TestGetSerializationCaseSensitive(t *testing.T) {
 		require.Equal(t, "hello", req.Msg)
 	}
 
-	codec.RegisterSerializer(codec.SerializationTypeGet, http.NewGetSerializationWithCaseSensitive("json", true))
+	codec.RegisterSerializer(codec.SerializationTypeGet,
+		http.NewGetSerializationWithCaseSensitive(http.DefaultSerializationTag, true))
 	s = codec.GetSerializer(codec.SerializationTypeGet)
 
 	req := &helloReq{}

@@ -23,13 +23,13 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-// Uses the same tag as json.
-var tag = "json"
+// DefaultSerializationTag is the default struct tag used by HTTP serializers.
+const DefaultSerializationTag = "json"
 
 func init() {
 	codec.RegisterSerializer(
 		codec.SerializationTypeForm,
-		NewFormSerialization(tag),
+		NewFormSerialization(DefaultSerializationTag),
 	)
 }
 
