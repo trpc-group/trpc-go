@@ -21,7 +21,21 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"trpc.group/trpc-go/trpc-go/precool"
 )
+
+// NewServer creates a new Server.
+func NewServer(opts ...Option) *Server {
+	var o Options
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return &Server{
+		MaxCloseWaitTime: o.MaxCloseWaitTime,
+		precoolChecker:   o.precoolChecker,
+	}
+}
 
 // Server is a tRPC server.
 // One process, one server. A server may offer one or more services.
@@ -29,6 +43,8 @@ type Server struct {
 	MaxCloseWaitTime time.Duration // max waiting time when closing server
 
 	services map[string]Service // k=serviceName,v=Service
+	// precoolChecker provides service-level precool detection.
+	precoolChecker precool.Checker
 
 	mux sync.Mutex // guards onShutdownHooks and afterShutdownHooks
 	// onShutdownHooks are hook functions that would be executed when server is
@@ -169,4 +185,15 @@ func (s *Server) RegisterAfterShutdown(fn func()) {
 	s.mux.Lock()
 	s.afterShutdownHooks = append(s.afterShutdownHooks, fn)
 	s.mux.Unlock()
+}
+
+// RegisterServicePrecool registers a precool strategy for a specific service.
+func (s *Server) RegisterServicePrecool(serviceName string, fn precool.Func) error {
+	if fn == nil {
+		return errors.New("precool function cannot be nil")
+	}
+	if s.precoolChecker == nil {
+		return errors.New("precool checker is nil")
+	}
+	return s.precoolChecker.Register(serviceName, fn)
 }

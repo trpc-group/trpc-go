@@ -22,6 +22,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/config"
 	"trpc.group/trpc-go/trpc-go/filter"
 	icodec "trpc.group/trpc-go/trpc-go/internal/codec"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/naming/circuitbreaker"
 	"trpc.group/trpc-go/trpc-go/naming/discovery"
 	"trpc.group/trpc-go/trpc-go/naming/loadbalance"
@@ -82,6 +83,15 @@ type BackendConfig struct {
 
 	// Report any error to the selector if this value is true.
 	ReportAnyErrToSelector bool `yaml:"report_any_err_to_selector"`
+
+	// PreWarm specifies the configuration for client connection prewarming.
+	PreWarm PreWarmConfig `yaml:"pre_warm,omitempty"`
+}
+
+// PreWarmConfig defines the configuration for client connection prewarming.
+type PreWarmConfig struct {
+	ConnsPerNode *int           `yaml:"conns_per_node,omitempty"`
+	Timeout      *time.Duration `yaml:"timeout,omitempty"`
 }
 
 // genOptions generates options for each RPC from BackendConfig.
@@ -113,6 +123,7 @@ func (cfg *BackendConfig) genOptions() (*Options, error) {
 	if cfg.TLSCertProvider != "" {
 		WithCertProvider(cfg.TLSCertProvider)(opts)
 	}
+	cfg.setPreWarm(opts)
 	if cfg.Protocol != "" && opts.Codec == nil {
 		return nil, fmt.Errorf("codec %s not exists", cfg.Protocol)
 	}
@@ -202,14 +213,25 @@ func (cfg *BackendConfig) setNamingOptions(opts *Options) error {
 	return nil
 }
 
+func (cfg *BackendConfig) setPreWarm(opts *Options) {
+	if cfg.PreWarm.ConnsPerNode == nil {
+		return
+	}
+	preWarmOpts := transport.PreWarmOptions{ConnsPerNode: *cfg.PreWarm.ConnsPerNode}
+	if cfg.PreWarm.Timeout != nil {
+		preWarmOpts.Timeout = *cfg.PreWarm.Timeout
+	}
+	opts.CallOptions = append(opts.CallOptions, transport.WithPreWarm(preWarmOpts))
+}
+
 var (
 	// DefaultSelectorFilterName is the default name of selector filter.
 	// It can be modified if conflict exists.
 	DefaultSelectorFilterName = "selector"
 
 	defaultBackendConf = &BackendConfig{
-		Network:  "tcp",
-		Protocol: "trpc",
+		Network:  protocol.TCP,
+		Protocol: protocol.TRPC,
 	}
 	defaultBackendOptions *Options
 

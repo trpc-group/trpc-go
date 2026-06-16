@@ -34,7 +34,9 @@ import (
 	"trpc.group/trpc-go/trpc-go/config"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/healthcheck"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/log"
+	"trpc.group/trpc-go/trpc-go/precool"
 	"trpc.group/trpc-go/trpc-go/rpcz"
 	"trpc.group/trpc-go/trpc-go/transport"
 )
@@ -72,6 +74,7 @@ const (
 	patternLoglevel      = "/cmds/loglevel"
 	patternConfig        = "/cmds/config"
 	patternHealthCheck   = "/is_healthy/"
+	patternPrecool       = "/cmds/is_precool/"
 	patternRPCZSpansList = "/cmds/rpcz/spans"
 	patternRPCZSpanGet   = "/cmds/rpcz/spans/"
 )
@@ -100,6 +103,7 @@ type Server struct {
 
 	router      *router
 	healthCheck *healthcheck.HealthCheck
+	precool     precool.Checker
 
 	closeOnce sync.Once
 	closeErr  error
@@ -115,6 +119,7 @@ func NewServer(opts ...Option) *Server {
 	s := &Server{
 		config:      cfg,
 		healthCheck: healthcheck.New(healthcheck.WithStatusWatchers(healthcheck.GetWatchers())),
+		precool:     cfg.precoolCheck,
 	}
 	if !cfg.skipServe {
 		s.router = s.configRouter(newRouter())
@@ -132,6 +137,11 @@ func (s *Server) configRouter(r *router) *router {
 			http.HandlerFunc(s.handleHealthCheck),
 		).ServeHTTP,
 	) // Health check.
+	r.add(patternPrecool,
+		http.StripPrefix(patternPrecool,
+			http.HandlerFunc(s.handlePrecool),
+		).ServeHTTP,
+	) // Precool check.
 
 	r.add(patternRPCZSpansList, s.handleRPCZSpansList)
 	r.add(patternRPCZSpanGet, s.handleRPCZSpanGet)
@@ -180,7 +190,7 @@ func (s *Server) Serve() error {
 		return errors.New("admin service does not support tls")
 	}
 
-	const network = "tcp"
+	const network = protocol.TCP
 	ln, err := s.listen(network, cfg.addr)
 	if err != nil {
 		return err
@@ -397,6 +407,32 @@ func (s *Server) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
+}
+
+func (s *Server) handlePrecool(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if s.precool == nil {
+		ret := newDefaultRes()
+		ret[retErrCode] = errCodeServer
+		ret["is_precool"] = ""
+		ret[retMessage] = "precool checker is not initialized"
+		_ = json.NewEncoder(w).Encode(ret)
+		return
+	}
+
+	serviceName := strings.TrimLeft(r.URL.Path, "/")
+	status := s.precool.CheckServer()
+	if serviceName != "" {
+		status = s.precool.CheckService(serviceName)
+	}
+	ret := newDefaultRes()
+	ret["is_precool"] = status.String()
+	_ = json.NewEncoder(w).Encode(ret)
 }
 
 // handleRPCZSpansList returns #xxx span from r by url "http://ip:port/cmds/rpcz/spans?num=xxx".

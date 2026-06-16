@@ -21,6 +21,8 @@ import (
 	"net"
 	"os"
 	"syscall"
+
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 )
 
 var errUnsupportedUDPProtocol = errors.New("only udp, udp4, udp6 are supported")
@@ -82,9 +84,9 @@ func getUDPSockaddr(proto, addr string) (sa syscall.Sockaddr, soType int, err er
 	}
 
 	switch udpVersion {
-	case "udp":
+	case protocol.UDP:
 		return &syscall.SockaddrInet4{Port: udp.Port}, syscall.AF_INET, nil
-	case "udp4":
+	case protocol.UDP4:
 		return getUDP4Sockaddr(udp)
 	default:
 		// must be "udp6"
@@ -98,15 +100,15 @@ func determineUDPProto(proto string, ip *net.UDPAddr) (string, error) {
 	// the protocol given to us by the caller.
 
 	if ip.IP.To4() != nil {
-		return "udp4", nil
+		return protocol.UDP4, nil
 	}
 
 	if ip.IP.To16() != nil {
-		return "udp6", nil
+		return protocol.UDP6, nil
 	}
 
 	switch proto {
-	case "udp", "udp4", "udp6":
+	case protocol.UDP, protocol.UDP4, protocol.UDP6:
 		return proto, nil
 	default:
 		return "", errUnsupportedUDPProtocol

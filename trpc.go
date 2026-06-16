@@ -21,8 +21,10 @@ import (
 
 	"trpc.group/trpc-go/trpc-go/admin"
 	"trpc.group/trpc-go/trpc-go/filter"
+	iprecool "trpc.group/trpc-go/trpc-go/internal/precool"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
+	"trpc.group/trpc-go/trpc-go/precool"
 	"trpc.group/trpc-go/trpc-go/rpcz"
 	"trpc.group/trpc-go/trpc-go/server"
 	"trpc.group/trpc-go/trpc-go/transport"
@@ -74,12 +76,14 @@ func NewServerWithConfig(cfg *Config, opt ...server.Option) *server.Server {
 	// set to global Config
 	SetGlobalConfig(cfg)
 
-	s := &server.Server{
-		MaxCloseWaitTime: getMillisecond(cfg.Server.MaxCloseWaitTime),
-	}
+	pc := iprecool.New()
+	s := server.NewServer(
+		server.WithMaxCloseWaitTime(getMillisecond(cfg.Server.MaxCloseWaitTime)),
+		server.WithPrecool(pc),
+	)
 
 	// setup admin service
-	setupAdmin(s, cfg)
+	setupAdmin(s, cfg, pc)
 
 	// init service one by one
 	for _, c := range cfg.Server.Service {
@@ -97,7 +101,7 @@ func GetAdminService(s *server.Server) (*admin.Server, error) {
 	return adminServer, nil
 }
 
-func setupAdmin(s *server.Server, cfg *Config) {
+func setupAdmin(s *server.Server, cfg *Config, pc precool.Checker) {
 	// admin configured, then admin service will be started
 	opts := []admin.Option{
 		admin.WithSkipServe(cfg.Server.Admin.Port == 0),
@@ -106,6 +110,7 @@ func setupAdmin(s *server.Server, cfg *Config) {
 		admin.WithConfigPath(ServerConfigPath),
 		admin.WithReadTimeout(getMillisecond(cfg.Server.Admin.ReadTimeout)),
 		admin.WithWriteTimeout(getMillisecond(cfg.Server.Admin.WriteTimeout)),
+		admin.WithPrecool(pc),
 	}
 	if cfg.Server.Admin.Port > 0 {
 		opts = append(opts, admin.WithAddr(fmt.Sprintf("%s:%d", cfg.Server.Admin.IP, cfg.Server.Admin.Port)))

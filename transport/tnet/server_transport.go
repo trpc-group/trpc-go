@@ -29,11 +29,12 @@ import (
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/addrutil"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/transport"
 )
 
-const transportName = "tnet"
+const transportName = protocol.TNET
 
 func init() {
 	transport.RegisterServerTransport(transportName, DefaultServerTransport)
@@ -108,7 +109,7 @@ func (s *serverTransport) Close(ctx context.Context) {
 
 func (s *serverTransport) switchNetworkToServe(ctx context.Context, opts *transport.ListenServeOptions) error {
 	switch opts.Network {
-	case "tcp", "tcp4", "tcp6":
+	case protocol.TCP, protocol.TCP4, protocol.TCP6:
 		if err := s.listenAndServeTCP(ctx, opts); err != nil {
 			return err
 		}

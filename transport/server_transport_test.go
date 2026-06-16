@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"runtime"
 	"strconv"
@@ -36,6 +37,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/keeporder"
+	"trpc.group/trpc-go/trpc-go/metrics"
 	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
 	"trpc.group/trpc-go/trpc-go/transport"
 )
@@ -90,6 +92,148 @@ func TestTCPListenAndServe(t *testing.T) {
 		transport.WithDialAddress(addr),
 		transport.WithClientFramerBuilder(&framerBuilder{}))
 	assert.NotNil(t, err)
+}
+
+func TestTCPListenAndServeReportsReadFailOnPartialReadTimeout(t *testing.T) {
+	const (
+		sinkName       = "tcp-read-fail-test"
+		readFailMetric = "trpc.TcpServerTransportReadFail"
+		idleMetric     = "trpc.TcpServerTransportIdleTimeout"
+	)
+
+	sink := newCountingMetricsSink(sinkName)
+	metrics.RegisterMetricsSink(sink)
+	defer metrics.RegisterMetricsSink(newNoopMetricsSink(sinkName))
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer ln.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	st := transport.NewServerTransport(transport.WithReusePort(false))
+	err = st.ListenAndServe(ctx,
+		transport.WithListener(ln),
+		transport.WithServerFramerBuilder(&partialReadTimeoutFramerBuilder{}),
+		transport.WithServerIdleTimeout(20*time.Millisecond),
+		transport.WithHandler(&echoHandler{}),
+	)
+	require.NoError(t, err)
+
+	conn, err := net.Dial("tcp", ln.Addr().String())
+	require.NoError(t, err)
+	defer conn.Close()
+	_, err = conn.Write([]byte{1})
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		return sink.Count(readFailMetric) > 0
+	}, time.Second, 10*time.Millisecond)
+	assert.Equal(t, 0, sink.Count(idleMetric))
+}
+
+func TestTCPListenAndServeReportsIdleTimeoutWithoutPartialRead(t *testing.T) {
+	const (
+		sinkName       = "tcp-idle-timeout-test"
+		readFailMetric = "trpc.TcpServerTransportReadFail"
+		idleMetric     = "trpc.TcpServerTransportIdleTimeout"
+	)
+
+	sink := newCountingMetricsSink(sinkName)
+	metrics.RegisterMetricsSink(sink)
+	defer metrics.RegisterMetricsSink(newNoopMetricsSink(sinkName))
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer ln.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	st := transport.NewServerTransport(transport.WithReusePort(false))
+	err = st.ListenAndServe(ctx,
+		transport.WithListener(ln),
+		transport.WithServerFramerBuilder(&partialReadTimeoutFramerBuilder{}),
+		transport.WithServerIdleTimeout(20*time.Millisecond),
+		transport.WithHandler(&echoHandler{}),
+	)
+	require.NoError(t, err)
+
+	conn, err := net.Dial("tcp", ln.Addr().String())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	require.Eventually(t, func() bool {
+		return sink.Count(idleMetric) > 0
+	}, time.Second, 10*time.Millisecond)
+	assert.Equal(t, 0, sink.Count(readFailMetric))
+}
+
+type countingMetricsSink struct {
+	name   string
+	mu     sync.Mutex
+	counts map[string]int
+}
+
+func newCountingMetricsSink(name string) *countingMetricsSink {
+	return &countingMetricsSink{
+		name:   name,
+		counts: make(map[string]int),
+	}
+}
+
+func (s *countingMetricsSink) Name() string {
+	return s.name
+}
+
+func (s *countingMetricsSink) Report(rec metrics.Record, opts ...metrics.Option) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, m := range rec.GetMetrics() {
+		s.counts[m.Name()]++
+	}
+	return nil
+}
+
+func (s *countingMetricsSink) Count(name string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.counts[name]
+}
+
+type noopMetricsSink struct {
+	name string
+}
+
+func newNoopMetricsSink(name string) *noopMetricsSink {
+	return &noopMetricsSink{name: name}
+}
+
+func (s *noopMetricsSink) Name() string {
+	return s.name
+}
+
+func (s *noopMetricsSink) Report(metrics.Record, ...metrics.Option) error {
+	return nil
+}
+
+type partialReadTimeoutFramerBuilder struct{}
+
+func (b *partialReadTimeoutFramerBuilder) New(r io.Reader) codec.Framer {
+	return &partialReadTimeoutFramer{r: r}
+}
+
+type partialReadTimeoutFramer struct {
+	r io.Reader
+}
+
+func (f *partialReadTimeoutFramer) ReadFrame() ([]byte, error) {
+	buf := make([]byte, 2)
+	if _, err := io.ReadFull(f.r, buf); err != nil {
+		return nil, err
+	}
+	return buf, nil
 }
 
 func TestTCPTLSListenAndServe(t *testing.T) {

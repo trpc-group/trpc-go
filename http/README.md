@@ -10,6 +10,45 @@ The tRPC-Go framework supports building three types of HTTP-related services:
 
 The RESTful related documentation is available in [/restful](/restful/)
 
+## FastHTTP transport
+
+tRPC-Go also provides FastHTTP-based client and server transport support.
+Use protocol `fasthttp` for HTTP RPC services and `fasthttp_no_protocol`
+for standard HTTP services implemented with `fasthttp.RequestCtx`.
+
+```yaml
+server:
+  service:
+    - name: trpc.app.server.fast
+      network: tcp
+      protocol: fasthttp_no_protocol
+      ip: 127.0.0.1
+      port: 8080
+```
+
+```go
+package main
+
+import (
+    trpc "trpc.group/trpc-go/trpc-go"
+    thttp "trpc.group/trpc-go/trpc-go/http"
+    "github.com/valyala/fasthttp"
+)
+
+func main() {
+    s := trpc.NewServer()
+    thttp.FastHTTPHandleFunc("/ping", func(ctx *fasthttp.RequestCtx) {
+        ctx.SetBodyString("pong")
+    })
+    thttp.RegisterNoProtocolService(s.Service("trpc.app.server.fast"))
+    s.Serve()
+}
+```
+
+For FastHTTP client calls that still need tRPC service discovery, filters, and
+metrics, use `NewFastHTTPClientProxy`. For direct FastHTTP-style usage, use
+`NewFastHTTPClient`.
+
 ## Pan-HTTP standard services
 
 The tRPC-Go framework provides pervasive HTTP standard service capabilities, mainly by adding service registration, service discovery, interceptors and other capabilities to the annotation library HTTP, so that the HTTP protocol can be seamlessly integrated into the tRPC ecosystem

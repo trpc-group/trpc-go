@@ -26,6 +26,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/filter"
 	"trpc.group/trpc-go/trpc-go/internal/attachment"
 	icodec "trpc.group/trpc-go/trpc-go/internal/codec"
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/internal/report"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 	"trpc.group/trpc-go/trpc-go/naming/selector"
@@ -37,6 +38,13 @@ import (
 type Client interface {
 	// Invoke performs a unary RPC.
 	Invoke(ctx context.Context, reqBody interface{}, rspBody interface{}, opt ...Option) error
+}
+
+// InitializableClient is a client that supports explicit initialization.
+type InitializableClient interface {
+	Client
+	// Init initializes the client with the provided options.
+	Init(ctx context.Context, opt ...Option) error
 }
 
 // DefaultClient is the default global client.
@@ -517,7 +525,7 @@ func ensureMsgRemoteAddr(
 	}
 
 	switch network {
-	case "tcp", "tcp4", "tcp6", "udp", "udp4", "udp6":
+	case protocol.TCP, protocol.TCP4, protocol.TCP6, protocol.UDP, protocol.UDP4, protocol.UDP6:
 		// Check if address can be parsed as an ip.
 		host, _, err := net.SplitHostPort(address)
 		if err != nil || net.ParseIP(host) == nil {
@@ -526,14 +534,14 @@ func ensureMsgRemoteAddr(
 	}
 	var addr net.Addr
 	switch network {
-	case "tcp", "tcp4", "tcp6":
+	case protocol.TCP, protocol.TCP4, protocol.TCP6:
 		addr, _ = net.ResolveTCPAddr(network, address)
-	case "udp", "udp4", "udp6":
+	case protocol.UDP, protocol.UDP4, protocol.UDP6:
 		addr, _ = net.ResolveUDPAddr(network, address)
-	case "unix":
+	case protocol.UNIX:
 		addr, _ = net.ResolveUnixAddr(network, address)
 	default:
-		addr, _ = net.ResolveTCPAddr("tcp4", address)
+		addr, _ = net.ResolveTCPAddr(protocol.TCP4, address)
 	}
 	msg.WithRemoteAddr(addr)
 }

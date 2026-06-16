@@ -16,12 +16,13 @@ package selector
 import (
 	"time"
 
+	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 )
 
 func init() {
 	Register("passthrough", NewPassthroughSelector()) // passthrough://temp.sock
-	Register("unix", NewPassthroughSelector())        // unix://temp.sock
+	Register(protocol.UNIX, NewPassthroughSelector()) // unix://temp.sock
 }
 
 // passthroughSelector is a selector simply passthrough serviceName.
