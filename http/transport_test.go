@@ -39,6 +39,7 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -1046,6 +1047,41 @@ func TestHTTPSSkipClientVerify(t *testing.T) {
 			),
 		))
 	require.Equal(t, []byte(t.Name()), rsp.Data)
+}
+
+func TestTLSClientInheritsCookieJar(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.SetCookie(w, &http.Cookie{Name: "sid", Value: "cookie-value"})
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	u, err := url.Parse(ts.URL)
+	require.NoError(t, err)
+	jar, err := cookiejar.New(nil)
+	require.NoError(t, err)
+
+	ct := thttp.NewClientTransport(false)
+	ct.(*thttp.ClientTransport).Jar = jar
+
+	ctx, msg := codec.WithNewMessage(context.Background())
+	msg.WithClientRPCName("/")
+	msg.WithClientReqHead(&thttp.ClientReqHeader{})
+	rspHeader := &thttp.ClientRspHeader{}
+	msg.WithClientRspHead(rspHeader)
+
+	_, err = ct.RoundTrip(ctx, nil,
+		transport.WithDialAddress(u.Host),
+		transport.WithDialTLS("", "", "none", ""),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, rspHeader.Response)
+	defer rspHeader.Response.Body.Close()
+
+	cookies := jar.Cookies(u)
+	require.Len(t, cookies, 1)
+	require.Equal(t, "sid", cookies[0].Name)
+	require.Equal(t, "cookie-value", cookies[0].Value)
 }
 
 func TestListenAndServeHTTPHead(t *testing.T) {
