@@ -169,6 +169,7 @@ func newServiceWithConfig(cfg *Config, serviceCfg *ServiceConfig, opt ...server.
 		server.WithCloseWaitTime(getMillisecond(cfg.Server.CloseWaitTime)),
 		server.WithMaxCloseWaitTime(getMillisecond(cfg.Server.MaxCloseWaitTime)),
 		server.WithIdleTimeout(getMillisecond(serviceCfg.Idletime)),
+		server.WithOverloadCtrl(&serviceCfg.OverloadCtrl),
 		server.WithTLS(serviceCfg.TLSCert, serviceCfg.TLSKey, serviceCfg.CACert),
 		server.WithServerAsync(*serviceCfg.ServerAsync),
 		server.WithMaxRoutines(serviceCfg.MaxRoutines),

@@ -29,6 +29,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 	"trpc.group/trpc-go/trpc-go/naming/selector"
 	"trpc.group/trpc-go/trpc-go/naming/servicerouter"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"trpc.group/trpc-go/trpc-go/pool/connpool"
 	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
 	"trpc.group/trpc-go/trpc-go/transport"
@@ -45,6 +46,8 @@ type Options struct {
 	// also compatible with old addressing like ip://ip:port
 	Target   string
 	endpoint string // The same as service name if target is not set.
+
+	OverloadCtrl overloadctrl.OverloadController // Client side overload control.
 
 	Network           string
 	Protocol          string
@@ -316,6 +319,13 @@ func WithMultiplexedPool(p multiplexed.Pool) Option {
 	return func(o *Options) {
 		o.EnableMultiplexed = true
 		o.CallOptions = append(o.CallOptions, transport.WithMultiplexedPool(p))
+	}
+}
+
+// WithOverloadCtrl returns an Option that sets client overload control strategy.
+func WithOverloadCtrl(oc overloadctrl.OverloadController) Option {
+	return func(o *Options) {
+		o.OverloadCtrl = oc
 	}
 }
 
@@ -655,6 +665,7 @@ func NewOptions() *Options {
 	return &Options{
 		Transport:         transport.DefaultClientTransport,
 		Selector:          selector.DefaultSelector,
+		OverloadCtrl:      overloadctrl.NoopOC{},
 		SerializationType: invalidSerializationType, // the initial value is -1
 		// CurrentSerializationType is the serialization type of caller itself.
 		// SerializationType is the serialization type of backend service.

@@ -29,6 +29,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/filter"
 	"trpc.group/trpc-go/trpc-go/http"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"trpc.group/trpc-go/trpc-go/pool/connpool"
 	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
 	"trpc.group/trpc-go/trpc-go/transport"
@@ -211,6 +212,10 @@ func TestOptions(t *testing.T) {
 	o = client.WithStreamTransport(transport.DefaultClientStreamTransport)
 	o(opts)
 	require.Equal(t, transport.DefaultClientStreamTransport, opts.StreamTransport)
+
+	o = client.WithOverloadCtrl(overloadctrl.NoopOC{})
+	o(opts)
+	require.NotNil(t, opts.OverloadCtrl)
 
 	// WithProtocol sets protocol of backend service like trpc
 	o = client.WithProtocol("trpc")

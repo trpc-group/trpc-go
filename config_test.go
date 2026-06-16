@@ -14,7 +14,9 @@
 package trpc
 
 import (
+	"context"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -25,6 +27,7 @@ import (
 	yaml "gopkg.in/yaml.v3"
 
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"trpc.group/trpc-go/trpc-go/rpcz"
 )
 
@@ -173,6 +176,83 @@ transport: test-transport
 		require.Equal(t, "test-transport", cfg.Transport)
 	})
 }
+
+func TestServiceConfigOverloadCtrl(t *testing.T) {
+	testServerOC := &overloadctrl.NoopOC{}
+	overloadctrl.RegisterServer("test_server_oc",
+		func(*overloadctrl.ServiceMethodInfo) overloadctrl.OverloadController {
+			return testServerOC
+		})
+
+	t.Run("default oc", func(t *testing.T) {
+		var cfg ServiceConfig
+		require.NoError(t, yaml.Unmarshal([]byte(`
+name: xxx
+`), &cfg))
+		token, err := cfg.OverloadCtrl.Acquire(context.Background(), "")
+		require.NoError(t, err)
+		require.Equal(t, overloadctrl.NoopToken{}, token)
+	})
+	t.Run("backward compatibility", func(t *testing.T) {
+		var cfg ServiceConfig
+		require.NoError(t, yaml.Unmarshal([]byte(`
+overload_ctrls: [test_server_oc]
+`), &cfg))
+		require.Equal(t, testServerOC, cfg.OverloadCtrl.OverloadController)
+	})
+	t.Run("multiple old configs", func(t *testing.T) {
+		var cfg ServiceConfig
+		require.Error(t, yaml.Unmarshal([]byte(`
+overload_ctrls: [test_server_oc, noop]
+`), &cfg))
+	})
+	t.Run("old and new config together", func(t *testing.T) {
+		var cfg ServiceConfig
+		require.Error(t, yaml.Unmarshal([]byte(`
+overload_ctrls: [test_server_oc]
+overload_ctrl: test_server_oc
+`), &cfg))
+	})
+	t.Run("new config", func(t *testing.T) {
+		var cfg ServiceConfig
+		require.NoError(t, yaml.Unmarshal([]byte(`
+overload_ctrl: test_server_oc
+`), &cfg))
+		require.Equal(t, testServerOC, cfg.OverloadCtrl.OverloadController)
+	})
+	t.Run("marshal", func(t *testing.T) {
+		var cfg ServiceConfig
+		require.NoError(t, yaml.Unmarshal([]byte(`overload_ctrl: test_server_oc`), &cfg))
+		data, err := yaml.Marshal(&cfg)
+		require.NoError(t, err)
+		require.Contains(t, string(data), "overload_ctrl: test_server_oc")
+	})
+}
+
+func TestServerOverloadControl(t *testing.T) {
+	const ocName = "default_overload_ctrl_test"
+	testServerOC := &overloadctrl.NoopOC{}
+	overloadctrl.RegisterServer(ocName, func(*overloadctrl.ServiceMethodInfo) overloadctrl.OverloadController {
+		return testServerOC
+	})
+
+	filePath := filepath.Join(t.TempDir(), "trpc_go_overload_test.yaml")
+	data := []byte("server:\n" +
+		"  app: some_app\n" +
+		"  server: some_server\n" +
+		"  overload_ctrl: default_overload_ctrl_test\n" +
+		"  service:\n" +
+		"    - name: some_service\n")
+	require.NoError(t, os.WriteFile(filePath, data, 0600))
+
+	c, err := LoadConfig(filePath)
+	require.NoError(t, err)
+	require.Equal(t, ocName, c.Server.OverloadCtrl.Builder)
+	require.Equal(t, ocName, c.Server.Service[0].OverloadCtrl.Builder)
+	require.Equal(t, c.Server.OverloadCtrl.OverloadController,
+		c.Server.Service[0].OverloadCtrl.OverloadController)
+}
+
 func TestConfigStreamFilter(t *testing.T) {
 	filterName := "sf1"
 	t.Run("server config", func(t *testing.T) {

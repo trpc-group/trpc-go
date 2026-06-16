@@ -21,6 +21,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/filter"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"trpc.group/trpc-go/trpc-go/precool"
 	"trpc.group/trpc-go/trpc-go/restful"
 	"trpc.group/trpc-go/trpc-go/transport"
@@ -50,6 +51,8 @@ type Options struct {
 
 	ServeOptions []transport.ListenServeOption
 	Transport    transport.ServerTransport
+
+	OverloadCtrl overloadctrl.OverloadController
 
 	Registry registry.Registry
 	Codec    codec.Codec
@@ -351,6 +354,13 @@ func WithCloseWaitTime(t time.Duration) Option {
 func WithMaxCloseWaitTime(t time.Duration) Option {
 	return func(o *Options) {
 		o.MaxCloseWaitTime = t
+	}
+}
+
+// WithOverloadCtrl returns an Option that sets overloadctrl.OverloadController.
+func WithOverloadCtrl(oc overloadctrl.OverloadController) Option {
+	return func(o *Options) {
+		o.OverloadCtrl = oc
 	}
 }
 

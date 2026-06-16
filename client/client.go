@@ -30,6 +30,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/internal/report"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 	"trpc.group/trpc-go/trpc-go/naming/selector"
+	"trpc.group/trpc-go/trpc-go/overloadctrl"
 	"trpc.group/trpc-go/trpc-go/rpcz"
 	"trpc.group/trpc-go/trpc-go/transport"
 )
@@ -233,6 +234,13 @@ func callFunc(ctx context.Context, reqBody interface{}, rspBody interface{}) (er
 	msg := codec.Message(ctx)
 	opts := OptionsFromContext(ctx)
 
+	if !overloadctrl.IsNoop(opts.OverloadCtrl) && msg.RemoteAddr() != nil {
+		token, err := opts.OverloadCtrl.Acquire(ctx, msg.RemoteAddr().String())
+		if err != nil {
+			return err
+		}
+		defer func() { token.OnResponse(ctx, err) }()
+	}
 	defer func() { err = opts.fixTimeout(err) }()
 
 	// Check if codec is empty, after updating msg.
