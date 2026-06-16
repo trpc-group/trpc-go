@@ -29,6 +29,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/filter"
+	"trpc.group/trpc-go/trpc-go/internal/keeporder"
 	"trpc.group/trpc-go/trpc-go/log"
 	"trpc.group/trpc-go/trpc-go/naming/registry"
 	"trpc.group/trpc-go/trpc-go/overloadctrl"
@@ -445,6 +446,75 @@ type overloadControllerAlwaysFail struct{}
 
 func (overloadControllerAlwaysFail) Acquire(context.Context, string) (overloadctrl.Token, error) {
 	return nil, errors.New("always limited")
+}
+
+func TestServicePreDecode(t *testing.T) {
+	codec.Register("fake-keeporder-predecode", &fakeCodec{}, nil)
+	s := server.New(server.WithProtocol("fake-keeporder-predecode"))
+	require.NoError(t, s.Register(&GreeterServerServiceDesc, &GreeterServerImpl{}))
+
+	pdh, ok := s.(keeporder.PreDecodeHandler)
+	require.True(t, ok)
+
+	ctx, msg := codec.WithNewMessage(context.Background())
+	output, err := pdh.PreDecode(ctx, []byte("normal-request"))
+	require.NoError(t, err)
+	require.Equal(t, []byte("normal-request"), output)
+	require.Equal(t, "/trpc.test.helloworld.Greeter/SayHello", msg.ServerRPCName())
+	successCtx := ctx
+
+	ctx, _ = codec.WithNewMessage(context.Background())
+	_, err = pdh.PreDecode(ctx, []byte("decode-error"))
+	require.ErrorContains(t, err, "server decode request fail")
+
+	h, ok := s.(transport.Handler)
+	require.True(t, ok)
+	ctx = keeporder.NewContextWithPreDecode(successCtx, &keeporder.PreDecodeInfo{ReqBodyBuf: output})
+	_, err = h.Handle(ctx, []byte("normal-request"))
+	require.NoError(t, err)
+}
+
+func TestServicePreDecodeCodecEmpty(t *testing.T) {
+	s := server.New(server.WithProtocol("unknown-keeporder-predecode"))
+	pdh, ok := s.(keeporder.PreDecodeHandler)
+	require.True(t, ok)
+	ctx, _ := codec.WithNewMessage(context.Background())
+	_, err := pdh.PreDecode(ctx, []byte("normal-request"))
+	require.ErrorContains(t, err, "server codec empty")
+}
+
+func TestServicePreUnmarshal(t *testing.T) {
+	codec.Register("fake-keeporder-preunmarshal", &fakeCodec{}, nil)
+
+	unregistered := server.New(server.WithProtocol("fake-keeporder-preunmarshal"))
+	puh, ok := unregistered.(keeporder.PreUnmarshalHandler)
+	require.True(t, ok)
+	ctx, _ := codec.WithNewMessage(context.Background())
+	ctx = keeporder.NewContextWithPreUnmarshal(ctx, &keeporder.PreUnmarshalInfo{})
+	_, err := puh.PreUnmarshal(ctx, []byte("normal-request"))
+	require.Error(t, err)
+
+	s := server.New(server.WithProtocol("fake-keeporder-preunmarshal"))
+	require.NoError(t, s.Register(&GreeterServerServiceDesc, &GreeterServerImpl{}))
+	puh, ok = s.(keeporder.PreUnmarshalHandler)
+	require.True(t, ok)
+
+	ctx, _ = codec.WithNewMessage(context.Background())
+	_, err = puh.PreUnmarshal(ctx, []byte("normal-request"))
+	require.ErrorContains(t, err, "failed to get keeporder pre-unmarshal info")
+
+	info := &keeporder.PreUnmarshalInfo{}
+	ctx = keeporder.NewContextWithPreUnmarshal(ctx, info)
+	req, err := puh.PreUnmarshal(ctx, []byte("normal-request"))
+	require.NoError(t, err)
+	body, ok := req.(*codec.Body)
+	require.True(t, ok)
+	require.Equal(t, []byte("normal-request"), body.Data)
+
+	h, ok := s.(transport.Handler)
+	require.True(t, ok)
+	_, err = h.Handle(ctx, []byte("normal-request"))
+	require.NoError(t, err)
 }
 
 func TestStreamFilterChainFilter(t *testing.T) {

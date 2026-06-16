@@ -216,6 +216,29 @@ func WithServerAsync(serverAsync bool) Option {
 	}
 }
 
+// WithKeepOrderPreDecodeExtractor returns an Option which enables keep-order processing
+// by extracting the order key from the decoded request body.
+func WithKeepOrderPreDecodeExtractor(preDecodeExtractor transport.KeepOrderPreDecodeExtractor) Option {
+	return func(o *Options) {
+		o.ServeOptions = append(o.ServeOptions, transport.WithKeepOrderPreDecodeExtractor(preDecodeExtractor))
+	}
+}
+
+// WithKeepOrderPreUnmarshalExtractor returns an Option which enables keep-order processing
+// by extracting the order key from the unmarshaled request body.
+func WithKeepOrderPreUnmarshalExtractor(preUnmarshalExtractor transport.KeepOrderPreUnmarshalExtractor) Option {
+	return func(o *Options) {
+		o.ServeOptions = append(o.ServeOptions, transport.WithKeepOrderPreUnmarshalExtractor(preUnmarshalExtractor))
+	}
+}
+
+// WithOrderedGroups returns an Option which specifies the groups used to keep request order.
+func WithOrderedGroups(groups transport.OrderedGroups) Option {
+	return func(o *Options) {
+		o.ServeOptions = append(o.ServeOptions, transport.WithOrderedGroups(groups))
+	}
+}
+
 // WithWritev returns an Option that sets whether to enable writev or not.
 func WithWritev(writev bool) Option {
 	return func(o *Options) {

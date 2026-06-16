@@ -212,6 +212,37 @@ func TestMoreOptions(t *testing.T) {
 	}
 	assert.Equal(t, transportOpts.ServerAsync, true)
 
+	// WithKeepOrderPreDecodeExtractor
+	preDecodeExtractor := func(context.Context, []byte) (string, bool) { return "decode", true }
+	o = server.WithKeepOrderPreDecodeExtractor(preDecodeExtractor)
+	o(opts)
+	for _, o := range opts.ServeOptions {
+		o(transportOpts)
+	}
+	key, ok := transportOpts.KeepOrderPreDecodeExtractor(context.Background(), nil)
+	assert.True(t, ok)
+	assert.Equal(t, "decode", key)
+
+	// WithKeepOrderPreUnmarshalExtractor
+	preUnmarshalExtractor := func(context.Context, interface{}) (string, bool) { return "unmarshal", true }
+	o = server.WithKeepOrderPreUnmarshalExtractor(preUnmarshalExtractor)
+	o(opts)
+	for _, o := range opts.ServeOptions {
+		o(transportOpts)
+	}
+	key, ok = transportOpts.KeepOrderPreUnmarshalExtractor(context.Background(), nil)
+	assert.True(t, ok)
+	assert.Equal(t, "unmarshal", key)
+
+	// WithOrderedGroups
+	groups := &serverTestOrderedGroups{}
+	o = server.WithOrderedGroups(groups)
+	o(opts)
+	for _, o := range opts.ServeOptions {
+		o(transportOpts)
+	}
+	assert.Equal(t, groups, transportOpts.OrderedGroups)
+
 	// WithMaxRoutines
 	server.WithMaxRoutines(100)(opts)
 	// WithWritev
@@ -286,6 +317,14 @@ func TestMoreOptions(t *testing.T) {
 	o(opts)
 	assert.Equal(t, maxWindowSize, opts.MaxWindowSize)
 }
+
+type serverTestOrderedGroups struct{}
+
+func (*serverTestOrderedGroups) Add(string, func()) {}
+
+func (*serverTestOrderedGroups) Remove(string) {}
+
+func (*serverTestOrderedGroups) Stop() {}
 
 func TestWithNamedFilter(t *testing.T) {
 	var (
