@@ -15,6 +15,8 @@ package admin
 
 import (
 	"time"
+
+	"trpc.group/trpc-go/trpc-go/precool"
 )
 
 const (
@@ -44,4 +46,5 @@ type configuration struct {
 	version      string
 	configPath   string
 	skipServe    bool
+	precoolCheck precool.Checker
 }

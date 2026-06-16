@@ -15,6 +15,8 @@ package admin
 
 import (
 	"time"
+
+	"trpc.group/trpc-go/trpc-go/precool"
 )
 
 // Option Service configuration options.
@@ -75,5 +77,12 @@ func WithConfigPath(configPath string) Option {
 func WithSkipServe(isSkip bool) Option {
 	return func(config *configuration) {
 		config.skipServe = isSkip
+	}
+}
+
+// WithPrecool sets the precool checker used by the admin precool endpoint.
+func WithPrecool(pc precool.Checker) Option {
+	return func(config *configuration) {
+		config.precoolCheck = pc
 	}
 }
