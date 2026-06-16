@@ -10,6 +10,45 @@ tRPC-Go 框架支持搭建与 HTTP 相关的三种服务:
 
 其中 RESTful 相关文档见 [/restful](/restful/)
 
+## FastHTTP transport
+
+tRPC-Go 也提供基于 FastHTTP 的客户端和服务端 transport。HTTP RPC 服务使用
+`fasthttp` 协议，基于 `fasthttp.RequestCtx` 的标准 HTTP 服务使用
+`fasthttp_no_protocol` 协议。
+
+```yaml
+server:
+  service:
+    - name: trpc.app.server.fast
+      network: tcp
+      protocol: fasthttp_no_protocol
+      ip: 127.0.0.1
+      port: 8080
+```
+
+```go
+package main
+
+import (
+    trpc "trpc.group/trpc-go/trpc-go"
+    thttp "trpc.group/trpc-go/trpc-go/http"
+    "github.com/valyala/fasthttp"
+)
+
+func main() {
+    s := trpc.NewServer()
+    thttp.FastHTTPHandleFunc("/ping", func(ctx *fasthttp.RequestCtx) {
+        ctx.SetBodyString("pong")
+    })
+    thttp.RegisterNoProtocolService(s.Service("trpc.app.server.fast"))
+    s.Serve()
+}
+```
+
+如果希望 FastHTTP 调用继续使用 tRPC 的服务发现、filter 和 metrics，可使用
+`NewFastHTTPClientProxy`。如果希望直接按 FastHTTP 风格使用，可使用
+`NewFastHTTPClient`。
+
 ## 泛 HTTP 标准服务
 
 tRPC-Go 框架提供了泛 HTTP 标准服务能力, 主要是在标准库 HTTP 的能力上添加了服务注册、服务发现、拦截器等能力, 使 HTTP 协议能够无缝接入 tRPC 生态
@@ -878,4 +917,3 @@ func (*chunkedServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	return
 }
 ```
-

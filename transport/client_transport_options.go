@@ -16,6 +16,7 @@ package transport
 // ClientTransportOptions is the client transport options.
 type ClientTransportOptions struct {
 	DisableHTTPEncodeTransInfoBase64 bool
+	MaxRedirectsCount                int
 }
 
 // ClientTransportOption modifies the ClientTransportOptions.
@@ -26,5 +27,13 @@ type ClientTransportOption func(*ClientTransportOptions)
 func WithDisableEncodeTransInfoBase64() ClientTransportOption {
 	return func(opts *ClientTransportOptions) {
 		opts.DisableHTTPEncodeTransInfoBase64 = true
+	}
+}
+
+// WithMaxRedirectsCount returns a ClientTransportOption which customizes the
+// maximum redirects count for FastHTTP client transport.
+func WithMaxRedirectsCount(c int) ClientTransportOption {
+	return func(opts *ClientTransportOptions) {
+		opts.MaxRedirectsCount = c
 	}
 }
