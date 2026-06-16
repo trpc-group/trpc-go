@@ -655,6 +655,7 @@ func (ct *ClientTransport) getStdHTTPClient(caFile, certFile,
 	}
 	client := &stdhttp.Client{
 		CheckRedirect: ct.Client.CheckRedirect,
+		Jar:           ct.Client.Jar,
 		Timeout:       ct.Client.Timeout,
 	}
 	if ct.http2Only {
