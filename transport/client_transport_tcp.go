@@ -21,6 +21,7 @@ import (
 
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
+	"trpc.group/trpc-go/trpc-go/internal/keeporder"
 	"trpc.group/trpc-go/trpc-go/internal/report"
 	"trpc.group/trpc-go/trpc-go/pool/connpool"
 	"trpc.group/trpc-go/trpc-go/pool/multiplexed"
@@ -236,7 +237,14 @@ func (c *clientTransport) multiplexed(ctx context.Context, req []byte, opts *Rou
 	msg := codec.Message(ctx)
 	msg.WithRemoteAddr(conn.RemoteAddr())
 
-	if err := conn.Write(req); err != nil {
+	err = conn.Write(req)
+	if info, ok := keeporder.ClientInfoFromContext(ctx); ok && info != nil {
+		select {
+		case info.SendError <- err:
+		default:
+		}
+	}
+	if err != nil {
 		return nil, errs.NewFrameError(errs.RetClientNetErr,
 			"tcp client multiplexed transport Write: "+err.Error())
 	}

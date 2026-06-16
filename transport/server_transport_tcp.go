@@ -18,6 +18,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"trpc.group/trpc-go/trpc-go/codec"
 	"trpc.group/trpc-go/trpc-go/errs"
 	"trpc.group/trpc-go/trpc-go/internal/addrutil"
+	ikeeporder "trpc.group/trpc-go/trpc-go/internal/keeporder"
 	"trpc.group/trpc-go/trpc-go/internal/protocol"
 	"trpc.group/trpc-go/trpc-go/internal/report"
 	"trpc.group/trpc-go/trpc-go/internal/writev"
@@ -122,16 +124,19 @@ func (s *serverTransport) serveTCP(ctx context.Context, ln net.Listener, opts *L
 		}
 		reader := newReadCountingReader(codec.NewReader(rwc))
 		tc := &tcpconn{
-			conn:        s.newConn(ctx, opts),
-			rwc:         rwc,
-			fr:          opts.FramerBuilder.New(reader),
-			readCounter: reader,
-			remoteAddr:  rwc.RemoteAddr(),
-			localAddr:   rwc.LocalAddr(),
-			serverAsync: opts.ServerAsync,
-			writev:      opts.Writev,
-			st:          s,
-			pool:        pool,
+			conn:                           s.newConn(ctx, opts),
+			rwc:                            rwc,
+			fr:                             opts.FramerBuilder.New(reader),
+			readCounter:                    reader,
+			remoteAddr:                     rwc.RemoteAddr(),
+			localAddr:                      rwc.LocalAddr(),
+			serverAsync:                    opts.ServerAsync,
+			writev:                         opts.Writev,
+			keepOrderPreDecodeExtractor:    opts.KeepOrderPreDecodeExtractor,
+			keepOrderPreUnmarshalExtractor: opts.KeepOrderPreUnmarshalExtractor,
+			orderedGroups:                  opts.OrderedGroups,
+			st:                             s,
+			pool:                           pool,
 		}
 		// Start goroutine sending with writev.
 		if tc.writev {
@@ -179,6 +184,15 @@ type tcpconn struct {
 	pool        *ants.PoolWithFunc
 	buffer      *writev.Buffer
 	closeNotify chan struct{}
+
+	// keepOrderPreDecodeExtractor specifies whether the current connection should keep
+	// order by a key extracted from the decoded request body.
+	keepOrderPreDecodeExtractor KeepOrderPreDecodeExtractor
+	// keepOrderPreUnmarshalExtractor specifies whether the current connection should keep
+	// order by a key extracted from the unmarshaled request body.
+	keepOrderPreUnmarshalExtractor KeepOrderPreUnmarshalExtractor
+	// orderedGroups specifies the groups in which to keep request order.
+	orderedGroups OrderedGroups
 }
 
 // close closes socket and cleans up.
@@ -282,6 +296,17 @@ func (c *tcpconn) serve() {
 }
 
 func (c *tcpconn) handle(req []byte) {
+	if c.keepOrderPreDecodeExtractor != nil {
+		if ok := c.handleKeepOrderPreDecode(req); ok {
+			return
+		}
+	}
+	if c.keepOrderPreUnmarshalExtractor != nil {
+		if ok := c.handleKeepOrderPreUnmarshal(req); ok {
+			return
+		}
+	}
+
 	if !c.serverAsync || c.pool == nil {
 		c.handleSync(req)
 		return
@@ -300,6 +325,69 @@ func (c *tcpconn) handle(req []byte) {
 	}
 }
 
+func (c *tcpconn) handleKeepOrderPreDecode(req []byte) bool {
+	pdh, ok := c.handler.(ikeeporder.PreDecodeHandler)
+	if !ok {
+		panic("bug: handler must implement pre-decode interface for keep-order requests")
+	}
+	ctx, msg := codec.WithNewMessage(context.Background())
+	reqBody, err := pdh.PreDecode(ctx, req)
+	if err != nil {
+		log.Warnf("pre-decode error: %+v, fallback to non-keep-order scenario", err)
+		codec.PutBackMessage(msg)
+		return false
+	}
+	keepOrderKey, ok := c.keepOrderPreDecodeExtractor(ctx, reqBody)
+	if !ok {
+		codec.PutBackMessage(msg)
+		return false
+	}
+	ctx = ikeeporder.NewContextWithPreDecode(ctx, &ikeeporder.PreDecodeInfo{ReqBodyBuf: reqBody})
+	c.orderedGroups.Add(keepOrderKey, func() {
+		defer func() {
+			codec.PutBackMessage(msg)
+			if err := recover(); err != nil {
+				log.ErrorContextf(ctx, "[PANIC]%v\n%s\n", err, debug.Stack())
+				report.PanicNum.Incr()
+			}
+		}()
+		c.handleSyncWithErrAndContext(ctx, msg, req, nil)
+	})
+	return true
+}
+
+func (c *tcpconn) handleKeepOrderPreUnmarshal(req []byte) bool {
+	puh, ok := c.handler.(ikeeporder.PreUnmarshalHandler)
+	if !ok {
+		panic("bug: handler must implement pre-unmarshal interface for keep-order requests")
+	}
+	ctx, msg := codec.WithNewMessage(context.Background())
+	info := &ikeeporder.PreUnmarshalInfo{}
+	ctx = ikeeporder.NewContextWithPreUnmarshal(ctx, info)
+	reqBody, err := puh.PreUnmarshal(ctx, req)
+	if err != nil {
+		log.Warnf("pre-unmarshal error: %+v, fallback to non-keep-order scenario", err)
+		codec.PutBackMessage(msg)
+		return false
+	}
+	keepOrderKey, ok := c.keepOrderPreUnmarshalExtractor(ctx, reqBody)
+	if !ok {
+		codec.PutBackMessage(msg)
+		return false
+	}
+	c.orderedGroups.Add(keepOrderKey, func() {
+		defer func() {
+			codec.PutBackMessage(msg)
+			if err := recover(); err != nil {
+				log.ErrorContextf(ctx, "[PANIC]%v\n%s\n", err, debug.Stack())
+				report.PanicNum.Incr()
+			}
+		}()
+		c.handleSyncWithErrAndContext(ctx, msg, req, nil)
+	})
+	return true
+}
+
 func (c *tcpconn) handleSync(req []byte) {
 	c.handleSyncWithErr(req, nil)
 }
@@ -307,6 +395,10 @@ func (c *tcpconn) handleSync(req []byte) {
 func (c *tcpconn) handleSyncWithErr(req []byte, e error) {
 	ctx, msg := codec.WithNewMessage(context.Background())
 	defer codec.PutBackMessage(msg)
+	c.handleSyncWithErrAndContext(ctx, msg, req, e)
+}
+
+func (c *tcpconn) handleSyncWithErrAndContext(ctx context.Context, msg codec.Msg, req []byte, e error) {
 	msg.WithServerRspErr(e)
 	// Record local addr and remote addr to context.
 	msg.WithLocalAddr(c.localAddr)

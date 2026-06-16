@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"trpc.group/trpc-go/trpc-go/codec"
+	"trpc.group/trpc-go/trpc-go/internal/keeporder/actor"
 )
 
 // ListenServeOptions is the server options on start.
@@ -39,6 +40,13 @@ type ListenServeOptions struct {
 	CopyFrame       bool          // whether copy frame
 	IdleTimeout     time.Duration // idle timeout of connection
 
+	// KeepOrderPreDecodeExtractor specifies the pre-decoding extractor to use for keeping order.
+	KeepOrderPreDecodeExtractor KeepOrderPreDecodeExtractor
+	// KeepOrderPreUnmarshalExtractor specifies the pre-unmarshalling extractor to use for keeping order.
+	KeepOrderPreUnmarshalExtractor KeepOrderPreUnmarshalExtractor
+	// OrderedGroups specifies the groups used to keep request order.
+	OrderedGroups OrderedGroups
+
 	// DisableKeepAlives, if true, disables keep-alives and only use the
 	// connection for a single request.
 	// This used for rpc transport layer like http, it's unrelated to
@@ -47,6 +55,12 @@ type ListenServeOptions struct {
 
 	// StopListening is used to instruct the server transport to stop listening.
 	StopListening <-chan struct{}
+}
+
+func (o *ListenServeOptions) fixKeepOrder() {
+	if o.OrderedGroups == nil {
+		o.OrderedGroups = actor.Default
+	}
 }
 
 // ListenServeOption modifies the ListenServeOptions.
@@ -118,6 +132,29 @@ func WithServeCertProvider(providerName string) ListenServeOption {
 func WithServerAsync(serverAsync bool) ListenServeOption {
 	return func(opts *ListenServeOptions) {
 		opts.ServerAsync = serverAsync
+	}
+}
+
+// WithKeepOrderPreDecodeExtractor returns a ListenServeOption which enables keep-order processing
+// by extracting the order key from the decoded request body.
+func WithKeepOrderPreDecodeExtractor(preDecodeExtractor KeepOrderPreDecodeExtractor) ListenServeOption {
+	return func(opts *ListenServeOptions) {
+		opts.KeepOrderPreDecodeExtractor = preDecodeExtractor
+	}
+}
+
+// WithKeepOrderPreUnmarshalExtractor returns a ListenServeOption which enables keep-order processing
+// by extracting the order key from the unmarshaled request body.
+func WithKeepOrderPreUnmarshalExtractor(preUnmarshalExtractor KeepOrderPreUnmarshalExtractor) ListenServeOption {
+	return func(opts *ListenServeOptions) {
+		opts.KeepOrderPreUnmarshalExtractor = preUnmarshalExtractor
+	}
+}
+
+// WithOrderedGroups returns a ListenServeOption which specifies the groups used to keep request order.
+func WithOrderedGroups(groups OrderedGroups) ListenServeOption {
+	return func(opts *ListenServeOptions) {
+		opts.OrderedGroups = groups
 	}
 }
 
