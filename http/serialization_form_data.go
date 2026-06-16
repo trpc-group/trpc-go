@@ -21,8 +21,6 @@ import (
 )
 
 var (
-	// tagJSON uses same tag with json.
-	tagJSON = "json"
 	// FormDataMarshalType the serialization method of the response data,
 	// default is json serialization.
 	FormDataMarshalType = codec.SerializationTypeJSON
@@ -31,7 +29,7 @@ var (
 func init() {
 	codec.RegisterSerializer(
 		codec.SerializationTypeFormData,
-		NewFormDataSerialization(tagJSON),
+		NewFormDataSerialization(DefaultSerializationTag),
 	)
 }
 

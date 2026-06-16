@@ -21,7 +21,7 @@ import (
 )
 
 func init() {
-	codec.RegisterSerializer(codec.SerializationTypeGet, NewGetSerialization(tag))
+	codec.RegisterSerializer(codec.SerializationTypeGet, NewGetSerialization(DefaultSerializationTag))
 }
 
 // NewGetSerialization initializes the get serialized object.

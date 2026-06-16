@@ -38,7 +38,7 @@ func TestFormSerializerRegister(t *testing.T) {
 	defer func() {
 		codec.RegisterSerializer(codec.SerializationTypeForm, s)
 	}()
-	codec.RegisterSerializer(codec.SerializationTypeForm, http.NewFormSerialization("json"))
+	codec.RegisterSerializer(codec.SerializationTypeForm, http.NewFormSerialization(http.DefaultSerializationTag))
 	formSerializer := codec.GetSerializer(codec.SerializationTypeForm)
 	require.NotNil(t, formSerializer)
 }
