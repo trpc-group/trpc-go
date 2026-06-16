@@ -654,6 +654,23 @@ func TestWithWritev(t *testing.T) {
 	assert.Equal(t, true, opts.Writev)
 }
 
+func TestWithOrderedGroups(t *testing.T) {
+	groups := &transportTestOrderedGroups{}
+	opt := transport.WithOrderedGroups(groups)
+	assert.NotNil(t, opt)
+	opts := &transport.ListenServeOptions{}
+	opt(opts)
+	assert.Equal(t, groups, opts.OrderedGroups)
+}
+
+type transportTestOrderedGroups struct{}
+
+func (*transportTestOrderedGroups) Add(string, func()) {}
+
+func (*transportTestOrderedGroups) Remove(string) {}
+
+func (*transportTestOrderedGroups) Stop() {}
+
 // TestWithMaxRoutine tests setting max number of goroutines.
 func TestWithMaxRoutine(t *testing.T) {
 	opt := transport.WithMaxRoutines(100)
@@ -1249,6 +1266,33 @@ func TestTCPListenAndServeKeepOrderPreDecode(t *testing.T) {
 	sendKeepOrderPreDecodeRequests(t, ln.Addr().String(), metaDataKey, assertKeepOrderResponses)
 }
 
+func TestTCPListenAndServeKeepOrderPreDecodeFallbackWithoutKey(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	defer ln.Close()
+
+	const metaDataKey = "keep_order_key"
+	h := &keepOrderPreDecodeHandler{values: make(map[string][]string)}
+	go func() {
+		st := transport.NewServerTransport(transport.WithKeepAlivePeriod(time.Minute))
+		err := st.ListenAndServe(context.Background(),
+			transport.WithListener(ln),
+			transport.WithHandler(h),
+			transport.WithServerFramerBuilder(trpc.DefaultFramerBuilder),
+			transport.WithServiceName(t.Name()),
+			transport.WithServerAsync(true),
+			transport.WithKeepOrderPreDecodeExtractor(func(context.Context, []byte) (string, bool) {
+				return "", false
+			}),
+		)
+		if err != nil {
+			t.Logf("ListenAndServe fail: %v", err)
+		}
+	}()
+
+	sendKeepOrderPreDecodeRequests(t, ln.Addr().String(), metaDataKey, assertKeepOrderResponseCounts)
+}
+
 func TestTCPListenAndServeKeepOrderPreUnmarshal(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.Nil(t, err)
@@ -1281,6 +1325,32 @@ func TestTCPListenAndServeKeepOrderPreUnmarshal(t *testing.T) {
 	}()
 
 	sendKeepOrderPreUnmarshalRequests(t, ln.Addr().String(), assertKeepOrderResponses)
+}
+
+func TestTCPListenAndServeKeepOrderPreUnmarshalFallbackWithoutKey(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	defer ln.Close()
+
+	h := &keepOrderPreUnmarshalHandler{values: make(map[string][]string)}
+	go func() {
+		st := transport.NewServerTransport(transport.WithKeepAlivePeriod(time.Minute))
+		err := st.ListenAndServe(context.Background(),
+			transport.WithListener(ln),
+			transport.WithHandler(h),
+			transport.WithServerFramerBuilder(trpc.DefaultFramerBuilder),
+			transport.WithServiceName(t.Name()),
+			transport.WithServerAsync(true),
+			transport.WithKeepOrderPreUnmarshalExtractor(func(context.Context, interface{}) (string, bool) {
+				return "", false
+			}),
+		)
+		if err != nil {
+			t.Logf("ListenAndServe fail: %v", err)
+		}
+	}()
+
+	sendKeepOrderPreUnmarshalRequests(t, ln.Addr().String(), assertKeepOrderResponseCounts)
 }
 
 func sendKeepOrderPreDecodeRequests(
@@ -1457,5 +1527,11 @@ func assertKeepOrderResponses(t *testing.T, rspCount int, keys []string, rsps ma
 	}
 	for _, key := range keys {
 		require.Equal(t, strings.Join(expect, " "), rsps[key])
+	}
+}
+
+func assertKeepOrderResponseCounts(t *testing.T, rspCount int, keys []string, rsps map[string]string) {
+	for _, key := range keys {
+		assert.Len(t, strings.Split(rsps[key], " "), rspCount, key)
 	}
 }

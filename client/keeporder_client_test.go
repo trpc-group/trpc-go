@@ -38,6 +38,20 @@ func TestKeepOrderClient(t *testing.T) {
 	require.EqualValues(t, rsp, rspOrError.Rsp.Message)
 }
 
+func TestKeepOrderClientError(t *testing.T) {
+	sendErr := errors.New("send failed")
+	invokeErr := errors.New("invoke failed")
+	cli := &testKeepOrderClient{
+		sendErr:   sendErr,
+		invokeErr: invokeErr,
+	}
+	c := client.NewKeepOrderClient[testRsp](cli)
+	ch, err := c.KeepOrderInvoke(context.Background(), &testReq{})
+	require.ErrorIs(t, err, sendErr)
+	rspOrError := <-ch
+	require.ErrorIs(t, rspOrError.Err, invokeErr)
+}
+
 type testReq struct {
 	Message string
 }
@@ -46,7 +60,9 @@ type testRsp struct {
 }
 
 type testKeepOrderClient struct {
-	wantRsp string
+	wantRsp   string
+	sendErr   error
+	invokeErr error
 }
 
 func (c *testKeepOrderClient) Invoke(
@@ -59,11 +75,11 @@ func (c *testKeepOrderClient) Invoke(
 	if !ok {
 		return errors.New("client info not found")
 	}
-	info.SendError <- nil
+	info.SendError <- c.sendErr
 	rsp, ok := rspBody.(*testRsp)
 	if !ok {
 		return errors.New("invalid response type")
 	}
 	rsp.Message = c.wantRsp
-	return nil
+	return c.invokeErr
 }

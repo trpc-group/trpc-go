@@ -441,12 +441,26 @@ func TestServicePreDecode(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []byte("normal-request"), output)
 	require.Equal(t, "/trpc.test.helloworld.Greeter/SayHello", msg.ServerRPCName())
+	successCtx := ctx
+
+	ctx, _ = codec.WithNewMessage(context.Background())
+	_, err = pdh.PreDecode(ctx, []byte("decode-error"))
+	require.ErrorContains(t, err, "server decode request fail")
 
 	h, ok := s.(transport.Handler)
 	require.True(t, ok)
-	ctx = keeporder.NewContextWithPreDecode(ctx, &keeporder.PreDecodeInfo{ReqBodyBuf: output})
+	ctx = keeporder.NewContextWithPreDecode(successCtx, &keeporder.PreDecodeInfo{ReqBodyBuf: output})
 	_, err = h.Handle(ctx, []byte("normal-request"))
 	require.NoError(t, err)
+}
+
+func TestServicePreDecodeCodecEmpty(t *testing.T) {
+	s := server.New(server.WithProtocol("unknown-keeporder-predecode"))
+	pdh, ok := s.(keeporder.PreDecodeHandler)
+	require.True(t, ok)
+	ctx, _ := codec.WithNewMessage(context.Background())
+	_, err := pdh.PreDecode(ctx, []byte("normal-request"))
+	require.ErrorContains(t, err, "server codec empty")
 }
 
 func TestServicePreUnmarshal(t *testing.T) {
@@ -466,6 +480,9 @@ func TestServicePreUnmarshal(t *testing.T) {
 	require.True(t, ok)
 
 	ctx, _ = codec.WithNewMessage(context.Background())
+	_, err = puh.PreUnmarshal(ctx, []byte("normal-request"))
+	require.ErrorContains(t, err, "failed to get keeporder pre-unmarshal info")
+
 	info := &keeporder.PreUnmarshalInfo{}
 	ctx = keeporder.NewContextWithPreUnmarshal(ctx, info)
 	req, err := puh.PreUnmarshal(ctx, []byte("normal-request"))
