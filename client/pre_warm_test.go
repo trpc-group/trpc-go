@@ -31,6 +31,8 @@ import (
 	"trpc.group/trpc-go/trpc-go/transport"
 )
 
+const preWarmAddress = "prewarm.example.test:8000"
+
 func TestInitializableClientPreWarm(t *testing.T) {
 	cli, ok := client.New().(client.InitializableClient)
 	require.True(t, ok)
@@ -41,7 +43,7 @@ func TestInitializableClientPreWarm(t *testing.T) {
 		client.WithPool(pool),
 		client.WithPreWarm(transport.PreWarmOptions{ConnsPerNode: 2}),
 	))
-	require.Equal(t, []string{"10.0.0.1:8000", "10.0.0.1:8000"}, pool.addresses)
+	require.Equal(t, []string{preWarmAddress, preWarmAddress}, pool.addresses)
 }
 
 func TestInitializableClientPreWarmDisabled(t *testing.T) {
@@ -87,7 +89,7 @@ type preWarmSelector struct{}
 
 func (preWarmSelector) Select(serviceName string, _ ...selector.Option) (*registry.Node, error) {
 	if serviceName == "backend" {
-		return &registry.Node{Network: "tcp", Address: "10.0.0.1:8000"}, nil
+		return &registry.Node{Network: "tcp", Address: preWarmAddress}, nil
 	}
 	return nil, errors.New("unknown service")
 }
