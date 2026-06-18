@@ -37,7 +37,7 @@ func main() {
 	// Send request.
 	rsp, err := clientProxy.SayHello(ctx, req)
 	if err != nil {
-		fmt.Println("Say hi err:%v", err)
+		fmt.Printf("Say hi err:%v\n", err)
 		return
 	}
 	fmt.Printf("Get msg: %s\n", rsp.GetMsg())
@@ -54,7 +54,7 @@ func main() {
 	// Send request.
 	rsp, err = clientProxy.SayHello(ctx, req)
 	if err != nil {
-		fmt.Println("Say hi err:%v", err)
+		fmt.Printf("Say hi err:%v\n", err)
 		return
 	}
 	fmt.Printf("Get msg: %s\n", rsp.GetMsg())

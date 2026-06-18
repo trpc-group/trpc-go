@@ -1,0 +1,12 @@
+global:
+  namespace: development
+  env_name: test
+
+server:
+  service:
+    - name: trpc.app.server.fasthttp
+      ip: 127.0.0.1
+      port: 8080
+      network: tcp
+      protocol: fasthttp_no_protocol
+      timeout: 1000
