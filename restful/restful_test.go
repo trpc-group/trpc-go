@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
@@ -701,8 +702,12 @@ func TestBasedOnFastHTTP(t *testing.T) {
 		thttp.NewRESTServerTransport(true))
 
 	// service registration
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.Nil(t, err)
+	endpoint := "http://" + listener.Addr().String()
+
 	s := &server.Server{}
-	service := server.New(server.WithAddress("127.0.0.1:45678"),
+	service := server.New(server.WithListener(listener),
 		server.WithServiceName("trpc.test.helloworld.FastHTTP"),
 		server.WithProtocol("restful_based_on_fasthttp"),
 		server.WithRESTOptions(
@@ -747,9 +752,18 @@ func TestBasedOnFastHTTP(t *testing.T) {
 	hpb.RegisterGreeterService(s, &greeterServerImpl{})
 
 	// start server
+	serveErr := make(chan error, 1)
 	go func() {
-		err := s.Serve()
-		require.Nil(t, err)
+		serveErr <- s.Serve()
+	}()
+	defer func() {
+		require.Nil(t, s.Close(nil))
+		select {
+		case err := <-serveErr:
+			require.Nil(t, err)
+		case <-time.After(time.Second):
+			t.Fatal("timeout waiting for server close")
+		}
 	}()
 
 	time.Sleep(100 * time.Millisecond)
@@ -758,10 +772,10 @@ func TestBasedOnFastHTTP(t *testing.T) {
 	data := `{"name": "xyz"}`
 	buf := bytes.Buffer{}
 	gBuf := gzip.NewWriter(&buf)
-	_, err := gBuf.Write([]byte(data))
+	_, err = gBuf.Write([]byte(data))
 	require.Nil(t, err)
 	gBuf.Close()
-	req, err := http.NewRequest("POST", "http://127.0.0.1:45678/v1/foobar", &buf)
+	req, err := http.NewRequest("POST", endpoint+"/v1/foobar", &buf)
 	require.Nil(t, err)
 	req.Header.Add("Content-Type", "anything")
 	req.Header.Add("Content-Encoding", "gzip")
@@ -785,7 +799,7 @@ func TestBasedOnFastHTTP(t *testing.T) {
 	require.Equal(t, respBody.Message, "test")
 
 	// test matching all by query params
-	req2, err := http.NewRequest("GET", "http://127.0.0.1:45678/v2/bar?name=xyz", nil)
+	req2, err := http.NewRequest("GET", endpoint+"/v2/bar?name=xyz", nil)
 	require.Nil(t, err)
 	resp2, err := http.DefaultClient.Do(req2)
 	require.Nil(t, err)
@@ -796,7 +810,7 @@ func TestBasedOnFastHTTP(t *testing.T) {
 	require.Equal(t, resp2.Header.Get("Content-Type"), "application/json")
 
 	// test server error
-	req3, err := http.NewRequest("GET", "http://127.0.0.1:45678/v2/bar?name=anything", nil)
+	req3, err := http.NewRequest("GET", endpoint+"/v2/bar?name=anything", nil)
 	require.Nil(t, err)
 	resp3, err := http.DefaultClient.Do(req3)
 	require.Nil(t, err)
@@ -810,7 +824,7 @@ func TestBasedOnFastHTTP(t *testing.T) {
 	_, err = gBuf4.Write([]byte(data4))
 	require.Nil(t, err)
 	gBuf4.Close()
-	req4, err := http.NewRequest("POST", "http://127.0.0.1:45678/v1/foobar", &buf4)
+	req4, err := http.NewRequest("POST", endpoint+"/v1/foobar", &buf4)
 	require.Nil(t, err)
 	req4.Header.Add("Content-Type", "anything")
 	req4.Header.Add("Content-Encoding", "gzip")
