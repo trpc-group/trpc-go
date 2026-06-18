@@ -602,6 +602,28 @@ func main() {
 }
 ```
 
+这种自定义路由默认保持历史行为：只有 pb 定义的 RESTful 路由会执行
+service 的 server filter 链。如果希望自定义路由也执行该 service 上配置的
+filter，可以在重新注册 handler 前先包装一层：
+
+```go
+router := restful.GetRouter(pb.PingServer_ServiceDesc.ServiceName)
+mux := http.NewServeMux()
+mux.Handle("/", router)
+mux.HandleFunc("/custom/ping", customPingHandler)
+
+restful.RegisterRouter(
+    pb.PingServer_ServiceDesc.ServiceName,
+    restful.WrapHandlerWithServerFilters(pb.PingServer_ServiceDesc.ServiceName, mux),
+)
+```
+
+`WrapHandlerWithServerFilters` 是显式 opt-in，不改变 pb 路由行为。pb 路由
+仍然走原生 transcoder 路径，filter 看到的仍是类型化的请求和响应；自定义
+非 pb 路由会在进入被包装 handler 前，以 nil 请求值执行 server filter 链。
+调用 wrapper 前必须先注册 pb service，这样 wrapper 才能复用框架创建的
+RESTful router 来做路由匹配和 filter 提取。
+
 # 性能
 
 为了提升性能，RESTful 协议插件额外支持基于 [fasthttp](https://github.com/valyala/fasthttp) 来处理 HTTP 包，RESTful 协议插件性能和注册的 URL 路径复杂度有关，和通过哪种方式传递 PB Message 字段也有关，这里仅给出最简单的 echo 测试场景下两种模式的对比：

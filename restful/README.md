@@ -664,6 +664,30 @@ func main() {
 }
 ```
 
+Custom routes registered this way keep the historical behavior: only pb-defined
+RESTful routes run the service server filter chain. If the custom routes should
+also run the filters configured for the service, wrap the handler before
+registering it:
+
+```go
+router := restful.GetRouter(pb.PingServer_ServiceDesc.ServiceName)
+mux := http.NewServeMux()
+mux.Handle("/", router)
+mux.HandleFunc("/custom/ping", customPingHandler)
+
+restful.RegisterRouter(
+    pb.PingServer_ServiceDesc.ServiceName,
+    restful.WrapHandlerWithServerFilters(pb.PingServer_ServiceDesc.ServiceName, mux),
+)
+```
+
+`WrapHandlerWithServerFilters` is opt-in and preserves pb route behavior. Pb
+routes still go through the native transcoder path with typed request and
+response values, while custom non-pb routes run the server filter chain with a
+nil request value before the wrapped handler is invoked. The pb service must be
+registered first so the wrapper can reuse the framework-created RESTful router
+for route matching and filter extraction.
+
 # Performance
 
 To improve performance, the RESTful protocol plugin also supports handling HTTP packets based on [fasthttp](https://github.com/valyala/fasthttp). 

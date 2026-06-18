@@ -80,6 +80,64 @@ func GetRouter(name string) http.Handler {
 	return router
 }
 
+// WrapHandlerWithServerFilters wraps an http.Handler so custom, non-pb routes
+// pass through the service-level server filter chain configured for the RESTful
+// service. Pb-mapped RESTful routes bypass this wrapper and keep the native
+// transcoder filter path with typed request and response values.
+//
+// The pb service must be registered before calling this function because the
+// wrapper sources filters and route matching from the framework-created
+// *restful.Router for the service.
+func WrapHandlerWithServerFilters(name string, h http.Handler) http.Handler {
+	orig := mustGetRouterForServerFilterWrapper(name)
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if orig.matchesRESTfulRoute(req) {
+			h.ServeHTTP(w, req)
+			return
+		}
+
+		ctx := req.Context()
+		if ctxForCompatibility != nil {
+			ctx = ctxForCompatibility(ctx, w, req)
+		}
+		ctx, err := orig.opts.HeaderMatcher(ctx, w, req, orig.opts.ServiceName, req.URL.Path)
+		if err != nil {
+			putBackCtxMessage(ctx)
+			orig.opts.ErrorHandler(ctx, w, req, errs.New(errs.RetServerDecodeFail, err.Error()))
+			return
+		}
+		defer putBackCtxMessage(ctx)
+
+		var filters filter.ServerChain
+		if orig.opts.FilterFunc != nil {
+			filters = orig.opts.FilterFunc()
+		}
+		if _, err := filters.Filter(ctx, nil, func(ctx context.Context, _ interface{}) (interface{}, error) {
+			filteredReq := req.WithContext(ctx)
+			h.ServeHTTP(w, filteredReq)
+			if req.MultipartForm == nil {
+				req.MultipartForm = filteredReq.MultipartForm
+			}
+			return nil, nil
+		}); err != nil {
+			orig.opts.ErrorHandler(ctx, w, req, err)
+		}
+	})
+}
+
+func mustGetRouterForServerFilterWrapper(name string) *Router {
+	router := GetRouter(name)
+	orig, ok := router.(*Router)
+	if !ok {
+		panic(fmt.Sprintf(
+			"restful: WrapHandlerWithServerFilters requires the original *restful.Router "+
+				"to be registered before wrapping service %q; current router is %T",
+			name, router,
+		))
+	}
+	return orig
+}
+
 // ProtoMessage is alias of proto.Message.
 type ProtoMessage proto.Message
 
@@ -324,6 +382,11 @@ func (r *Router) findTranscoder(method, path string) (*transcoder, map[string]st
 		}
 	}
 	return nil, nil
+}
+
+func (r *Router) matchesRESTfulRoute(req *http.Request) bool {
+	tr, _ := r.findTranscoder(req.Method, req.URL.Path)
+	return tr != nil
 }
 
 func (r *Router) handle(
