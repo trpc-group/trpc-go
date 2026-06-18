@@ -144,6 +144,15 @@ func handle(w http.ResponseWriter, r *http.Request) error {
 }
 ```
 
+**注意事项**
+
+- **精确匹配**：URL 注册模式下，`pattern` 会被当作 `URL.Path` 的精确匹配。
+  例如 `/api/callback/*` 不会按前缀匹配 `/api/callback/xxx`。
+- **通配兜底**：只有 `"*"` 会作为兜底 handler，在没有任何精确匹配命中时才会
+  生效。
+- **需要路由能力**（前缀匹配、路径参数、正则等）：请使用
+  `RegisterNoProtocolServiceMux`，在 mux/router 里注册路由。
+
 ### 客户端
 
 这里指的是调用一个标准 HTTP 服务, 下游这个标准 HTTP 服务并不一定是基于 tRPC-Go 框架构建的
@@ -172,10 +181,9 @@ package main
 import (
     "context"
 
-    trpc "trpc.group/trpc-go/trpc-go"
     "trpc.group/trpc-go/trpc-go/client"
     "trpc.group/trpc-go/trpc-go/codec"
-  trpc "trpc.group/trpc-go/trpc-go"
+    "trpc.group/trpc-go/trpc-go/http"
     "trpc.group/trpc-go/trpc-go/log"
 )
 

@@ -144,6 +144,16 @@ func handle(w http.ResponseWriter, r *http.Request) error {
 }
 ```
 
+**Notes**
+
+- **Exact match**: In URL registration mode, `pattern` is treated as an exact
+  `URL.Path` match. Patterns like `/api/callback/*` do **not** work as prefix
+  matching.
+- **Wildcard**: Only `"*"` is treated as a wildcard handler, and it works as a
+  fallback when no exact match exists.
+- **Need routing features** (prefix match, path params, regex): use
+  `RegisterNoProtocolServiceMux` and register routes in your mux/router.
+
 ### Client
 
 This refers to calling a standard HTTP service, which is not necessarily built on the tRPC-Go framework downstream
@@ -172,7 +182,6 @@ package main
 import (
     "context"
 
-    trpc "trpc.group/trpc-go/trpc-go"
     "trpc.group/trpc-go/trpc-go/client"
     "trpc.group/trpc-go/trpc-go/codec"
     "trpc.group/trpc-go/trpc-go/http"
