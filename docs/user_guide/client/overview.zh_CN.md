@@ -94,7 +94,7 @@ func (s *greeterServerImpl) SayHello(ctx context.Context, req *pb.HelloRequest) 
         log.ErrorContextf(ctx, "say hi fail:%v", err)
         return nil, errs.New(10000, "xxxxx") 
     }
-    return &pb.HelloReply{Xxx: reply.Xxx} nil
+    return &pb.HelloReply{Xxx: reply.Xxx}, nil
 }
 
 func main(){
@@ -122,7 +122,7 @@ import (
 )
 
 // 一般小工具都是从 main 函数写起
-func main {
+func main() {
     // 由于没有配置文件帮忙初始化插件，所以需要自己手动初始化北极星
     pselector.RegisterDefault()
     // 创建一个客户端调用代理
