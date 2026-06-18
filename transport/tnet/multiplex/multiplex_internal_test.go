@@ -97,4 +97,10 @@ func (*fakeTnetConn) SetKeepAlive(time.Duration) error   { return nil }
 func (*fakeTnetConn) SetOnRequest(tnet.TCPHandler) error { return nil }
 func (*fakeTnetConn) SetOnClosed(tnet.OnTCPClosed) error { return nil }
 func (*fakeTnetConn) SetIdleTimeout(time.Duration) error { return nil }
-func (*fakeTnetConn) SetSafeWrite(bool)                  {}
+func (*fakeTnetConn) SetWriteIdleTimeout(time.Duration) error {
+	return nil
+}
+func (*fakeTnetConn) SetReadIdleTimeout(time.Duration) error {
+	return nil
+}
+func (*fakeTnetConn) SetSafeWrite(bool) {}
