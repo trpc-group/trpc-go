@@ -1,27 +1,30 @@
-# Http
+# HTTP
 
-This example demonstrates the use of http protocol in tRPC.
+This example demonstrates the use of HTTP Standard Service in tRPC.
 
 ## Usage
 
 * Start server.
+
 ```shell
-$ go run server/main.go -conf server/trpc_go.yaml
+go run server/main.go -conf server/trpc_go.yaml
 ```
 
 * Curl request.
-```sh
-curl -X POST -d '{"msg":"hello"}' -H "Content-Type:application/json" http://127.0.0.1:8000/trpc.test.helloworld.Greeter/SayHello
+
+```shell
+curl -X POST -d '{"msg":"hello"}' -H "Content-Type:application/json" "http://127.0.0.1:8080/v1/hello"
 ```
 
 The server log will be displayed as follows:
-```
-2023-06-12 11:27:55.440 INFO    server/service.go:164   process:68073, http service:trpc.test.helloworld.Greeter launch success, tcp:127.0.0.1:8000, serving ...
-2023-06-12 11:28:00.456 DEBUG   server/main.go:21       SayHello recv req:msg:"hello"
+
+```shell
+2024-08-22 11:51:36.172 DEBUG   maxprocs/maxprocs.go:47 maxprocs: Leaving GOMAXPROCS=10: CPU quota undefined
+2024-08-22 11:51:36.172 INFO    server/service.go:202   process: 131426, http_no_protocol service: trpc.app.server.stdhttp launch success, tcp: 127.0.0.1:8080, serving ...
 ```
 
 ## Explanation
+
 For more Information, please refer to:
 
-- [Building a Generic HTTP Standard Service with tRPC-Go](/http/README.md#pan-http-standard-services)
-- [Building a Generic HTTP RPC Service with tRPC-Go](/http/README.md#pan-http-rpc-service)
+* [Building a Generic HTTP Standard Service with tRPC-Go](/http/README.md#pan-http-standard-services)
