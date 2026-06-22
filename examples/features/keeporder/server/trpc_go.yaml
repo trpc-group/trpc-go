@@ -1,0 +1,12 @@
+global:
+  namespace: development
+  env_name: test
+
+server:
+  service:
+    - name: trpc.app.keeporder.Player
+      ip: 127.0.0.1
+      port: 8080
+      network: tcp
+      protocol: trpc
+      timeout: 1000

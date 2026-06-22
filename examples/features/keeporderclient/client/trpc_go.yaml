@@ -1,0 +1,11 @@
+global:
+  namespace: development
+  env_name: test
+
+client:
+  service:
+    - name: keeporder.Player
+      network: tcp
+      protocol: trpc
+      target: ip://127.0.0.1:8080
+      timeout: 1000
