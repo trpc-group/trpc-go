@@ -91,7 +91,7 @@ func (s *greeterServerImpl) SayHello(ctx context.Context, req *pb.HelloRequest) 
         log.ErrorContextf(ctx, "say hi fail:%v", err)
         return nil, errs.New(10000, "xxxxx") 
     }
-    return &pb.HelloReply{Xxx: reply.Xxx} nil
+    return &pb.HelloReply{Xxx: reply.Xxx}, nil
 }
 
 func main(){
@@ -119,7 +119,7 @@ import (
 )
 
 // Generally, small tools start from the main function
-func main {
+func main() {
     // Since there is no configuration file to help initialize the plugin, you need to manually initialize the North Star
     pselector.RegisterDefault()
     // Create a client call proxy
