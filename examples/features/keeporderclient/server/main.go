@@ -32,7 +32,7 @@ type serviceImpl struct {
 }
 
 func (si *serviceImpl) Update(ctx context.Context, req *proto.UpdateReq) (*proto.UpdateRsp, error) {
-	// Sleep certain amount of time that is inverse proportional to the couter received
+	// Sleep certain amount of time that is inverse proportional to the counter received.
 	// to amplify what keep-order wants to achieve.
 	// time.Sleep(20 * time.Millisecond * time.Duration(req.GetTotal()-req.GetCounter()))
 	log.Infof("start process update request %+v", req)

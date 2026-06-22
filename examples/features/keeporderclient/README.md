@@ -7,7 +7,7 @@ Start server:
 ```shell
 cd examples/features/keeporderclient
 cd server
-go run . 
+go run .
 ```
 
 Start client:
@@ -43,6 +43,6 @@ proxy := proto.NewPlayerClientProxy(client.WithMultiplexedPool(multiplexed.New(m
 * Use `proxy.KeepOrderXxx` method which is generated in newer version of trpc-go-cmdline to issue keep-order requests.
 
 ```shell
-trpc upgrade 
+trpc upgrade
 trpc create -p proto/player.proto --rpconly --nogomod --mock=false -o proto --keeporder
 ```
