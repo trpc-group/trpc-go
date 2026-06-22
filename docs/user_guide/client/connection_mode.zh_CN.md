@@ -90,13 +90,14 @@ import "trpc.group/trpc-go/trpc-go/pool/connpool"
 /*
 连接池参数
 type Options struct {
-	MinIdle             int			  	// 最小空闲连接数量，由连接池后台周期性补充，0 代表不做补充
-	MaxIdle             int           	// 最大空闲连接数量，0 代表不做限制，框架默认值 65535
-	MaxActive           int           	// 用户可用连接的最大并发数，0 代表不做限制
+	MinIdle             int           	// 最小空闲连接数量，由连接池后台周期性补充，0 代表不做补充，默认值 0
+	MaxIdle             int           	// 最大空闲连接数量，0 代表不做限制，框架默认值 65536
+	MaxActive           int           	// 用户可用连接的最大并发数，0 代表不做限制，默认值 0
 	Wait                bool          	// 可用连接达到最大并发数时，是否等待，默认为 false, 不等待
 	IdleTimeout         time.Duration 	// 空闲连接超时时间，0 代表不做限制，框架默认值 50s
-	MaxConnLifetime     time.Duration 	// 连接的最大生命周期，0 代表不做限制
+	MaxConnLifetime     time.Duration 	// 连接的最大生命周期，0 代表不做限制，默认值 0
 	DialTimeout         time.Duration 	// 建立连接超时时间，框架默认值 200ms
+	PoolIdleTimeout     time.Duration 	// 连接池空闲超时时间，0 代表不做限制，框架默认值 100s
 	ForceClose          bool          	// 用户使用连接后是否强制关闭，默认为 false, 放回连接池
 	PushIdleConnToTail  bool			// 放回连接池时的方式，默认为 false, 采用 LIFO 获取空闲连接
 }
@@ -125,6 +126,12 @@ if err != nil {
 
 log.Info("req:%v, rsp:%v, err:%v", req, rsp, err)
 ```
+
+**注意：** 虽然示例中只创建了一个 `pool` 实例并传入，但 tRPC-Go 内部会为每个不同的下游 IP 地址（`network+address+protocol` 组合）创建独立的 `ConnectionPool` 实例。这些 `ConnectionPool` 实例共享相同的配置参数（如 `MaxIdle`、`MinIdle`、`IdleTimeout` 等），但各自管理自己的连接。这意味着：
+
+- 每个下游 IP 都有自己独立的连接池实例
+- 所有连接池实例使用相同的配置参数
+- 连接池实例之间互不影响，各自维护自己的连接
 
 #### 设置空闲连接超时
 
