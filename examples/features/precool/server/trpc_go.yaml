@@ -1,0 +1,27 @@
+global:
+  namespace: Development
+
+server:
+  app: app
+  server: server
+  close_wait_time: 1000
+  max_close_wait_time: 2000
+  admin:
+    ip: 127.0.0.1
+    port: 11014
+    read_timeout: 3000
+    write_timeout: 60000
+  service:
+    - name: trpc.examples.precool.Precool
+      protocol: trpc
+      network: tcp
+      address: "127.0.0.1:8000"
+      timeout: 1000
+
+client:
+  timeout: 1000
+  namespace: Development
+  service:
+    - name: trpc.examples.precool.Precool
+      target: "ip://127.0.0.1:8000"
+      protocol: trpc
