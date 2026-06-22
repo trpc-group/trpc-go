@@ -6,6 +6,7 @@ replace trpc.group/trpc-go/trpc-go => ../
 
 require (
 	github.com/golang/protobuf v1.5.2
+	github.com/r3labs/sse/v2 v2.10.0
 	github.com/valyala/fasthttp v1.43.0
 	google.golang.org/protobuf v1.33.0
 	trpc.group/trpc-go/trpc-go v0.0.0-00010101000000-000000000000
@@ -32,7 +33,6 @@ require (
 	github.com/panjf2000/ants/v2 v2.4.6 // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/r3labs/sse/v2 v2.10.0 // indirect
 	github.com/spf13/cast v1.3.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
