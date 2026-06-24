@@ -6,9 +6,17 @@ server:                                            # server configuration.
   app: examples                                        # business application name.
   server: timeout                               # service process name.
   service:                                         # business service configuration, can have multiple.
-    - name: trpc.examples.timeout.chat           # the route name of the service.
+    - name: trpc.examples.timeout.forward-chat           # the route name of the service.
       ip: 127.0.0.1                                # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
-      port: 8002                                   # the service listening port, can use the placeholder ${port}.
+      port: 8001                                   # the service listening port, can use the placeholder ${port}.
       network: tcp                                 # the service listening network type,  tcp or udp.
       protocol: trpc                               # application layer protocol, trpc or http.
-      timeout: 2000                               # maximum request processing time in milliseconds.
+      timeout: 5000                               # maximum request processing time in milliseconds.
+client:
+  service:
+    - name: trpc.examples.timeout.chat
+      callee: trpc.examples.chat.Chat
+      target: ip://127.0.0.1:8002
+      timeout: 3000
+      network: tcp
+      protocol: trpc
