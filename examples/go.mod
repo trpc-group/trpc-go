@@ -5,6 +5,7 @@ go 1.18
 replace trpc.group/trpc-go/trpc-go => ../
 
 require (
+	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.5.2
 	github.com/valyala/fasthttp v1.43.0
 	google.golang.org/protobuf v1.33.0
@@ -17,7 +18,6 @@ require (
 	github.com/andybalholm/brotli v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/go-playground/form/v4 v4.2.0 // indirect
-	github.com/golang/mock v1.4.4 // indirect
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/google/flatbuffers v2.0.0+incompatible // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect

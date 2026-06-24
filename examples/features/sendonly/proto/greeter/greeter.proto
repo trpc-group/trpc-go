@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package  trpc.examples.sendonly;
+
+import "google/protobuf/empty.proto";
+
+option  go_package ="trpc.group/trpc-go/trpc-go/examples/features/sendonly/proto/greeter";
+
+message NotifyRequest {
+  string message = 1;
+}
+
+service Greeter {
+  rpc Notify(NotifyRequest) returns (NotifyResponse) {}
+}
+
+message NotifyResponse {
+  string message = 1;
+}
