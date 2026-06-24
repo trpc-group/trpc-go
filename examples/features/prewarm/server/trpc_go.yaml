@@ -1,0 +1,8 @@
+server:
+  service:
+    - name: trpc.helloworld.Greeter
+      ip: 127.0.0.1
+      port: 8000
+      network: tcp
+      protocol: trpc
+      timeout: 1000

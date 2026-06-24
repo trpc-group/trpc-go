@@ -1,0 +1,15 @@
+global: # global config.
+  namespace: development # environment type, two types: production and development.
+  env_name: test # environment name, names of multiple environments in informal settings.
+
+server: # server configuration.
+  service: # business service configuration, can have multiple.
+    - name: trpc.app.server.stdhttps # the route name of the service.
+      ip: 127.0.0.1 # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
+      port: 9443 # the service listening port, can use the placeholder ${port}.
+      network: tcp # the service listening network type.
+      protocol: https_no_protocol # the service application protocol.
+      timeout: 1000 # the service process timeout.
+      tls_cert: "../../../../testdata/server.crt" # TLS certificate file.
+      tls_key: "../../../../testdata/server.key" # TLS private key file.
+      filter: [info-request-head]

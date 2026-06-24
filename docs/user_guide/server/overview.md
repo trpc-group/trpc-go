@@ -262,6 +262,33 @@ tRPC-Go has considered the testability of the framework from the beginning of th
 
 # Advanced Features
 
+## Precool Readiness Checks
+
+Precool checks are used when a process has started but some dependencies still
+need to finish initialization before the service should be considered ready.
+The admin endpoint `/cmds/is_precool/` reports process-level status, and
+`/cmds/is_precool/{service-name}` reports service-level status.
+
+When the server is created with `trpc.NewServer()`, tRPC-Go creates a precool
+checker and wires it to both the server and admin service. Register service
+readiness logic with `RegisterServicePrecool`:
+
+```go
+s := trpc.NewServer()
+if err := s.RegisterServicePrecool("trpc.examples.precool.Precool", func() precool.Status {
+    if !dependencyReady {
+        return precool.Ongoing
+    }
+    return precool.Success
+}); err != nil {
+    return err
+}
+```
+
+If a server or admin service is constructed manually, pass the same
+`precool.Checker` instance with `server.WithPrecool` and `admin.WithPrecool`.
+See `examples/features/precool` for a complete runnable example.
+
 ## Timeout control
 
 tRPC-Go provides three timeout mechanisms for RPC calls: link timeout, message timeout, and call timeout. For an introduction to the principles and related configurations of these three timeout mechanisms, please refer to [tRPC-Go Timeout Control](/docs/user_guide/timeout_control.md).

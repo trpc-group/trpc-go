@@ -1,0 +1,18 @@
+client:
+  service:
+    - name: trpc.app.server.stdhttps
+      target: ip://127.0.0.1:9443
+      protocol: http_no_protocol
+      network: tcp
+      timeout: 1000
+      tls_cert: ../../../testdata/client.crt
+      tls_key: ../../../testdata/client.key
+      ca_cert: none
+      tls_server_name: localhost
+      tls_cert_provider: simple  # Use custom certificate provider
+
+plugins:
+  log:
+    default:
+      - writer: console
+        level: debug

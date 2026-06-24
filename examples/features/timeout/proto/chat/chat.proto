@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package  trpc.examples.chat;
+
+option go_package = "trpc.group/trpc-go/trpc-go/examples/features/timeout/proto/chat";
+
+
+// Echo is the echo service.
+service Chat {
+  // UnarySayHi is unary say hi.
+  rpc UnarySayHi(SayHiRequest) returns (SayHiResponse) {}
+}
+
+// EchoRequest is the request for say hi.
+message SayHiRequest {
+  string message = 1;
+}
+
+// EchoResponse is the response for say hi.
+message SayHiResponse {
+  string message = 1;
+}

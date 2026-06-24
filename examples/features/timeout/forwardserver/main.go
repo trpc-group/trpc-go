@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"trpc.group/trpc-go/trpc-go"
-	"trpc.group/trpc-go/trpc-go/client"
 	pb "trpc.group/trpc-go/trpc-go/examples/features/timeout/proto/chat"
 	"trpc.group/trpc-go/trpc-go/log"
 )
@@ -28,8 +27,8 @@ import (
 
 func main() {
 	s := trpc.NewServer()
-	pb.RegisterChatService(s.Service("trpc.examples.timeout.chat"), &chat{
-		client: pb.NewChatClientProxy(client.WithTarget("ip://127.0.0.1:8002")),
+	pb.RegisterChatService(s.Service("trpc.examples.timeout.forward-chat"), &chat{
+		client: pb.NewChatClientProxy(),
 	})
 	if err := s.Serve(); err != nil {
 		log.Error(err)
@@ -42,6 +41,11 @@ type chat struct {
 }
 
 func (c *chat) UnarySayHi(ctx context.Context, req *pb.SayHiRequest) (*pb.SayHiResponse, error) {
-	time.Sleep(1 * time.Second)
-	return &pb.SayHiResponse{Message: "SayHi: " + req.Message}, nil
+	time.Sleep(6 * time.Second)
+	rsp, err := c.client.UnarySayHi(ctx, req)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	return &pb.SayHiResponse{Message: "SayHi: " + rsp.Message}, nil
 }

@@ -3,12 +3,13 @@ global:                             # global config.
   env_name: test                    # environment name, names of multiple environments in informal settings.
 
 server:                                            # server configuration.
-  app: examples                                        # business application name.
-  server: timeout                               # service process name.
+  app: examples                                    # business application name.
+  server: echo                                     # service process name.
   service:                                         # business service configuration, can have multiple.
-    - name: trpc.examples.timeout.chat           # the route name of the service.
+    - name: trpc.examples.sendonly.greeter                # the route name of the service.
+      callee: trpc.examples.sendonly.Greeter
       ip: 127.0.0.1                                # the service listening ip address, can use the placeholder ${ip}, choose one of ip and nic, priority ip.
-      port: 8002                                   # the service listening port, can use the placeholder ${port}.
-      network: tcp                                 # the service listening network type,  tcp or udp.
+      nic: eth0                                    # the service listening network card address, if configures ip, you don't need to configure it.
+      port: 8000                                   # the service listening port, can use the placeholder ${port}.
+      network: udp                                 # the service listening network type,  tcp or udp.
       protocol: trpc                               # application layer protocol, trpc or http.
-      timeout: 2000                               # maximum request processing time in milliseconds.

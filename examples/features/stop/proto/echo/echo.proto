@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package  trpc.examples.echo;
+
+option  go_package ="trpc.group/trpc-go/trpc-go/examples/features/stop/proto/echo";
+
+// EchoRequest is the request for echo.
+message EchoRequest {
+  string message = 1;
+}
+
+// EchoResponse is the response for echo.
+message EchoResponse {
+  string message = 1;
+}
+
+// Echo is the echo service.
+service Echo {
+  // UnaryEcho is unary echo.
+  rpc UnaryEcho(EchoRequest) returns (EchoResponse) {}
+}
+
+service  TestStreaming {
+  rpc StreamingOutputCall(StreamingFullDuplexCallRequest)
+      returns (stream StreamingFullDuplexCallResponse);
+  rpc StreamingInputCall(stream StreamingFullDuplexCallRequest)
+      returns (StreamingFullDuplexCallResponse);
+  rpc FullDuplexCall(stream StreamingFullDuplexCallRequest)
+      returns (stream StreamingFullDuplexCallResponse);
+}
+
+message StreamingFullDuplexCallRequest {
+  string message = 1;
+}
+
+message StreamingFullDuplexCallResponse {
+  string message = 1;
+}
