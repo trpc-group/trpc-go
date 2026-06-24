@@ -8,6 +8,7 @@ require (
 	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.5.2
 	github.com/valyala/fasthttp v1.43.0
+	golang.org/x/sync v0.1.0
 	google.golang.org/protobuf v1.33.0
 	trpc.group/trpc-go/trpc-go v0.0.0-00010101000000-000000000000
 	trpc.group/trpc/trpc-protocol/pb/go/trpc v1.0.0
@@ -40,7 +41,6 @@ require (
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
 	golang.org/x/net v0.17.0 // indirect
-	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.21.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect

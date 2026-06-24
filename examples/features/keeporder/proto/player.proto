@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package keeporder;
+
+option go_package="trpc.group/trpc-go/trpc-go/examples/features/keeporder/proto";
+
+service Player {
+  rpc Update(UpdateReq) returns (UpdateRsp);
+}
+
+message UpdateReq {
+  string id = 1;
+  int32 counter = 2;
+  int32 total = 3;
+}
+
+message UpdateRsp {
+  string state = 2;
+}
