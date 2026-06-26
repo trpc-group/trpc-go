@@ -1,53 +1,59 @@
-//
-//
-// Tencent is pleased to support the open source community by making tRPC available.
-//
-// Copyright (C) 2023 Tencent.
-// All rights reserved.
-//
-// If you have downloaded a copy of the tRPC source code from Tencent,
-// please note that tRPC source code is licensed under the  Apache 2.0 License,
-// A copy of the Apache 2.0 License is included in this file.
-//
-//
-
 // Package main is the server main package for http demo.
 package main
 
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 
-	trpc "trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go"
+	"trpc.group/trpc-go/trpc-go/codec"
+	"trpc.group/trpc-go/trpc-go/filter"
+	thttp "trpc.group/trpc-go/trpc-go/http"
 	"trpc.group/trpc-go/trpc-go/log"
-
-	pb "trpc.group/trpc-go/trpc-go/testdata/trpc/helloworld"
 )
 
-// GreeterServerImpl service implement
-type GreeterServerImpl struct {
-	pb.GreeterService
-}
-
-// SayHello say hello request
-func (s *GreeterServerImpl) SayHello(ctx context.Context, req *pb.HelloRequest) (*pb.HelloReply, error) {
-	rsp := &pb.HelloReply{}
-
-	log.Debugf("SayHello recv req:%s", req)
-	rsp.Msg = "Hi " + req.Msg
-
-	return rsp, nil
+// handle is a function that processes HTTP requests.
+// Its implementation is consistent with the standard HTTP library.
+func handle(w http.ResponseWriter, r *http.Request) error {
+	_, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	// Finally, use 'w' to send the response.
+	w.Header().Set("Content-type", "application/text")
+	w.Header().Set("reply", "response head")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("response body"))
+	return nil
 }
 
 func main() {
+	filter.Register("info-request-head", infoReqHead, nil)
 	// Init server.
 	s := trpc.NewServer()
 
-	// Register service.
-	pb.RegisterGreeterService(s, &GreeterServerImpl{})
+	// Register the handle function for the "/v1/hello" endpoint.
+	thttp.HandleFunc("/v1/hello", handle)
 
-	// Serve and listen.
+	// When registering the NoProtocolService, the parameter passed must match the service name in the configuration.
+	// The service name here should be: s.Service("trpc.app.server.stdhttp").
+	thttp.RegisterNoProtocolService(s.Service("trpc.app.server.stdhttp"))
+
+	// Start serving and listening.
 	if err := s.Serve(); err != nil {
 		fmt.Println(err)
 	}
+}
+
+func infoReqHead(ctx context.Context, req interface{}, next filter.ServerHandleFunc) (rsp interface{}, err error) {
+	msg := codec.Message(ctx)
+	rsp, err = next(ctx, req)
+	log.Info(msg.ClientReqHead())
+	log.Info(msg.ClientRspHead())
+	log.Info(msg.ServerReqHead())
+	log.Info(msg.ServerRspHead())
+	return rsp, err
 }

@@ -1,0 +1,16 @@
+global:
+  namespace: Development
+  env_name: test
+
+server:
+  app: test
+  server: helloworld
+  filter:
+    - trace
+  service:
+    - name: trpc.test.helloworld.Greeter
+      ip: 127.0.0.1
+      port: 9092
+      network: tcp
+      protocol: restful
+      timeout: 1000

@@ -7,6 +7,7 @@ replace trpc.group/trpc-go/trpc-go => ../
 require (
 	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.5.2
+	github.com/qiangxue/fasthttp-routing v0.0.0-20160225050629-6ccdc2a18d87
 	github.com/r3labs/sse/v2 v2.10.0
 	github.com/valyala/fasthttp v1.43.0
 	golang.org/x/sync v0.1.0
@@ -19,7 +20,9 @@ require (
 	github.com/BurntSushi/toml v0.3.1 // indirect
 	github.com/andybalholm/brotli v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
+	github.com/go-ozzo/ozzo-routing v2.1.4+incompatible // indirect
 	github.com/go-playground/form/v4 v4.2.0 // indirect
+	github.com/golang/gddo v0.0.0-20210115222349-20d68f94ee1f // indirect
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/google/flatbuffers v2.0.0+incompatible // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
@@ -27,6 +30,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kavu/go_reuseport v1.5.0 // indirect
 	github.com/klauspost/compress v1.15.9 // indirect
+	github.com/kr/pretty v0.2.0 // indirect
 	github.com/lestrrat-go/strftime v1.0.6 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect
@@ -44,6 +48,7 @@ require (
 	golang.org/x/sys v0.21.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
+	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	trpc.group/trpc-go/tnet v1.1.0 // indirect
 )

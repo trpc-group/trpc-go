@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package  trpc.examples.echo;
+
+option go_package = "trpc.group/trpc-go/trpc-go/examples/features/httprpc/proto/echo";
+
+// Due to historical reasons, the rick platform needs to import "trpc/common/trpc.proto";
+import "trpc.proto";
+
+// EchoRequest is the request for echo.
+message EchoRequest {
+  string message = 1 [json_name="json_message"];
+}
+
+// EchoResponse is the response for echo.
+message EchoResponse {
+  int32 code = 1;
+  string message = 2;
+}
+
+// Echo is the echo service.
+service Echo {
+  // UnaryEcho is unary echo.
+  rpc UnaryEcho(EchoRequest) returns (EchoResponse) {
+    option (trpc.alias) = "/unaryecho";
+  }
+}
