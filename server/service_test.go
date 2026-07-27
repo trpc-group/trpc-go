@@ -198,7 +198,9 @@ func TestService(t *testing.T) {
 func TestServiceName(t *testing.T) {
 	const serviceName = "trpc.test.helloworld.Greeter"
 	service := server.New(server.WithServiceName(serviceName))
-	assert.Equal(t, serviceName, service.ServiceName())
+	namer, ok := service.(interface{ ServiceName() string })
+	require.True(t, ok)
+	assert.Equal(t, serviceName, namer.ServiceName())
 }
 
 // TestServiceFail tests failures of request handling.

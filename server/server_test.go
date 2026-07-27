@@ -330,16 +330,14 @@ type closeOrderService struct {
 	ch   chan string
 }
 
+var _ server.Service = (*closeOrderService)(nil)
+
 func (s *closeOrderService) Register(interface{}, interface{}) error {
 	return nil
 }
 
 func (s *closeOrderService) Serve() error {
 	return nil
-}
-
-func (s *closeOrderService) ServiceName() string {
-	return s.name
 }
 
 func (s *closeOrderService) Close(ch chan struct{}) error {

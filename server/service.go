@@ -42,8 +42,6 @@ const MaxCloseWaitTime = 10 * time.Second
 
 // Service is the interface that provides services.
 type Service interface {
-	// ServiceName returns the configured service name.
-	ServiceName() string
 	// Register registers a proto service.
 	Register(serviceDesc interface{}, serviceImpl interface{}) error
 	// Serve starts serving.
