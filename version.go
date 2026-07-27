@@ -25,10 +25,10 @@ import "fmt"
 // release candidate 0.1.0-rc
 // release           0.1.0
 const (
-	MajorVersion  = 0
-	MinorVersion  = 14
+	MajorVersion  = 1
+	MinorVersion  = 1
 	PatchVersion  = 0
-	VersionSuffix = "-dev" // -alpha -alpha.1 -beta -rc -rc.1
+	VersionSuffix = "" // -alpha -alpha.1 -beta -rc -rc.1
 )
 
 // Version returns the version of trpc.
