@@ -25,13 +25,13 @@ import "fmt"
 // release candidate 0.1.0-rc
 // release           0.1.0
 const (
-	MajorVersion  = 1
-	MinorVersion  = 1
-	PatchVersion  = 0
-	VersionSuffix = "" // -alpha -alpha.1 -beta -rc -rc.1
+	majorVersion  = 1
+	minorVersion  = 1
+	patchVersion  = 0
+	versionSuffix = "" // -alpha -alpha.1 -beta -rc -rc.1
 )
 
 // Version returns the version of trpc.
 func Version() string {
-	return fmt.Sprintf("v%d.%d.%d%s", MajorVersion, MinorVersion, PatchVersion, VersionSuffix)
+	return fmt.Sprintf("v%d.%d.%d%s", majorVersion, minorVersion, patchVersion, versionSuffix)
 }

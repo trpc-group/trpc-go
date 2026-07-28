@@ -6,6 +6,9 @@
 
 ### Compatibility
 
+- The version component constants `MajorVersion`, `MinorVersion`,
+  `PatchVersion`, and `VersionSuffix` are no longer exported. Use
+  `trpc.Version()` to obtain the complete version string.
 - Restored compatibility of the `server.Service` interface by removing its
   `ServiceName` requirement. Code written specifically against the v1.0.4
   interface can use a local interface assertion to access the optional method.
