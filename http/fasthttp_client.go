@@ -70,10 +70,7 @@ func NewFastHTTPClient(name string, opts ...client.Option) *fasthttp.Client {
 	c.opts = append(c.opts, client.WithTarget("passthrough://"+name))
 	return &fasthttp.Client{
 		ConfigureClient: func(hc *fasthttp.HostClient) error {
-			hc.Transport = func(req *fasthttp.Request, rsp *fasthttp.Response) error {
-				_, err := c.RoundTrip(hc, req, rsp)
-				return err
-			}
+			hc.Transport = c
 			return nil
 		},
 	}
