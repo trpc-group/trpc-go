@@ -162,11 +162,16 @@ func (p *Multiplexed) initPoolForNode(opts *GetOptions) {
 	if _, ok := p.concreteConns.Load(opts.nodeKey); ok {
 		return
 	}
-	p.concreteConns.Store(opts.nodeKey, p.newConcreteConnections(opts))
+	conns := p.newConcreteConnections(opts)
+	conns.mu.Lock()
+	defer conns.mu.Unlock()
+	conns.initialize(opts)
+	// Publish before failed dials can remove the connection set.
+	p.concreteConns.Store(opts.nodeKey, conns)
 }
 
 func (p *Multiplexed) newConcreteConnections(opts *GetOptions) *Connections {
-	conns := &Connections{
+	return &Connections{
 		nodeKey: opts.nodeKey,
 		opts:    p.opts,
 		conns:   make([]*Connection, 0, p.opts.connectNumberPerHost),
@@ -175,8 +180,6 @@ func (p *Multiplexed) newConcreteConnections(opts *GetOptions) *Connections {
 			p.concreteConns.Delete(opts.nodeKey)
 		},
 	}
-	conns.initialize(opts)
-	return conns
 }
 
 func (cs *Connections) newConn(opts *GetOptions) *Connection {

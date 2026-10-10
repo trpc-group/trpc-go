@@ -518,37 +518,45 @@ func (s *msuite) TestUdpMultiplexedReadTimeout() {
 
 func (s *msuite) TestMultiplexedServerFail() {
 	tests := []struct {
-		network string
-		address string
-		exists  bool
+		name          string
+		network       string
+		connectNumber int
 	}{
-		{s.network, "invalid address", false},
-		{s.udpNetwork, "invalid address", false},
+		{"tcp/default", s.network, 0},
+		{"tcp/single", s.network, 1},
+		{"tcp/multiple", s.network, 4},
+		{"udp/default", s.udpNetwork, 0},
+		{"udp/single", s.udpNetwork, 1},
+		{"udp/multiple", s.udpNetwork, 4},
 	}
 
 	for _, tt := range tests {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		m := New(
-			WithConnectNumber(1),
-			// On windows, it will try to use up all the timeout to do the dialling.
-			// So limit the dial timeout.
-			WithDialTimeout(time.Millisecond),
-		)
-		opts := NewGetOptions()
-		opts.WithVID(atomic.AddUint32(&s.requestID, 1))
-		opts.WithFrameParser(&emptyFrameParser{})
-		_, err := m.GetMuxConn(ctx, tt.network, tt.address, opts)
-		s.T().Logf("m.GetMuxConn err: %+v\n", err)
-		// Because of possible out of order execution of goroutines,
-		// the error may or may not be nil.
-		if err != nil {
-			// If it is non-nil, it must be an expelled error.
-			require.True(s.T(), errors.Is(err, ErrConnectionsHaveBeenExpelled))
-		}
-		time.Sleep(10 * time.Millisecond)
-		_, ok := m.concreteConns.Load(makeNodeKey(tt.network, tt.address))
-		assert.Equal(s.T(), tt.exists, ok)
+		s.Run(tt.name, func() {
+			poolOpts := []PoolOption{WithDialTimeout(time.Millisecond)}
+			if tt.connectNumber != 0 {
+				poolOpts = append(poolOpts, WithConnectNumber(tt.connectNumber))
+			}
+			m := New(poolOpts...)
+			opts := NewGetOptions()
+			opts.WithVID(atomic.AddUint32(&s.requestID, 1))
+			opts.WithFrameParser(&emptyFrameParser{})
+			const address = "invalid address"
+			for i := 0; i < 100; i++ {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				vc, err := m.GetMuxConn(ctx, tt.network, address, opts)
+				if err == nil {
+					vc.Close()
+				}
+				cancel()
+				if err != nil {
+					require.True(s.T(), errors.Is(err, ErrConnectionsHaveBeenExpelled) || errors.Is(err, ErrInitPoolFail))
+				}
+				require.Eventually(s.T(), func() bool {
+					_, exists := m.concreteConns.Load(makeNodeKey(tt.network, address))
+					return !exists
+				}, time.Second, time.Millisecond)
+			}
+		})
 	}
 }
 
