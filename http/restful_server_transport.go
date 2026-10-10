@@ -145,7 +145,7 @@ func (st *RESTServerTransport) ListenAndServe(ctx context.Context, opt ...transp
 		var err error
 		ln, err = st.getListener(opts)
 		if err != nil {
-			return fmt.Errorf("restfull server transport get listener err: %w", err)
+			return fmt.Errorf("restful server transport get listener err: %w", err)
 		}
 	}
 	// Save listener.
